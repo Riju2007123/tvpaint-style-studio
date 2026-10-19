@@ -87,12 +87,18 @@
   #vbRow { background: #313136; border-top: 1px solid #2B2B30; display: flex;
     align-items: center; gap: 4px; padding: 0 8px; overflow: hidden; }
   #vbRow .tib { width: 24px; height: 22px; }
-  #ovBar { flex: 1 1 140px; height: 14px; background: #2D2D32; border-radius: 3px;
-    position: relative; margin: 0 6px; }
-  #ovFill { position: absolute; top: 2px; height: 3px; left: 0; background: #454b52; border-radius: 2px; }
-  #ovIn { position: absolute; top: 0; height: 7px; width: 2px; background: #5ad35a; }
-  #ovOut { position: absolute; top: 0; height: 7px; width: 2px; background: #d35a5a; }
-  #ovMark { position: absolute; top: 6px; height: 8px; width: 2px; background: #ffd24a; }
+  #tlScroll { padding: 3px 8px 0; background: #2D2D32; }
+  #ovBar { height: 10px; background: #313136; border-radius: 5px; position: relative; overflow: hidden; }
+  #ovFill { position: absolute; top: 0; bottom: 0; background: #3E476B; }
+  #ovIn, #ovOut, #ovMark { position: absolute; top: 0; bottom: 0; width: 2px; }
+  #ovIn { background: #3f7a3f; } #ovOut { background: #8a3f3f; } #ovMark { background: #F0D092; }
+  /* hold cells: dark cell with ONE horizontal dash (TVPaint exposure hold look) */
+  .cell.hold { background: #2D2D32; }
+  .cell.hold::after { content: ""; position: absolute; left: 50%; top: 50%; width: 60%; height: 2px;
+    transform: translate(-50%, -50%); background: #6E6E75; }
+  .strip .cell { background: #2D2D32; }
+  .cell.keyw { background: #efefef; }
+  #vbRow .tib { width: 24px; height: 22px; }
   #dispSel { width: 84px; background: #2D2D32; color: #B6B6B6; border: 1px solid #2B2B30;
     border-radius: 3px; padding: 2px 4px; }
   #zoomIn, #zoomOut { width: 16px; height: 16px; }
@@ -106,8 +112,24 @@
   #tlTabs .tab { background: #313136; border: 1px solid #2B2B30; border-bottom: 0;
     border-radius: 4px 4px 0 0; padding: 3px 16px; cursor: pointer; color: #898989; }
   #tlTabs .tab.on { background: #3E476B; color: #B6B6B6; }
-  #tlBody { flex: 1; display: grid; grid-template-columns: 200px 1fr; min-height: 0; }
-  #tlLeft { border-right: 1px solid #2B2B30; overflow-y: auto; padding: 2px 0; }
+  #tlBody { flex: 1; display: grid; grid-template-columns: 210px 1fr; min-height: 0; }
+  #tlLeft { border-right: 1px solid #2B2B30; overflow: hidden; padding: 0; }
+  /* left column mirrors the track row-for-row (verified against the reference screenshot):
+     .lhead = ruler(20) + camera strip(20); .llayer = strip(40) + label margin(15) + border */
+  .lhead { height: 41px; box-sizing: border-box; border-bottom: 1px solid #2B2B30;
+    display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 1px 5px; }
+  .lhicons { display: flex; align-items: center; gap: 3px; height: 17px; }
+  .lhicons img.sq { width: 16px; height: 16px; }
+  .camrow { height: 18px; padding: 0; gap: 3px; }
+  .llayer { height: 56px; border-bottom: 1px solid #2B2B30; display: flex; flex-direction: column; }
+  .llayer .lname { height: 20px; }
+  .llayer .lblock { flex: 1; display: flex; gap: 5px; padding: 1px 5px 2px; align-items: flex-start; }
+  .llayer .lblock .lthumb { width: 34px; height: 20px; background: #fff; border: 1px solid #2B2B30;
+    border-radius: 2px; flex: none; }
+  .llayer .lblock .lcol { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .llayer .lblock .minic { font-size: 9px; color: #898989; white-space: nowrap; }
+  .llayer .lblock .oprow { display: flex; align-items: center; gap: 3px; color: #898989; }
+  .llayer .lblock .oprow input[type=range] { flex: 1; height: 6px; }
   .trow { display: flex; align-items: center; gap: 4px; padding: 1px 6px; height: 30px; }
   .trow.cur { background: #333a41; }
   .trow.dim { opacity: .45; }
@@ -240,10 +262,10 @@
         <canvas id="art"></canvas>
         <canvas id="ovl"></canvas>
       </div>
-      <div id="vbRow"></div>
     </div>
   </div>
   <div id="tlpanel">
+    <div id="tlScroll"><div id="ovBar"><div id="ovFill"></div><div id="ovIn"></div><div id="ovOut"></div><div id="ovMark"></div></div></div>
     <div id="tlTabs"></div>
     <div id="tlTransport"></div>
     <div id="tlInfoRow"></div>

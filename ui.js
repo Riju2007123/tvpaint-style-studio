@@ -1133,20 +1133,28 @@ function buildTlTabs() {
 function renderTimeline() {
   const maxF = Math.max(proj.outFrame, proj.currentFrame + 4);
   const left = $("tlLeft"), track = $("tlTrack");
-  // left column: Camera Layer row (live when project has a camera) + per-layer blocks
+  // left column — row-for-row mirror of the track (lhead = ruler+camera strip, llayer = one strip)
   const camOn = !!(proj.cameraKeys && proj.cameraKeys.length);
-  let lh = `<div class="trow ${camOn ? "" : "dim"}" onclick="${camOn ? "selectTool(&quot;camera&quot;)" : ""}"
+  let lh = `<div class="lhead">
+    <div class="lhicons">
+      <img class="sq" src="icons/FileNew-x20.png" title="new" style="opacity:.8">
+      <img class="sq" src="icons/FileOpen-x20.png" title="open" style="opacity:.8">
+      <img class="sq" src="icons/FileSave-x20.png" title="save" style="opacity:.8">
+      <img class="sq" src="icons/LayerSquigglesOn-x20.png" title="curves" style="opacity:.8">
+      <img class="sq" src="icons/LayerActiveOn-x20.png" title="layers" style="opacity:.8">
+      <button class="minib" onclick="layerAdd()" title="New Layer">New ▾</button>
+      <span style="color:#B6B6B6;cursor:pointer" title="favorites" onclick="toast('(prototype)')">♡</span>
+    </div>
+    <div class="trow camrow ${camOn ? "" : "dim"}" onclick="${camOn ? "selectTool(&quot;camera&quot;)" : ""}"
       title="Camera Layer"><img class="sq" src="icons/Shape-Camera-x20.png">
       <span class="nm">Camera Layer</span>
       ${camOn ? `<button class="sf" title="delete camera keys" onclick="event.stopPropagation();proj.cameraKeyAt=null;toast('camera keys kept')"><img src="icons/ReqLockOff-x20.png"></button>` : `<img class="sq" src="icons/ReqLockOn-x20.png">`}</div>
-    <div class="trow ${camOn ? "" : "dim"}"><span class="nm" style="padding-left:8px">❋ Speed curve</span></div>
-    <div class="minirow">
-      <button class="minib" onclick="layerAdd()" title="New Layer">New ▾</button>
-      <span style="color:#9fe08f;cursor:pointer" title="favorites" onclick="toast('(prototype)')">♡</span>
-    </div>`;
+  </div>`;
   proj.layers.forEach((l, i) => {
-    lh += `<div class="trow ${i === proj.currentLayer ? "cur" : ""}" onclick="pickLayer(${i})">
-      <span class="nm" style="font-weight:600;color:#B6B6B6">${l.name}</span>
+    lh += `<div class="llayer" onclick="pickLayer(${i})">
+    <div class="trow lname ${i === proj.currentLayer ? "cur" : ""}">
+      <img class="sq" src="icons/LayerSquigglesOn-x20.png" style="opacity:.8">
+      <span class="nm">${l.name}</span>
       <button class="sf ${l.visible ? "on" : ""}" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'visible')"
         title="Show/Hide (eye)"><img src="icons/${l.visible ? "LayerActiveOn" : "LayerActiveOff"}-x20.png"></button>
       <button class="sf ${l.preserveTransparency ? "on" : ""}" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'preserveTransparency')"
@@ -1155,31 +1163,27 @@ function renderTimeline() {
         title="Light table"><img src="icons/${l.lighttable ? "LayerLighttableOn" : "LayerLighttableOff"}-x20.png"></button>
       <button class="sf ${l.locked ? "on" : ""}" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'locked')"
         title="Lock Layer"><img src="icons/${l.locked ? "ReqLockOn" : "ReqLockOff"}-x20.png"></button>
-      <button class="sf" title="Rename" onclick="event.stopPropagation();${""}">✏</button>
     </div>
-    <div class="lblock" onclick="pickLayer(${i})">
-      <div class="thumbrow">
-        <canvas class="lthumb" data-layer="${i}" width="44" height="26"></canvas>
-        <div style="flex:1">
-          <div class="minic">
-            <img class="sq" src="icons/LayerSquigglesOn-x20.png" title="speed curve">
-            <span>S≡</span><span title="preserve transpar.">▨</span>
-            <button class="sf" onclick="event.stopPropagation();layerDup()" title="Duplicate">⧉</button>
-          </div>
-          <div class="minic" style="justify-content:space-between">
-            <span>Color</span>
-            <div class="dots">
-              <i class="${l.lighttable ? "on" : ""}" title="light table" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'lighttable')"></i>
-              <i class="${l.preserveTransparency ? "on" : ""}" title="preserve transparency" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'preserveTransparency')"></i>
-              <i class="${l.locked ? "on" : ""}" title="lock" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'locked')"></i>
-            </div>
-          </div>
+    <div class="lblock">
+      <canvas class="lthumb" data-layer="${i}" width="34" height="20"></canvas>
+      <div class="lcol">
+        <div class="minic">
+          <span>▸ ⏸ ⏭ ▣</span>
+          <span style="margin-left:auto">Color</span>
         </div>
+        <div class="minic">
+          <span class="dots">
+            <i class="${l.lighttable ? "on" : ""}" title="light table" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'lighttable')"></i>
+            <i class="${l.preserveTransparency ? "on" : ""}" title="preserve transparency" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'preserveTransparency')"></i>
+            <i class="${l.locked ? "on" : ""}" title="lock" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'locked')"></i>
+          </span>
+        </div>
+        <div class="oprow"><span style="font-size:12px">⊖</span>
+          <input type="range" data-lop="${i}" min="0" max="100" value="${Math.round(l.opacity * 100)}">
+          <span class="lval">${Math.round((l.opacity || 1) * 100)}%</span></div>
       </div>
-      <div class="oprow"><span style="font-size:13px">⊖</span>
-        <input type="range" data-lop="${i}" min="0" max="100" value="${Math.round(l.opacity * 100)}">
-        <span class="lval">${Math.round((l.opacity || 1) * 100)}%</span></div>
-    </div>`;
+    </div>
+  </div>`;
   });
   left.innerHTML = lh;
   left.querySelectorAll("[data-lop]").forEach(r => {
@@ -2061,7 +2065,59 @@ window.georgeRun = function (lineIn) {
   }
 };
 
-// ================= transport bar (REA: Mark In / fps / play / zoom / Mark Out) =================
+// ================= timeline transport (TVPaint remote icon row) =================
+function buildTransport() {
+  const T = $("tlTransport");
+  if (!T) return;
+  T.innerHTML = `
+    <span class="tlbl">Mark In</span><input class="tinput" id="tMarkIn" type="number" min="1">
+    <span style="width:20px;display:inline-flex;flex-direction:column;gap:2px">
+      <span style="height:3px;background:#3f7a3f;border-radius:2px"></span>
+      <span style="height:3px;background:#8a3f3f;border-radius:2px"></span></span>
+    <button class="tib remote" id="rFirst" title="Go to first image"><img src="icons/Remote-Goto-FirstImage-x20.png"></button>
+    <button class="tib remote" id="rPrev" title="Previous image"><img src="icons/Remote-Goto-PreviousImage-x20.png"></button>
+    <button class="tib remote" id="rPlay" title="Play/Stop (Space)"><img src="icons/Remote-PlaySmall-x20.png"></button>
+    <button class="tib remote" id="rNext" title="Next image"><img src="icons/Remote-Goto-NextImage-x20.png"></button>
+    <button class="tib remote" id="rLast" title="Go to last image"><img src="icons/Remote-Goto-LastImage-x20.png"></button>
+    <button class="tib remote" id="rLoop" title="Loop"><img src="icons/Remote-LoopOn-x20.png"></button>
+    <select id="fpsSel" style="background:#2D2D32;color:#B6B6B6;border:1px solid #2B2B30;border-radius:3px;width:76px">
+      ${[12, 24, 25, 30, 50, 60].map(f => `<option ${f === 24 ? "selected" : ""}>${f} fps</option>`).join("")}
+    </select>
+    <span style="flex:1"></span>
+    <button class="tib" id="zoomOut" title="zoom out">−</button>
+    <span id="zoomLbl">100.00%</span>
+    <button class="tib" id="zoomIn" title="zoom in">+</button>
+    <select id="dispSel" style="background:#2D2D32;color:#B6B6B6;border:1px solid #2B2B30;border-radius:3px">
+      <option>Display</option><option>Display 1:1</option><option>Fit</option></select>
+    <span class="tlbl">Mark Out</span><input class="tinput" id="tMarkOut" type="number" min="1">`;
+  $("rFirst").onclick = () => remote("first");
+  $("rPrev").onclick = () => remote("prev");
+  $("rPlay").onclick = () => remote("play");
+  $("rNext").onclick = () => remote("next");
+  $("rLast").onclick = () => remote("last");
+  $("rLoop").onclick = () => toggleLoop();
+  $("fpsSel").onchange = (e) => { proj.fps = parseInt(e.target.value) || 24; renderTimeline(); renderTimelineStatus(); };
+  $("tMarkIn").onchange = (e) => { proj.inFrame = Math.max(1, +e.target.value || 1); renderAll(); };
+  $("tMarkOut").onchange = (e) => { proj.outFrame = Math.max(proj.inFrame, +e.target.value || 25); renderAll(); };
+  $("zoomIn").onclick = () => { view.zoom = Math.min(20, view.zoom * 1.25); syncTransport(); renderAll(); };
+  $("zoomOut").onclick = () => { view.zoom = Math.max(0.05, view.zoom * 0.8); syncTransport(); renderAll(); };
+  $("dispSel").onchange = (e) => {
+    const v = e.target.value;
+    if (v === "Display 1:1") { view.zoom = 1; }
+    else if (v === "Fit") { fitView(); }
+    renderAll();
+  };
+  window.syncFpsSel = () => {   // keep the fps select in sync (Modify Project / New Project)
+    const s = $("fpsSel");
+    if (!s) return;
+    const want = proj.fps + " fps";
+    if (![...s.options].some(o => o.textContent === want))
+      s.add(new Option(want, want, true, true));
+    s.value = want;
+  };
+  syncFpsSel();
+  syncTransport();
+}
 function stopPlayback() {
   if (playing) { clearInterval(playing); playing = null; setPlayIcon(false); }
 }
@@ -2070,54 +2126,12 @@ function setPlayIcon(on) {
   const t = $("tPlay");
   if (t) { t.textContent = on ? "⏸" : "▶"; t.classList.toggle("ton", on); }
 }
-function buildTransport() {
-  const T = $("tlTransport");
-  if (!T) return;
-  T.innerHTML =
-    `<span class="tlbl">Mark In</span><input class="tinput" id="tMarkIn" type="number" min="1">
-    <span style="width:20px;display:inline-flex;flex-direction:column;gap:2px">
-      <span style="height:3px;background:#3f7a3f;border-radius:2px"></span>
-      <span style="height:3px;background:#8a3f3f;border-radius:2px"></span></span>
-    <button class="tbtn" id="tSound" title="sound">🔊</button>
-    <button class="tbtn" id="tLoop" title="loop">🔁</button>
-    <select id="tFps" class="tinput" style="width:56px" title="frame rate">
-      <option>12</option><option>24</option><option>25</option><option>30</option></select><span class="tlbl">fps</span>
-    <button class="tbtn" id="tFirst" title="go to first image">⏮</button>
-    <button class="tbtn" id="tPrev" title="previous image">◀</button>
-    <button class="tbtn" id="tPlay" title="play">▶</button>
-    <button class="tbtn" id="tStop" title="stop">■</button>
-    <button class="tbtn" id="tNext" title="next image">▶</button>
-    <button class="tbtn" id="tLast" title="go to last image">⏭</button>
-    <span style="flex:1"></span>
-    <button class="tbtn" id="tZoomOut" title="zoom out">−</button>
-    <input class="tinput" id="tZoom" style="width:52px" title="zoom %">
-    <button class="tbtn" id="tZoomIn" title="zoom in">+</button>
-    <button class="tbtn" id="tDisplay" title="display">Display ▾</button>
-    <span class="tlbl">Mark Out</span><input class="tinput" id="tMarkOut" type="number" min="1">`;
-  $("tPlay").onclick = () => window.togglePlay();
-  $("tStop").onclick = () => stopPlayback();
-  $("tPrev").onclick = () => stepPlay(proj.currentFrame - 1);
-  $("tNext").onclick = () => stepPlay(proj.currentFrame + 1);
-  $("tFirst").onclick = () => { proj.currentFrame = proj.inFrame; renderAll(); };
-  $("tLast").onclick = () => { proj.currentFrame = proj.outFrame; renderAll(); };
-  $("tLoop").onclick = () => window.toggleLoop();
-  $("tSound").onclick = () => toast("sound — not in this prototype");
-  $("tFps").onchange = (e) => { proj.fps = +e.target.value || 24; renderTimeline(); renderTimelineStatus(); };
-  $("tMarkIn").onchange = (e) => { proj.inFrame = Math.max(1, +e.target.value || 1); renderAll(); };
-  $("tMarkOut").onchange = (e) => { proj.outFrame = Math.max(proj.inFrame, +e.target.value || 25); renderAll(); };
-  $("tZoomOut").onclick = () => { view.zoom /= 1.25; syncTransport(); renderAll(); };
-  $("tZoomIn").onclick = () => { view.zoom *= 1.25; syncTransport(); renderAll(); };
-  $("tZoom").onchange = (e) => { const v = parseFloat(e.target.value); if (v > 0) { view.zoom = v / 100; renderAll(); } };
-  $("tDisplay").onclick = () => toast("Display — not in this prototype");
-  syncTransport();
-}
 function syncTransport() {
-  const zi = $("tZoom"), mi = $("tMarkIn"), mo = $("tMarkOut"), fps = $("tFps"), tl = $("tLoop");
-  if (zi && document.activeElement !== zi) zi.value = (view.zoom * 100).toFixed(2) + "%";
+  const mi = $('tMarkIn'), mo = $('tMarkOut'), fps = $('fpsSel'), z = $('zoomLbl');
   if (mi && document.activeElement !== mi) mi.value = proj.inFrame;
   if (mo && document.activeElement !== mo) mo.value = proj.outFrame;
-  if (fps && document.activeElement !== fps) fps.value = String(proj.fps);
-  if (tl) tl.classList.toggle("ton", loop);
+  if (fps && document.activeElement !== fps) fps.value = proj.fps + ' fps';
+  if (z) z.textContent = (view.zoom * 100).toFixed(2) + '%';
 }
 // ================= status bar =================
 function buildStatusbar() {
@@ -2179,7 +2193,6 @@ function boot() {
   buildToolbar();
   buildPanels();
   buildCameraPanel();
-  buildVbRow();
   buildTlTabs();
   buildTransport();
   buildStatusbar();
