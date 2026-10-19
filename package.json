@@ -1,0 +1,8 @@
+{
+  "name": "my-version",
+  "version": "0.1.0",
+  "description": "TVPaint-style animation studio prototype (rebuilt from REA evidence)",
+  "scripts": {
+    "test": "node test/engine.test.js"
+  }
+}
