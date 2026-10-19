@@ -145,8 +145,9 @@
   .ruler { display: flex; position: sticky; left: 0; height: 20px; background: #313136;
     z-index: 2; border-bottom: 1px solid #2B2B30; }
   .ruler.bot { border-bottom: 0; border-top: 1px solid #2B2B30; margin-top: -1px; }
-  .ruler .tick { min-width: 64px; flex: none; border-left: 1px solid #2B2B30;
-    font-size: 10px; color: #898989; padding: 2px 4px; position: relative; }
+  .ruler .tick { min-width: 64px; flex: none; border-left: 0; padding: 2px 0 2px 4px;
+    font-size: 10px; color: #898989; position: relative; }
+  .ruler .tick.in { color: #3f7a3f; }
   .ruler .tick.cur { background: #3d6fd9; color: #B6B6B6; }
   .ruler .band { position: absolute; top: 0; height: 4px; background: #3d6fd9; }
   .ruler .band.green { background: #4f7a4a; }
@@ -208,6 +209,14 @@
     z-index: 6; touch-action: none; }
   .expHandle::after { content: ""; position: absolute; right: 3px; top: 4px; bottom: 4px;
     width: 2px; background: #b8bdc2; }
+  /* timing handles: small gray squares at the top corners of every key cell */
+  .cell .dh { position: absolute; top: -2px; width: 7px; height: 7px; background: #5A5A61;
+    z-index: 4; cursor: ew-resize; touch-action: none; }
+  .cell .dh.l { left: 1px; }
+  .cell .dh.r { right: 1px; }
+  .cell .dh.grab { background: #5A66CC; }
+  /* add-drawing + at the left edge of each strip */
+  .plus.stripstart { display: block; right: auto; left: -10px; top: -7px; }
   /* transport row above the ruler (REA: Mark In / fps / play / zoom / Mark Out) */
   #tlTransport { display: flex; align-items: center; gap: 6px; background: #313136;
     border-bottom: 1px solid #2B2B30; padding: 3px 8px; min-height: 30px; }

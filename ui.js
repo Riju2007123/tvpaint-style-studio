@@ -1199,7 +1199,8 @@ function renderTimeline() {
   const inF = proj.inFrame, outF = Math.max(proj.outFrame, inF);
   const ticks = Array.from({ length: Math.ceil(maxF / 2) }, (_, i) => {
     const f = i * 2 + 1;
-    return `<div class="tick ${f === proj.currentFrame ? "cur" : ""}">${f}</div>`;
+    const cls = [f === proj.currentFrame ? "cur" : "", f === proj.inFrame ? "in" : ""].join(" ");
+    return `<div class="tick ${cls}">${f}</div>`;
   }).join("");
   // info row (REA/status format): Project / Clip / Layer-count includes camera / Current Image
   const info = $("tlInfoRow");
@@ -1241,7 +1242,7 @@ function renderTimeline() {
       const end = Math.min(maxF, k + exp - 1);
       const w = Math.max(32, (end - k + 1) * 32);
       const isLastKey = k === keys[keys.length - 1];
-      th += `<div class="blk" style="left:${(k - 1) * 32}px;width:${w}px">` +
+      th += `<div class="blk" style="left:${(k - 1) * 32}px;width:${w}px" data-k="${k}" data-l="${li}">` +
         `<i class="knob" style="left:-5px"></i>` +
         `${exp > 1 ? `<i class="blkExp">${exp}</i>` : ""}` +
         `${isLastKey ? `<i class="expHandle" data-k="${k}" data-l="${li}" title="drag right: increase length"></i>` : ""}</div>`;
@@ -1254,10 +1255,15 @@ function renderTimeline() {
       const num = k === f ? `<span class="knum">${k}.</span>` : "";
       // small ⊘ sigil inside the first key of the strip
       const vs = (k === f && keys.length && k === keys[0]) ? `<span class="vsigil">⊘</span>` : "";
-      th += `<div class="cell ${cls}${cur}" data-f="${f}" data-l="${li}">${num}${vs}
+      // timing handles: every key cell carries gray squares at its top corners;
+      // drag right = longer exposure, drag left = move the drawing earlier/later
+      const dh = k === f ? `<span class="dh l" data-k="${k}" data-l="${li}"></span>` +
+        `<span class="dh r" data-k="${k}" data-l="${li}"></span>` : "";
+      th += `<div class="cell ${cls}${cur}" data-f="${f}" data-l="${li}">${num}${vs}${dh}
         <button class="plus" title="add drawing here" data-plus="${f}" data-pl="${li}">+</button></div>`;
     }
-    th += `<span class="pin" style="right:0">∅</span></div>`;
+    th += `<span class="pin" style="right:0">∅</span>
+      <button class="plus stripstart" data-plus="1" data-pl="${li}" title="add drawing at start">+</button></div>`;
   });
   th += `<div class="ruler bot" id="rulerBot">${ticks}${mkBands}</div>`;
   // blue current-frame column runs the full track height with red image-bound edges
@@ -1314,6 +1320,67 @@ function renderTimeline() {
           hist.sealModel(proj);
           toast("exposure " + exp);
         }
+        renderAll();
+      };
+      h.addEventListener("pointermove", mv);
+      h.addEventListener("pointerup", up);
+    };
+  });
+  // timing handles on key cells: right corner lengthens the exposure,
+  // left corner moves the drawing earlier/later (TVPaint cell timing drag)
+  track.querySelectorAll(".cell.keyw .dh").forEach(h => {
+    const isR = h.classList.contains("r");
+    const k = +h.dataset.k, li = +h.dataset.l, l = proj.layers[li];
+    const strip = h.closest(".strip");
+    h.onpointerdown = (e) => {
+      e.stopPropagation(); e.preventDefault();
+      const sr = strip.getBoundingClientRect();
+      h.classList.add("grab");
+      try { h.setPointerCapture(e.pointerId); } catch (err) {}
+      const startExp = l.frames[k].exposure || 1;
+      const blk = strip.querySelector(`.blk[data-k="${k}"]`);
+      let exp = startExp, startK = k, moved = false;
+      h.dataset.expBound = String(startExp);
+      h.dataset.kBound = String(k);
+      const mv = (ev) => {
+        const pos = Math.round((ev.clientX - sr.left) / 32) + 1;
+        if (isR) {
+          exp = Math.max(1, Math.min(pos - k + 1, maxF - k + 1));
+          if (exp === +h.dataset.expBound) return;
+          moved = true;
+          if (blk) {
+            blk.style.width = ((exp) * 32) + "px";
+            const badge = blk.querySelector(".blkExp");
+            if (badge) badge.textContent = exp > 1 ? exp : "";
+          }
+          h.dataset.expBound = String(exp);
+        } else {
+          const newK = Math.max(1, Math.min(pos, k + startExp - 1));
+          if (newK === +h.dataset.kBound) return;
+          moved = true;
+          if (blk) blk.style.left = ((newK - 1) * 32) + "px";
+          h.dataset.kBound = String(newK);
+        }
+      };
+      const up = () => {
+        h.classList.remove("grab");
+        try { h.releasePointerCapture(e.pointerId); } catch (err) {}
+        h.removeEventListener("pointermove", mv);
+        h.removeEventListener("pointerup", up);
+        const curExp = isR ? exp : startExp;
+        const curK = isR ? k : +h.dataset.kBound;
+        h.dataset.expBound = ""; h.dataset.kBound = "";
+        if (!moved || (curExp === startExp && curK === startK)) { renderAll(); return; }
+        hist.pushModel(proj);
+        if (isR) { l.frames[k].exposure = curExp; toast("exposure " + curExp); }
+        else {
+          const f = l.frames[startK];
+          delete l.frames[startK];
+          f.exposure = startExp;
+          l.frames[curK] = f;
+          toast("moved to " + curK);
+        }
+        hist.sealModel(proj);
         renderAll();
       };
       h.addEventListener("pointermove", mv);
