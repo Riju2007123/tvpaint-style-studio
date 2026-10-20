@@ -104,15 +104,15 @@
   #vbRow { background: #313136; border-top: 1px solid #2B2B30; display: flex;
     align-items: center; gap: 4px; padding: 0 8px; overflow: hidden; }
   #vbRow .tib { width: 24px; height: 22px; }
-  #tlScroll { padding: 3px 8px 0; background: #2D2D32; }
-  #ovBar { height: 10px; background: #313136; border-radius: 5px; position: relative; overflow: hidden; }
+  #ovBar { height: 10px; background: #232327; border-radius: 5px; position: relative; overflow: hidden;
+    flex: 1 1 auto; min-width: 80px; margin: 0 6px; border: 1px solid #2B2B30; }
   #ovFill { position: absolute; top: 0; bottom: 0; background: #3E476B; }
   #ovIn, #ovOut, #ovMark { position: absolute; top: 0; bottom: 0; width: 2px; }
   #ovIn { background: #3f7a3f; } #ovOut { background: #8a3f3f; } #ovMark { background: #F0D092; }
   /* hold cells: dark cell with ONE horizontal dash (TVPaint exposure hold look) */
   .cell.hold { background: #2D2D32; }
-  .cell.hold::after { content: ""; position: absolute; left: 50%; top: 50%; width: 60%; height: 2px;
-    transform: translate(-50%, -50%); background: #6E6E75; }
+  .cell.hold::after { content: ""; position: absolute; left: 50%; top: 50%; width: 55%; height: 2px;
+    transform: translate(-50%, -50%); background: #4a4a51; }
   .strip .cell { background: #2D2D32; }
   .cell.keyw { background: #efefef; }
   #vbRow .tib { width: 24px; height: 22px; }
@@ -124,20 +124,23 @@
   /* ---- timeline panel ---- */
   #tlpanel { background: #313136; border-top: 1px solid #2B2B30; display: flex;
     flex-direction: column; min-height: 0; }
-  #tlTabs { display: flex; align-items: flex-end; gap: 2px; background: #313136;
-    padding: 2px 6px 0; border-bottom: 1px solid #2B2B30; }
+  #tlTabsRow { display: flex; align-items: flex-end; background: #2D2D32;
+    border-bottom: 1px solid #2B2B30; padding: 2px 6px 0; min-height: 22px; }
+  #tlTabs { display: flex; align-items: flex-end; gap: 2px; background: transparent; padding: 0; flex: none; }
   #tlTabs .tab { background: #313136; border: 1px solid #2B2B30; border-bottom: 0;
-    border-radius: 4px 4px 0 0; padding: 3px 16px; cursor: pointer; color: #898989; }
+    border-radius: 4px 4px 0 0; padding: 2px 16px; cursor: pointer; color: #898989; font-size: 11px; }
   #tlTabs .tab.on { background: #3E476B; color: #B6B6B6; }
-  #tlBody { flex: 1; display: grid; grid-template-columns: 210px 1fr; min-height: 0; }
+  #tlBody { flex: 1; display: grid; grid-template-columns: 252px 1fr; min-height: 0; }
   #tlLeft { border-right: 1px solid #2B2B30; overflow: hidden; padding: 0; }
   /* left column mirrors the track row-for-row (verified against the reference screenshot):
      .lhead = ruler(20) + camera strip(20); .llayer = strip(40) + label margin(15) + border */
-  .lhead { height: 41px; box-sizing: border-box; border-bottom: 1px solid #2B2B30;
-    display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 1px 5px; }
-  .lhicons { display: flex; align-items: center; gap: 3px; height: 17px; }
+  .lhead { height: 20px; box-sizing: border-box; border-bottom: 1px solid #2B2B30;
+    display: flex; flex-direction: column; justify-content: flex-start; gap: 0;
+    padding: 0 5px; overflow: hidden; }
+  .lhead.withcam { height: 40px; }
+  .lhicons { display: flex; align-items: center; gap: 3px; height: 19px; flex: none; }
   .lhicons img.sq { width: 16px; height: 16px; }
-  .camrow { height: 18px; padding: 0; gap: 3px; }
+  .camrow { height: 20px; padding: 0; gap: 3px; flex: none; }
   .llayer { height: 56px; border-bottom: 1px solid #2B2B30; display: flex; flex-direction: column; }
   .llayer .lname { height: 20px; }
   .llayer .lblock { flex: 1; display: flex; gap: 5px; padding: 1px 5px 2px; align-items: flex-start; }
@@ -154,25 +157,28 @@
   .trow canvas { width: 48px; height: 24px; background: #fff; border: 1px solid #2D2D32;
     border-radius: 2px; flex: none; }
   .trow .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lhead .camrow { height: 20px; padding: 0 0; }
+  .lhead .camrow .nm { font-size: 11px; }
   .trow .sq { opacity: .5; width: 16px; height: 16px; }
   .sf { background: none; border: 0; padding: 0 1px; cursor: pointer; opacity: .3; }
   .sf img { width: 15px; height: 15px; display: block; }
   .sf.on { opacity: 1; }
   #tlTrack { overflow: auto; position: relative; }
-  .ruler { display: flex; position: sticky; left: 0; height: 20px; background: #313136;
-    z-index: 2; border-bottom: 1px solid #2B2B30; }
+  .ruler { display: flex; position: sticky; left: 0; height: 20px; background: transparent;
+    z-index: 5; border-bottom: 1px solid #2B2B30; }
+  .ruler .tick { position: relative; z-index: 6; }
   .ruler.bot { border-bottom: 0; border-top: 1px solid #2B2B30; margin-top: -1px; }
-  .ruler .tick { min-width: 64px; flex: none; border-left: 0; padding: 2px 0 2px 4px;
+  .ruler .tick { width: 80px; min-width: 80px; flex: none; border-left: 0; padding: 2px 0 2px 4px;
     font-size: 10px; color: #898989; position: relative; }
   .ruler .tick.in { color: #3f7a3f; }
-  .ruler .tick.cur { background: #3d6fd9; color: #B6B6B6; }
+  .ruler .tick.cur { background: #3d6fd9; color: #fff; }
   .ruler .band { position: absolute; top: 0; height: 4px; background: #3d6fd9; }
   .ruler .band.green { background: #4f7a4a; }
   .strip { display: flex; height: 40px; border-bottom: 1px solid #2B2B30; position: relative; }
-  .cell { min-width: 32px; flex: none; border-right: 1px solid #2B2B30; position: relative;
+  .cell { width: 40px; min-width: 40px; flex: none; border-right: 1px solid #2B2B30; position: relative;
     cursor: pointer; background: #2D2D32; }
   .cell.keyw { background: #efefef; }
-  .cell.hold { background: repeating-linear-gradient(180deg, #b8b8b8 0 3px, #9a9a9a 3px 6px); }
+  .cell.hold { background: #efefef; }
   .cell.blockend::after { content: attr(data-exp); position: absolute; right: 2px; top: 2px;
     background: #2D2D32; color: #B6B6B6; font-size: 10px; padding: 0 4px; border-radius: 2px; }
   .cell .pin { position: absolute; right: -7px; top: 12px; width: 14px; height: 14px; z-index: 3;
@@ -219,7 +225,7 @@
   #curLine { position: absolute; top: 0; bottom: 0; width: 2px; background: #c05555;
     z-index: 5; pointer-events: none; }
   /* blue current-frame column through the whole track, red edges mark the image bounds */
-  #curCol { position: absolute; top: 0; bottom: 0; width: 32px; z-index: 4; pointer-events: none;
+  #curCol { position: absolute; top: 0; bottom: 0; width: 40px; z-index: 4; pointer-events: none;
     background: rgba(61, 111, 217, 0.55); border-left: 1px solid #c05555; border-right: 1px solid #c05555; }
   #curCol::before { content: ""; position: absolute; inset: 0;
     background: rgba(61, 111, 217, 0.35); }
@@ -245,9 +251,9 @@
   #tlTransport .tinput { background: #2D2D32; color: #B6B6B6; border: 1px solid #2B2B30;
     border-radius: 3px; font-size: 11px; padding: 2px 5px; width: 46px; }
   #tlTransport .tlbl { color: #898989; font-size: 11px; }
-  #tlInfoRow { text-align: center; color: #898989; font-size: 11px; padding: 3px 0;
-    background: #313136; border-bottom: 1px solid #2B2B30; }
-  #tlInfoRow span { margin: 0 14px; }
+  #tlInfoRow { text-align: right; color: #898989; font-size: 11px; padding: 0 2px 2px;
+    background: transparent; margin-left: auto; white-space: nowrap; overflow: hidden; }
+  #tlInfoRow span { margin-left: 16px; }
   /* camera layer strip: thin row with always-visible + inserts */
   .strip.cam { height: 20px; }
   .strip.cam .cell { background: #2D2D32; }
@@ -277,6 +283,15 @@
     padding: 0 10px; color: #898989; font-size: 11px; }
   #statusbar .right { margin-left: auto; display: flex; gap: 14px; align-items: center; }
   #proxyLbl { background: #2f5a43; color: #bfe8d2; border-radius: 3px; padding: 1px 10px; }
+  /* current-frame cell: solid blue like TVPaint, above the column tint */
+  .cell.curf { background: #3d6fd9 !important; z-index: 6;
+    box-shadow: inset 0 0 0 1px #6fa8c9; outline: none; }
+  .cell.curf canvas { visibility: hidden; }
+  .cell.curf .knum { color: #e8eef5; z-index: 7; }
+  .cell.curf .fnum { position: absolute; left: 3px; top: 2px; font-size: 10px;
+    color: #fff; z-index: 7; }
+  .cell.curf .vsigil { z-index: 7; }
+  .cell.curf .dh { z-index: 8; }
 </style>
 </head>
 <body>
@@ -293,10 +308,11 @@
     </div>
   </div>
   <div id="tlpanel">
-    <div id="tlScroll"><div id="ovBar"><div id="ovFill"></div><div id="ovIn"></div><div id="ovOut"></div><div id="ovMark"></div></div></div>
-    <div id="tlTabs"></div>
     <div id="tlTransport"></div>
-    <div id="tlInfoRow"></div>
+    <div id="tlTabsRow">
+      <div id="tlTabs"></div>
+      <div id="tlInfoRow"></div>
+    </div>
     <div id="tlBody">
       <div id="tlLeft"></div>
       <div id="tlTrack"></div>
