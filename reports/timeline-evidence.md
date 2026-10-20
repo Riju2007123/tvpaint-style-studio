@@ -861,6 +861,115 @@ whole view, the field of view punched back to full brightness, a 1 px
 transformed by the camera, the zoom steps along the ladder, the fit snaps to
 the ladder and the zoom keeps the centre of the drawing area fixed.
 
+### v26 pass - the camera, decompiled and re-implemented channel by channel
+
+**The live Camera[Pro] tool panel** (captured on TVPaint Animation 12.1.0 with the
+Camera tool selected) is exactly:
+
+```
+Tool : Camera[Pro]
+  Command            (dropdown)
+  Lock All           [checkbox]
+  Time Profile       (button)
+  See bookmarks      [checkbox]
+  Toggle all         (button)
+  Mode               Linear | Spline | Bezier curve | Smart Spline
+  Motion Blur        0.00 %
+  X            [lock]  1920.0
+  Y            [lock]  1080.0
+  Modify ratio [ ]
+  Rotation    [lock]   0.00 degrees
+  Zoom        [lock] 100.00
+  Flip X      [ ]
+  Flip Y      [ ]
+  Parameters ...
+```
+The `Command` dropdown holds **Invert / Load... / Save... / Reset / Reset and
+Fit to project** and the `Mode` dropdown holds **Linear / Spline / Bezier curve
+/ Smart Spline**.
+
+TVPaint's own localisation file gives the semantics of every control
+(`english.tvpaint.loc`):
+- `009582205` "Lock all the Camera parameters. With this option checked, it is
+  no more possible to change the camera parameters."
+- `009582225` "X value of the current position", `009582226` "Y value of the
+  current position", `009582227` "Current angle of the current position",
+  `009582228` "Current zoom of the current position"
+- `009582230` "Set the value of the Motion Blur. This option adds a 'Motion
+  Blur' effect on the camera move."
+- `009582260` "Lock the ratio of the camera size during its modification."
+- `009582210` the **Time Profile**: "the time axis begins to the first frame
+  and ends to the last frame, the position axis begins to the first key point
+  and ends to the last key point of the path"
+- `009582235` "Open the global camera parameters request" -> `009582150`
+  "Camera parameters" with `009582255` Format, `009582265` width, `009582270`
+  height, `009582275` frame rate, `009582280` pixel aspect ratio, `009582285`
+  field order.
+
+**The camera keyframe menu** (live, right click on the camera row) is exactly
+`Create keyframe / Delete keyframe / Adjust the layer to the animation /
+Cut keyframe / Copy keyframe / Paste keyframe (disabled) / Invert all keys`, and
+the `Create keyframe` submenu is **All / [tick]Position / [tick]Rotation /
+[tick]Zoom / [tick]Camera size / Movement Type** - the ticks show which channels
+are keyed at that frame.
+
+**REA - the camera has FOUR INDEPENDENT CHANNELS.**  The command table builder
+`FUN_1405d30e0` registers fourteen camera commands:
+
+| command | handler | id |
+|---|---|---|
+| CameraAddKey | `FUN_1405bb0d0` | 0xb76bdc |
+| CameraAddPositionKey | `FUN_1405bb210` | 0xb76bdd |
+| CameraAddRotationKey | `FUN_1405bb360` | 0xb76bde |
+| CameraAddZoomKey | `FUN_1405bb5e0` | 0xb76bdf |
+| CameraAddSizeKey | `FUN_1405bb4a0` | 0xb76be0 |
+| CameraDeleteKey | `FUN_1405bb720` | 0xb76be1 |
+| CameraDeletePositionKey | `FUN_1405bb8a0` | 0xb76be2 |
+| CameraDeleteRotationKey | `FUN_1405bb9f0` | 0xb76be3 |
+| CameraDeleteZoomKey | `FUN_1405bbc90` | 0xb76be4 |
+| CameraDeleteSizeKey | `FUN_1405bbb40` | 0xb76be5 |
+| CameraMoveToNextKey | `FUN_1405bbe90` | 0xb76be6 |
+| CameraMoveToPreviousKey | `FUN_1405bbf00` | 0xb76be7 |
+| CameraMoveToFirstKey | `FUN_1405bbde0` | 0xb76be8 |
+| CameraMoveToLastKey | `FUN_1405bbe30` | 0xb76be9 |
+
+The keyframes live in the container at `app + 0x2f0` (count `app + 0x2f8`,
+array `app + 0x300`) and every keyframe is **0x380 bytes**.  The decompiled
+`FUN_1405bb0d0` (CameraAddKey) writes `0xf` into the flag word at `key + 0x48`,
+while `FUN_1405bb210` (AddPositionKey) calls `FUN_1401dac50` which sets **bit 1**
+and `FUN_1405bb360` (AddRotationKey) calls `FUN_1401dad20` which sets **bit 2**.
+`FUN_1401ea550` maps the bits: **1 = position, 2 = rotation, 4 = zoom,
+8 = size**.  The four motion curves of a keyframe sit at `+0x80`, `+0x140`,
+`+0x200` and `+0x2c0` (`FUN_1401ea470` clears all four), the rotation value is
+at `+0x18` and the zoom value at `+0x20`.  `FUN_1401ea670` then folds the
+position, the sizes and the zoom into the final camera rectangle.
+
+So: **a keyframe only drives the channels it is keyed for**, and each channel
+interpolates on its own curve - the prototype had a single keyframe with one
+interpolation mode, which was wrong.
+
+**The live camera parameters** measured on the user's project (drawing area
+3840x2160, `Config/CameraMultiplierWidth = 2`): the camera panel shows
+**X = 1920.0, Y = 1080.0** (the centre of the camera in the drawing area) and
+the camera frame drawn on the canvas is **1920x1080** - exactly half the
+drawing area, centred, which is the same rectangle the camera panel reports.
+
+The prototype now has the four channels (`E.CAM_CH`), the fourteen commands
+(`cameraAddKey` / `cameraDeleteKey` / `cameraMoveKey` / `cameraMoveKeyRelative`),
+a per channel interpolation with its own mode, the **Time Profile** curve
+editor (a Time x Position graph with draggable handles and presets) and the
+**Camera parameters** dialog (Format / Width / Height / Frame rate / Pixel
+aspect ratio / Field order).  The keyframe submenu shows the same ticks as the
+live menu.
+
+**The camera profile on the canvas.**  With the **Camera tool active** the
+live app draws the whole profile in the camera colour: the 1 px frame, the
+**four corner handles** (7 px squares on the frame corners), the **centre
+handle** (a small square with a cross in it) and a **horizontal guide** that
+runs from the centre handle to the right edge of the frame and ends in a small
+triangle.  The prototype draws exactly that (and only the frame plus the centre
+plus when the Camera tool is not active, which is what the live app shows).
+
 ### Still not captured
 - Exact Role submenu appearance/order. The labels are known from the loc's role
   assignment commands: `Keyframe`, `Breakdown`, `Inbetween (To Do)`,

@@ -93,6 +93,25 @@ Works from `file://` too — just open `index.html`.
   `Camera size`, `Movement Type`), `Adjust the layer to the animation` (bakes
   the camera movement into the drawings), `Cut keyframe` / `Copy keyframe` /
   `Paste keyframe` and `Invert all keys` (inverts the camera path).
+- The camera has **four independent channels** - position, rotation, zoom and
+  camera size - each with its own keyframes and its own motion curve, exactly
+  like TVPaint 12 (the keyframe flag word carries `1 = position, 2 = rotation,
+  4 = zoom, 8 = size`).  A keyframe only drives the channels it is keyed for.
+  The `Create keyframe` / `Delete keyframe` submenus tick the channels that are
+  keyed, and the camera row's menu holds `Create keyframe / Delete keyframe /
+  Adjust the layer to the animation / Cut keyframe / Copy keyframe / Paste
+  keyframe / Invert all keys`.
+- The **Camera[Pro]** panel: `Command` (Invert / Load... / Save... / Reset /
+  Reset and Fit to project), `Lock All`, `Time Profile`, `See bookmarks`,
+  `Toggle all`, `Mode` (Linear / Spline / Bezier curve / Smart Spline),
+  `Motion Blur`, `X`, `Y`, `Width`, `Height`, `Modify ratio`, `Rotation`,
+  `Zoom`, `Flip X`, `Flip Y` and `Parameters ...` (the camera parameters
+  request: Format, width, height, frame rate, pixel aspect ratio, field order).
+  The **Time Profile** is the camera motion curve: a Time x Position graph with
+  draggable handles and presets.
+- With the Camera tool active the canvas shows the whole camera profile: the
+  1 px frame in the camera colour, the four corner handles, the centre handle
+  and the guide that runs to the right edge of the frame.
 - The project window shows the **drawing area**, always - the camera is a pure
   overlay and never transforms the artwork (measured live, see
   `reports/timeline-evidence.md`): the whole view is dimmed to `126/255` of its

@@ -1363,6 +1363,34 @@ function drawCameraOverlay() {
   octx.moveTo(mx - arm, my); octx.lineTo(mx + arm, my);
   octx.moveTo(mx, my - arm); octx.lineTo(mx, my + arm);
   octx.stroke();
+  // With the Camera tool active TVPaint draws the whole camera profile on the
+  // canvas: the four corner handles, the centre handle (a small square with a
+  // cross in it) and the horizontal guide that runs to the right edge of the
+  // frame (live capture of the Camera[Pro] tool).
+  if (tool === "camera") {
+    octx.save();
+    octx.translate(mx, my);
+    octx.rotate((curR.rot || 0) * Math.PI / 180);
+    const hw = curR.w / 2 * view.zoom, hh = curR.h / 2 * view.zoom;
+    octx.strokeStyle = TV_CAMERA_COL;
+    octx.lineWidth = 1;
+    [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].forEach(([dx, dy]) => {
+      octx.strokeRect(Math.round(dx) - 3.5, Math.round(dy) - 3.5, 7, 7);
+    });
+    octx.strokeRect(-4, -4, 8, 8);
+    octx.beginPath();
+    octx.moveTo(0, -4); octx.lineTo(0, 4);
+    octx.moveTo(-4, 0); octx.lineTo(4, 0);
+    octx.stroke();
+    octx.beginPath();
+    octx.moveTo(4, 0); octx.lineTo(hw, 0);
+    octx.stroke();
+    octx.beginPath();
+    octx.moveTo(hw, 0); octx.lineTo(hw - 5, -4); octx.lineTo(hw - 5, 4);
+    octx.closePath();
+    octx.stroke();
+    octx.restore();
+  }
   octx.restore();
 }
 function strokeRotRect(c, r) {
