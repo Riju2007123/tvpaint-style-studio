@@ -81,8 +81,10 @@ function newProject(w, h, fps) {
     ],
     showRoles: false, roleLayerOnly: false,
     timelineTC: false,
-    // canvas display options (live TVPaint 12 "Display" popup defaults)
-    showStencil: false, showPaper: true, showSelection: true,
+    // canvas display options (live TVPaint 12 "Display" popup defaults, read
+    // from the live popup: Stencil off, Paper off, Selection on,
+    // Animator Disk on, Camera on, Follow Camera off, Timeline Notes off)
+    showStencil: false, showPaper: false, showSelection: true,
     showAnimatorDisk: true, showCamera: true, followCamera: false,
     showTimelineNotes: false, showReticule: false, layerAttenuation: false,
     loopLimits: { mode: "mark", start: 1, end: null },
@@ -220,8 +222,10 @@ function brushStamp(ctx, brush, color, x, y, pressure, proj, cap) {
       ctx.fillStyle = colorWithAlpha(color, alpha);
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
     } else {
-      const inner = Math.max(0, r - Math.max(0.6, r * soft));
-      const g = ctx.createRadialGradient(x, y, inner * hard, x, y, r);
+      // solid core up to r*hardness, soft edge out to r (the anti-aliasing
+      // setting widens the soft edge).  Without the solid core the pen brush
+      // never reaches full opacity and the stroke looks faint and broken.
+      const g = ctx.createRadialGradient(x, y, r * hard, x, y, r);
       g.addColorStop(0, colorWithAlpha(color, alpha));
       g.addColorStop(1, colorWithAlpha(color, 0));
       ctx.fillStyle = g;
@@ -522,7 +526,9 @@ function strokeMove(state, pt, pressure) {
   state.smoothed.y += (pt.y - state.smoothed.y) * k;
   const p2 = { ...state.smoothed };
   const d = Math.hypot(p2.x - state.last.x, p2.y - state.last.y);
-  const step = Math.max(1, brush.size / 4);
+  // the stamps are placed close enough to overlap, so the stroke is continuous
+  // even for a small brush (TVPaint draws an unbroken line)
+  const step = Math.max(0.4, brush.size / 4);
   const n = Math.max(1, Math.ceil(d / step));
   const cap = state.scratch ? undefined : brush.opacity;
   // wet pickup: blend brush color toward the underlying paint while still wet
