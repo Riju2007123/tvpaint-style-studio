@@ -112,6 +112,10 @@ Works from `file://` too — just open `index.html`.
   camera-follow mode and the notes. The overlay colours come from the binary's
   own tokens (`0 0 0 128` selection, `64 64 64 128` animator disk / layer
   attenuation, `255 255 0 255` reticule, `128 128 255 255` camera profile).
+- Two more canvas overlays taken from the binary's own tokens: the **reticule**
+  (the yellow `255,255,0,255` crosshair that follows the pointer, `View >
+  Reticule`) and the **layer attenuation** (`64,64,64,128` - the layers that are
+  not the current one are dimmed, `View > Attenuate other layers`).
 - Layer order: the layer rows can be dragged onto each other to reorder them
   (with `Move Selected Layers` armed, the whole selection travels as a block),
   and the layer menu's `Move` submenu now carries the exact TVPaint 12 entries
