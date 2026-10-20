@@ -1173,6 +1173,40 @@ closes its panel and the shared blue block grows and shrinks over the open
 ones.  The Windows menu uses the same commands, so the menu ticks follow the
 tool bar.
 
+### v31 pass - the panels float and dock like TVPaint
+
+Every panel of TVPaint can be **docked in the left column** or **floated over
+the project window**; the chevron in the panel header switches between the two
+and a floating panel is dragged by its title bar.  The live app was opened and
+both states were captured:
+
+- **docked** (left column, 215 px wide, with a scroll bar): `Main Panel`,
+  `Color Panel`, `Chromatic Wheel`, `Light Table`, `Remote Control`,
+  `Tool : Pen Brush` - each header carries the title, a dot, the chevron and
+  the cross.
+- **floated**: the `Remote Control` and the `Light Table` as separate windows
+  over the canvas, each with the title, a dot, the chevron and the cross in its
+  own title bar.
+
+The content of the three panels that were visible:
+
+- **Color Panel** - `APen` and `BPen` colour boxes with their pickers, a
+  swap button and the `Colour #000000` line.
+- **Chromatic Wheel** - the big colour wheel with the value triangle and the
+  `R:000 G:000 B:000` line under it.
+- **Light Table** - a `Color` / `Instance` / `Bin` row with the green and
+  orange swatches, the `10 9 8 7 6 5 4 3 2 1` value scale with the lamp and
+  the `1 2 3 4 5 6 7 8 9 10` instance scale, the swatch grid whose dashes
+  form the staircase of the exposures, the `• • • • •` / `X` line and the
+  `Attenuate` box.
+- **Remote Control** - the layer field, the colour bar, the two transport
+  rows, `Frame rate 24 fps` with the `3 6 8 10 12 / 12.5 15 24 25 30` grid,
+  `Mark In` / `Mark Out` with their spinners and `Flip X / Flip Y / P`.
+
+The prototype now has all of that: the panels float and dock, the Chromatic
+Wheel is a real wheel, the Light Table and the Remote Control have the live
+layout, and the left column is the 215 px of the live app.
+
 ### Still not captured
 - Exact Role submenu appearance/order. The labels are known from the loc's role
   assignment commands: `Keyframe`, `Breakdown`, `Inbetween (To Do)`,

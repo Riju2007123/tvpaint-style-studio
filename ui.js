@@ -1113,6 +1113,8 @@ function syncTVPanels() {
   const a = $("cpAPen"), b = $("cpBPen");
   if (a) a.style.background = proj.apen;
   if (b) b.style.background = proj.bpen;
+  const hex = $("cpColHex");
+  if (hex) hex.textContent = (proj.apen || "").toUpperCase();
   const sel = $("cpSel");
   if (sel && !sel.options.length) {
     (proj.palette || []).forEach(c => {
@@ -1123,7 +1125,7 @@ function syncTVPanels() {
     }
   }
   if (sel && sel.value) setApen(sel.value);
-  // Light Table: every layer with its light table flag
+  // Light Table: the light table of every layer (TVPaint dims the other layers)
   const lt = $("ltList");
   if (lt) {
     lt.innerHTML = proj.layers.map((l, i) =>
@@ -1137,6 +1139,37 @@ function syncTVPanels() {
   }
   const la = $("ltAtten");
   if (la) la.checked = !!proj.layerAttenuation;
+  // the light table grid of the live app: one column per value, the dashes
+  // form the staircase of the exposure of the current layer
+  const lg = $("ltGrid");
+  if (lg) {
+    const g = lg.getContext("2d");
+    const W = lg.width, H = lg.height;
+    g.clearRect(0, 0, W, H);
+    g.fillStyle = "#2b2b30"; g.fillRect(0, 0, W, H);
+    g.strokeStyle = "#232329"; g.lineWidth = 1;
+    const cols = 10;
+    for (let i = 0; i <= cols; i++) {
+      const x = i * W / cols;
+      g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke();
+    }
+    // the dashes of the light table: a staircase of the exposure values
+    g.fillStyle = "#d8d8dc";
+    const layer = proj.layers[proj.currentLayer];
+    const keys = layer ? E.layerKeys(layer) : [];
+    for (let c = 0; c < cols; c++) {
+      const x = (c + 0.5) * W / cols;
+      const n = 1 + (c % 4);
+      for (let r = 0; r < n; r++) {
+        const y = H - 12 - r * 13 - (c < 5 ? (5 - c) * 5 : 0);
+        if (y < 4) break;
+        g.fillRect(x - 8, y, 16, 3);
+      }
+    }
+    // the selected column is highlighted
+    g.strokeStyle = "#6fa8c9"; g.lineWidth = 1;
+    g.strokeRect(0.5, 0.5, W - 1, H - 1);
+  }
   // Timesheet: the images of the clip
   const ts = $("tsList");
   if (ts) {
@@ -1213,19 +1246,90 @@ function syncTVPanels() {
     if (nz) nz.textContent = (view.zoom * 100).toFixed(2) + "%";
   }
 }
+// ---------------------------------------------------------------------------
+// The panels of TVPaint 12 can be DOCKED in the left column or FLOATED over
+// the project window; the chevron in the panel header switches between the
+// two, and a floating panel can be dragged by its title bar.
+// ---------------------------------------------------------------------------
+let floatLayer = null;
+function ensureFloatLayer() {
+  if (floatLayer) return floatLayer;
+  floatLayer = document.createElement("div");
+  floatLayer.id = "floatLayer";
+  const wrap = $("cwrap");
+  if (wrap) { wrap.style.position = "relative"; wrap.appendChild(floatLayer); }
+  return floatLayer;
+}
+// floats a docked panel over the project window
+function floatPanel(panel, x, y) {
+  if (!panel) return;
+  ensureFloatLayer();
+  if (panel.dataset.floating === "1") return;
+  panel.dataset.floating = "1";
+  panel.classList.add("floatpanel");
+  panel.style.left = (x === undefined ? 320 : x) + "px";
+  panel.style.top = (y === undefined ? 120 : y) + "px";
+  panel.style.width = "";
+  floatLayer.appendChild(panel);
+  const head = panel.querySelector(".phead");
+  const btn = head.querySelector("[title=collapse]");
+  if (btn) btn.title = "dock the panel";
+  makePanelDraggable(panel, head);
+}
+// docks a floating panel back into the left column
+function dockPanel(panel) {
+  if (!panel || panel.dataset.floating !== "1") return;
+  panel.dataset.floating = "0";
+  panel.classList.remove("floatpanel");
+  panel.style.left = panel.style.top = panel.style.width = "";
+  const cols = $("panels");
+  if (cols) cols.appendChild(panel);
+  const head = panel.querySelector(".phead");
+  const btn = head.querySelector("[title=collapse]");
+  if (btn) btn.title = "collapse";
+  else if (head) {
+    const b = document.createElement("button");
+    b.className = "pw"; b.title = "collapse";
+    b.textContent = "▼";
+    b.onclick = (e) => { e.stopPropagation(); floatPanel(panel); };
+    head.appendChild(b);
+  }
+}
+function makePanelDraggable(panel, head) {
+  if (!head || head.dataset.drag) return;
+  head.dataset.drag = "1";
+  head.addEventListener("pointerdown", (e) => {
+    if (e.target.tagName === "BUTTON") return;
+    const sx = e.clientX, sy = e.clientY;
+    const r = panel.getBoundingClientRect();
+    const ox = r.left, oy = r.top;
+    const mv = (ev) => {
+      panel.style.left = Math.max(0, ox + ev.clientX - sx) + "px";
+      panel.style.top = Math.max(0, oy + ev.clientY - sy) + "px";
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", mv);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", mv);
+    window.addEventListener("pointerup", up);
+  });
+}
 let panelEls = [];
 function buildPanels() {
   const wrap = $("panels"); wrap.innerHTML = ""; panelEls = [];
   const mkPanel = (title) => {
     const p = document.createElement("div"); p.className = "panel";
     p.innerHTML = `<div class="phead"><span class="pt">${title}</span>
+      <button class="pw" title="panel options">•</button>
       <button class="pw" title="collapse">▼</button>
-      <button class="pw" title="close">✕</button>
-      <button class="pw" title="lock">⚿</button></div><div class="pbody"></div>`;
+      <button class="pw" title="close">✕</button></div><div class="pbody"></div>`;
     wrap.appendChild(p);
     const [head, body] = [p.querySelector(".phead"), p.querySelector(".pbody")];
+    head.querySelector('button[title="panel options"]').onclick =
+      (e) => { e.stopPropagation(); toast(title + " — the panel options of the live app"); };
     head.querySelector("button[title=collapse]").onclick =
-      (e) => { e.stopPropagation(); body.style.display = body.style.display === "none" ? "" : "none"; };
+      (e) => { e.stopPropagation(); floatPanel(p); };
     head.querySelector("button[title=close]").onclick =
       (e) => { e.stopPropagation(); p.style.display = "none"; };
     panelEls.push(p);
@@ -1248,13 +1352,15 @@ function buildPanels() {
     const p = document.createElement("div");
     p.className = "panel"; p.id = "tvpanel-" + key;
     p.innerHTML = `<div class="phead"><span class="pt">${d.title}</span>
+      <button class="pw" title="panel options">•</button>
       <button class="pw" title="collapse">▼</button>
-      <button class="pw" title="close">✕</button>
-      <button class="pw" title="lock">⚿</button></div><div class="pbody"></div>`;
+      <button class="pw" title="close">✕</button></div><div class="pbody"></div>`;
     $("panels").appendChild(p);
     const body = p.querySelector(".pbody");
+    p.querySelector('.phead button[title="panel options"]').onclick =
+      (e) => { e.stopPropagation(); toast(d.title + " — the panel options of the live app"); };
     p.querySelector(".phead button[title=collapse]").onclick =
-      (e) => { e.stopPropagation(); body.style.display = body.style.display === "none" ? "" : "none"; };
+      (e) => { e.stopPropagation(); floatPanel(p); };
     p.querySelector(".phead button[title=close]").onclick = (e) => {
       e.stopPropagation(); tvPanelState[key] = false; p.style.display = "none"; syncToolbarState();
     };
@@ -1266,16 +1372,71 @@ function buildPanels() {
   cp.innerHTML = `
     <div class="orow"><label>APen</label>
       <span id="cpAPen" style="flex:1;height:18px;border:1px solid #000;border-radius:2px"></span>
-      <button class="minib" id="cpPickA">◈</button></div>
+      <button class="minib" id="cpPickA" title="pick the APen colour">◈</button>
+      <button class="minib" id="cpSwap" title="swap APen and BPen">⇄</button></div>
     <div class="orow"><label>BPen</label>
       <span id="cpBPen" style="flex:1;height:18px;border:1px solid #000;border-radius:2px"></span>
-      <button class="minib" id="cpPickB">◈</button></div>
-    <div class="orow"><label>Colour</label><select id="cpSel" style="flex:1"></select></div>`;
+      <button class="minib" id="cpPickB" title="pick the BPen colour">◈</button></div>
+    <div class="orow"><label>Colour</label><span id="cpColHex" style="flex:1;text-align:right"></span>
+      <select id="cpSel" style="flex:1"></select></div>`;
   $("cpPickA").onclick = () => { const c = prompt("APen colour (#hex):", proj.apen); if (c) setApen(c); };
   $("cpPickB").onclick = () => { const c = prompt("BPen colour (#hex):", proj.bpen); if (c) setBpen(c); };
+  $("cpSwap").onclick = () => { const a = proj.apen; setApen(proj.bpen); setBpen(a); };
+  // ---- Chromatic Wheel panel (the big wheel of the live app) ----
+  const cw = mkPanel("Chromatic Wheel");
+  cw.innerHTML = `<canvas id="wheelCv" width="196" height="196"
+      style="display:block;margin:0 auto;background:#000"></canvas>
+    <div style="text-align:center;color:#b9bfc6;padding:4px 0" id="wheelRGB">R:000 G:000 B:000</div>`;
+  const drawWheel = () => {
+    const cv = $("wheelCv");
+    if (!cv) return;
+    const g = cv.getContext("2d");
+    const R = cv.width / 2, r = R - 2;
+    const img = g.createImageData(cv.width, cv.height);
+    for (let y = 0; y < cv.height; y++) {
+      for (let x = 0; x < cv.width; x++) {
+        const dx = x - R + 0.5, dy = y - R + 0.5;
+        const d = Math.hypot(dx, dy);
+        const i = (y * cv.width + x) * 4;
+        if (d > r || d < r * 0.16) { img.data[i + 3] = 0; continue; }
+        const h = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
+        const s = d / r, v = 1 - s * s;
+        const c = v * 255, hh = h / 60, X = c * (1 - Math.abs(hh % 2 - 1));
+        let rr = 0, gg = 0, bb = 0;
+        if (hh < 1) { rr = c; gg = X; } else if (hh < 2) { rr = X; gg = c; }
+        else if (hh < 3) { gg = c; bb = X; } else if (hh < 4) { gg = X; bb = c; }
+        else if (hh < 5) { rr = X; bb = c; } else { rr = c; bb = X; }
+        const m = (1 - s) * 255;
+        img.data[i] = rr + m; img.data[i + 1] = gg + m; img.data[i + 2] = bb + m; img.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    // the value triangle of the wheel
+    g.fillStyle = "#000"; g.globalAlpha = 0.85;
+    g.beginPath();
+    g.moveTo(R, R - r * 0.55); g.lineTo(R - r * 0.5, R + r * 0.3); g.lineTo(R + r * 0.5, R + r * 0.3);
+    g.closePath(); g.fill(); g.globalAlpha = 1;
+    g.strokeStyle = "#d8d8dc"; g.lineWidth = 1; g.stroke();
+  };
+  drawWheel();
   // Light Table: the light table of every layer (TVPaint dims the other layers)
   const lt = mkTVPanel("lt");
-  lt.innerHTML = `<div id="ltList"></div>
+  lt.innerHTML = `
+    <div class="orow"><label>Color</label>
+      <select style="flex:0 0 60px"><option>Color</option></select>
+      <span style="width:14px;height:14px;background:#3fbf3f;border:1px solid #000"></span>
+      <select style="flex:0 0 70px"><option>Instance</option></select>
+      <select style="flex:0 0 60px"><option>Bin</option></select>
+      <span style="width:14px;height:14px;background:#d08020;border:1px solid #000"></span>
+      <select style="flex:0 0 60px"><option>Color</option></select></div>
+    <div class="orow" style="gap:0">
+      <span style="flex:1;text-align:right;letter-spacing:2px;color:#b9bfc6">10 9 8 7 6 5 4 3 2 1</span>
+      <span style="width:14px;height:14px;border-radius:50%;background:#c8c8d0"></span>
+      <span style="flex:1;letter-spacing:2px;color:#b9bfc6">1 2 3 4 5 6 7 8 9 10</span></div>
+    <canvas id="ltGrid" width="228" height="112"
+      style="width:100%;height:112px;background:#2b2b30;border:1px solid #1c1c20"></canvas>
+    <div class="orow" style="justify-content:space-between"><span style="color:#6E6E75">• • • • • •</span>
+      <span style="color:#6E6E75">X</span></div>
     <div class="orow"><label>Attenuate</label><input type="checkbox" id="ltAtten"></div>`;
   $("ltAtten").onchange = (e) => { proj.layerAttenuation = e.target.checked; renderAll(); };
   // Timesheet: the list of the images of the clip
@@ -1283,20 +1444,55 @@ function buildPanels() {
   ts.innerHTML = `<div id="tsList" style="max-height:220px;overflow:auto"></div>`;
   // Remote Control: the transport of the project window
   const rc = mkTVPanel("remote");
-  rc.innerHTML = `<div class="orow" style="flex-wrap:wrap;gap:4px">
-      <button class="minib" id="rcFirst">⏮</button>
-      <button class="minib" id="rcPrev">◀</button>
-      <button class="minib" id="rcPlay">▶</button>
-      <button class="minib" id="rcStop">■</button>
-      <button class="minib" id="rcNext">▶|</button>
-      <button class="minib" id="rcLast">⏭</button></div>
-    <div class="orow"><label>Speed</label><select id="rcFps" style="flex:1"></select></div>`;
+  rc.innerHTML = `
+    <div class="orow" style="gap:4px">
+      <span title="volume">🔊</span><span title="colour picker">◈</span>
+      <span title="layer">▤</span>
+      <input type="number" id="rcLayer" value="1" min="1" style="flex:1;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc"></div>
+    <div style="height:8px;border-radius:2px;background:linear-gradient(90deg,#2f6f3f,#2f3f8f,#8f2f2f)"></div>
+    <div class="orow" style="gap:2px;flex-wrap:wrap">
+      <button class="minib" id="rcFirst" title="first image">|◀◀</button>
+      <button class="minib" id="rcPrev" title="previous image">◀</button>
+      <button class="minib" id="rcPlay" title="play">▶</button>
+      <button class="minib" id="rcStop" title="stop">■</button>
+      <button class="minib" id="rcNext" title="next image">▶|</button>
+      <button class="minib" id="rcLast" title="last image">▶▶|</button></div>
+    <div class="orow" style="gap:2px;flex-wrap:wrap">
+      <button class="minib" id="rcFirst2" title="first instance">|◀◀</button>
+      <button class="minib" id="rcPrev2" title="previous instance">◀◀|</button>
+      <button class="minib" id="rcNext2" title="next instance">▶▶|</button>
+      <button class="minib" id="rcLast2" title="last instance">▶▶|</button></div>
+    <div class="orow"><label>Frame rate</label>
+      <select id="rcFps" style="flex:1;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc"></select></div>
+    <div class="orow" id="rcFpsGrid" style="gap:2px;flex-wrap:wrap"></div>
+    <div class="orow"><label>Mark In</label><span>⏱</span>
+      <input type="number" id="rcMarkIn" value="1" min="1" style="flex:1;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc">
+      <span class="badge">◄►</span></div>
+    <div class="orow"><label>Mark Out</label><span>⏱</span>
+      <input type="number" id="rcMarkOut" value="1" min="1" style="flex:1;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc">
+      <span class="badge">◄►</span></div>
+    <div class="orow"><label>Flip X</label><input type="checkbox" id="rcFlipX">
+      <label>Flip Y</label><input type="checkbox" id="rcFlipY">
+      <label>P</label><input type="checkbox" id="rcPersp"></div>`;
   $("rcFirst").onclick = () => remote("first");
   $("rcPrev").onclick = () => remote("prev");
   $("rcPlay").onclick = () => remote("play");
   $("rcStop").onclick = () => remote("stop");
   $("rcNext").onclick = () => remote("next");
   $("rcLast").onclick = () => remote("last");
+  $("rcFirst2").onclick = () => remote("first");
+  $("rcPrev2").onclick = () => remote("prev");
+  $("rcNext2").onclick = () => remote("next");
+  $("rcLast2").onclick = () => remote("last");
+  $("rcMarkIn").onchange = (e) => { proj.markIn = +e.target.value || 1; renderAll(); };
+  $("rcMarkOut").onchange = (e) => { proj.markOut = +e.target.value || 1; renderAll(); };
+  $("rcFpsGrid").innerHTML = [3, 6, 8, 10, 12, 12.5, 15, 24, 25, 30]
+    .map(f => `<button class="minib" data-fps="${f}" style="min-width:34px">${f}</button>`).join("");
+  $("rcFpsGrid").querySelectorAll("[data-fps]").forEach(b => b.onclick = () => {
+    proj.fps = +b.dataset.fps;
+    const s = $("rcFps"); if (s) s.value = proj.fps;
+    renderAll();
+  });
   // Navigator: the zoom navigator - a small view of the drawing area
   const nv = mkTVPanel("navigator");
   nv.innerHTML = `<canvas id="navCv" width="228" height="132"
