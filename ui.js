@@ -81,7 +81,9 @@ function renderArtOnly() {
   actx.fillStyle = "#ffffff";
   actx.fillRect(0, 0, proj.width, proj.height);
   const camKeys = proj.cameraKeys && proj.cameraKeys.length;
-  if (camView && camKeys) {
+  // TVPaint: the camera IS the lens — with camera keys present the canvas always
+  // renders through the camera (the Camera View toggle only shows/hides the overlay).
+  if (camKeys) {
     // render through the camera: fit the camera rect, apply rotate/zoom/flip
     const cam = E.cameraEvaluate(proj, proj.currentFrame);
     const r = E.cameraRect(proj, cam);
@@ -108,7 +110,7 @@ function renderArtOnly() {
     actx.drawImage(surf, 0, 0);
     actx.globalAlpha = 1;
   });
-  if (camView && camKeys) actx.restore();
+  if (camKeys) actx.restore();
 }
 function renderOverlayOnly() {
   octx.setTransform(1, 0, 0, 1, 0, 0);

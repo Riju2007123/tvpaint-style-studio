@@ -166,7 +166,7 @@ test("George pen color commands", () => {
 });
 test("George project info", () => {
   const p = E.newProject(320, 240, 8);
-  assert.strictEqual(E.George.tv_projectinfo(p), "320 240 8 1 1");
+  assert.strictEqual(E.George.tv_projectinfo(p), "320 240 8 1 25");
   assert.strictEqual(E.George.tv_getwidth(p), "320");
   assert.strictEqual(E.George.tv_framerate(p, 30), "30");
   assert.strictEqual(p.fps, 30);

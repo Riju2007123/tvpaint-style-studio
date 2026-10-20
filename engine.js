@@ -39,7 +39,7 @@ function newLayer(name) {
 function newProject(w, h, fps) {
   const p = {
     width: w || 512, height: h || 512, fps: fps || 24,
-    inFrame: 1, outFrame: 1, currentFrame: 1,
+    inFrame: 1, outFrame: 25, currentFrame: 1,
     layers: [newLayer("Layer 1")],
     currentLayer: 0,
     antiAlias: "high",   // REA: antiAliasing None | Medium | High | Highest
