@@ -7,7 +7,7 @@
   * { box-sizing: border-box; user-select: none; }
   html, body { margin: 0; height: 100vh; overflow: hidden;
     font: 12px/1.35 "Segoe UI", sans-serif; background: #1e2023; color: #b9bfc6; }
-  #app { display: grid; height: 100vh; grid-template-rows: 24px 32px 1fr 236px 22px; }
+  #app { display: grid; height: 100vh; grid-template-rows: 24px 32px 1fr 320px 26px; }
 
   /* ---- menu bar ---- */
   #menubar { background: #2a2e33; display: flex; align-items: stretch; padding: 0 4px;
@@ -81,6 +81,8 @@
   .pbBtn:hover { background: #3E476B; }
   .pbmenu { position: fixed; z-index: 400; background: #313136; border: 1px solid #5A5A61;
     box-shadow: 0 3px 10px #000a; padding: 2px 0; min-width: 92px; color: #B6B6B6; font-size: 11px; }
+  .pbmenu .pbhead { padding: 3px 8px; color: #d0d0d4; font-weight: 600; font-size: 11px;
+    border-bottom: 1px solid #4a4a51; margin-bottom: 2px; }
   .pbmenu .pbi { padding: 3px 8px; cursor: pointer; white-space: nowrap; display: flex; gap: 6px; }
   .pbmenu .pbi:hover { background: #3E476B; }
   .pbmenu .pbi .chk { width: 10px; display: inline-block; }
@@ -97,201 +99,269 @@
     border-radius: 4px 4px 0 0; padding: 3px 14px; cursor: pointer; }
   .tabs .tab.on { background: #3E476B; color: #B6B6B6; }
 
-  #cwrap { display: grid; grid-template-rows: 1fr 30px; min-height: 0; min-width: 0; }
+  #cwrap { display: grid; grid-template-rows: 1fr 22px; min-height: 0; min-width: 0; }
   #viewport { position: relative; background: #313136; overflow: hidden; min-width: 0; }
   #art, #ovl { position: absolute; left: 0; top: 0; }
   #ovl { touch-action: none; cursor: crosshair; }
   #vbRow { background: #313136; border-top: 1px solid #2B2B30; display: flex;
-    align-items: center; gap: 4px; padding: 0 8px; overflow: hidden; }
+    align-items: center; gap: 8px; padding: 0 8px; overflow: hidden; }
+  #canvasScroll { flex: 1; height: 6px; background: #232327; border-radius: 3px; position: relative;
+    overflow: hidden; margin-right: 20px; }
+  #canvasScrollThumb { position: absolute; left: 0; top: 0; bottom: 0; width: 34%; background: #55555c;
+    border-radius: 3px; }
+  #vbRight { display: flex; align-items: center; gap: 6px; color: #898989; font-size: 11px; }
+  #vbRight .vbrot { color: #8a8a90; font-size: 13px; }
+  #vbRight #zoomLbl { min-width: 44px; text-align: right; }
   #vbRow .tib { width: 24px; height: 22px; }
   #ovBar { height: 10px; background: #232327; border-radius: 5px; position: relative; overflow: hidden;
     flex: 1 1 auto; min-width: 80px; margin: 0 6px; border: 1px solid #2B2B30; }
   #ovFill { position: absolute; top: 0; bottom: 0; background: #3E476B; }
   #ovIn, #ovOut, #ovMark { position: absolute; top: 0; bottom: 0; width: 2px; }
   #ovIn { background: #3f7a3f; } #ovOut { background: #8a3f3f; } #ovMark { background: #F0D092; }
-  /* hold cells: dark cell with ONE horizontal dash (TVPaint exposure hold look) */
-  .cell.hold { background: #2D2D32; }
-  .cell.hold::after { content: ""; position: absolute; left: 50%; top: 50%; width: 55%; height: 2px;
-    transform: translate(-50%, -50%); background: #4a4a51; }
-  .strip .cell { background: #2D2D32; }
-  .cell.keyw { background: #efefef; }
   #vbRow .tib { width: 24px; height: 22px; }
   #dispSel { width: 84px; background: #2D2D32; color: #B6B6B6; border: 1px solid #2B2B30;
     border-radius: 3px; padding: 2px 4px; }
   #zoomIn, #zoomOut { width: 16px; height: 16px; }
   #zoomLbl { min-width: 44px; text-align: left; color: #aab1b8; }
 
-  /* ---- timeline panel ---- */
+  /* ---- timeline panel (verified pixel-by-pixel against TVPaint 12.1.0 Pro Demo) ---- */
   #tlpanel { background: #313136; border-top: 1px solid #2B2B30; display: flex;
     flex-direction: column; min-height: 0; }
-  #tlTabsRow { display: flex; align-items: flex-end; background: #2D2D32;
-    border-bottom: 1px solid #2B2B30; padding: 2px 6px 0; min-height: 22px; }
-  #tlTabs { display: flex; align-items: flex-end; gap: 2px; background: transparent; padding: 0; flex: none; }
-  #tlTabs .tab { background: #313136; border: 1px solid #2B2B30; border-bottom: 0;
-    border-radius: 4px 4px 0 0; padding: 2px 16px; cursor: pointer; color: #898989; font-size: 11px; }
-  #tlTabs .tab.on { background: #3E476B; color: #B6B6B6; }
-  #tlBody { flex: 1; display: grid; grid-template-columns: 252px 1fr; min-height: 0; }
-  #tlLeft { border-right: 1px solid #2B2B30; overflow: hidden; padding: 0; }
-  /* left column mirrors the track row-for-row (verified against the reference screenshot):
-     .lhead = ruler(20) + camera strip(20); .llayer = strip(40) + label margin(15) + border */
-  .lhead { height: 20px; box-sizing: border-box; border-bottom: 1px solid #2B2B30;
-    display: flex; flex-direction: column; justify-content: flex-start; gap: 0;
-    padding: 0 5px; overflow: hidden; }
-  .lhead.withcam { height: 40px; }
-  .lhicons { display: flex; align-items: center; gap: 3px; height: 19px; flex: none; }
-  .lhicons img.sq { width: 16px; height: 16px; }
-  .camrow { height: 20px; padding: 0; gap: 3px; flex: none; }
-  .llayer { height: 56px; border-bottom: 1px solid #2B2B30; display: flex; flex-direction: column; }
-  .llayer .lname { height: 20px; }
-  .llayer .lblock { flex: 1; display: flex; gap: 5px; padding: 1px 5px 2px; align-items: flex-start; }
-  .llayer .lblock .lthumb { width: 34px; height: 20px; background: #fff; border: 1px solid #2B2B30;
-    border-radius: 2px; flex: none; }
-  .llayer .lblock .lcol { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-  .llayer .lblock .minic { font-size: 9px; color: #898989; white-space: nowrap; }
-  .llayer .lblock .oprow { display: flex; align-items: center; gap: 3px; color: #898989; }
-  .llayer .lblock .oprow input[type=range] { flex: 1; height: 6px; }
-  .trow { display: flex; align-items: center; gap: 4px; padding: 1px 6px; height: 30px; }
-  .trow.cur { background: #333a41; }
-  .trow.dim { opacity: .45; }
-  .trow.locked { opacity: .6; }
-  .trow canvas { width: 48px; height: 24px; background: #fff; border: 1px solid #2D2D32;
-    border-radius: 2px; flex: none; }
-  .trow .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .lhead .camrow { height: 20px; padding: 0 0; }
-  .lhead .camrow .nm { font-size: 11px; }
-  .trow .sq { opacity: .5; width: 16px; height: 16px; }
-  .sf { background: none; border: 0; padding: 0 1px; cursor: pointer; opacity: .3; }
-  .sf img { width: 15px; height: 15px; display: block; }
-  .sf.on { opacity: 1; }
-  #tlTrack { overflow: auto; position: relative; }
-  .ruler { display: flex; position: sticky; left: 0; height: 20px; background: transparent;
-    z-index: 5; border-bottom: 1px solid #2B2B30; }
-  .ruler .tick { position: relative; z-index: 6; }
-  .ruler.bot { border-bottom: 0; border-top: 1px solid #2B2B30; margin-top: -1px; }
-  .ruler .tick { width: 80px; min-width: 80px; flex: none; border-left: 0; padding: 2px 0 2px 4px;
-    font-size: 10px; color: #898989; position: relative; }
-  .ruler .tick.in { color: #3f7a3f; }
-  .ruler .tick.cur { background: #3d6fd9; color: #fff; }
-  .ruler .band { position: absolute; top: 0; height: 4px; background: #3d6fd9; }
+  #tlTabsRow { display: flex; align-items: center; justify-content: center; background: #313136;
+    border-bottom: 1px solid #2B2B30; padding: 0 8px; height: 20px; flex: none; }
+  #tlInfoRow { text-align: center; color: #898989; font-size: 11px; margin: 0 auto;
+    white-space: nowrap; overflow: hidden; padding: 0 2px; }
+  #tlInfoRow span { margin: 0 13px; }
+  /* 395 px left column = 355 px layer panel + 40 px separator column (⊘) */
+  #tlBody { flex: 1; display: grid; grid-template-columns: 395px 1fr; min-height: 0; }
+  #tlLeft { overflow: hidden; padding: 0; position: relative; background: #313136; }
+  .lsep { position: absolute; right: 0; top: 0; bottom: 0; width: 50px; background: #2D2D32;
+    border-left: 1px solid #2B2B30; z-index: 1; }
+  .lsep::before { content: ""; position: absolute; left: 2px; top: 0; bottom: 0; width: 10px;
+    background: #3a3a41; border-left: 1px solid #4a4a51; border-right: 1px solid #26262b; }
+  .lsep .pin { position: absolute; left: 26px; transform: translateX(-50%); top: 46px; height: 60px;
+    display: flex; align-items: center; color: #7c8288; font-size: 15px; }
+  .lhead { height: 29px; width: 345px; box-sizing: border-box; border-bottom: 1px solid #2B2B30;
+    display: flex; flex-direction: row; align-items: center; gap: 5px; padding: 0 4px; overflow: hidden;
+    position: relative; z-index: 2; }
+  .lhead.withcam { height: 46px; }
+  .ltabs { display: flex; align-items: center; gap: 2px; flex: none; }
+  .ltabs .tab { background: #46464D; border-radius: 4px; padding: 2px 9px; cursor: pointer;
+    color: #c6c6cc; font-size: 11px; white-space: nowrap; }
+  .ltabs .tab.on { background: #3E476B; color: #dcdce6; }
+  .lhiconsrow { height: 17px; width: 345px; box-sizing: border-box; display: flex; align-items: center;
+    border-bottom: 1px solid #2B2B30; position: relative; z-index: 2; overflow: hidden; }
+  .lhicons { display: flex; align-items: center; gap: 1px; height: 17px; flex: 1 1 auto;
+    min-width: 0; padding: 0 3px; }
+  .lhicons img.sq { width: 14px; height: 14px; display: block; filter: invert(.35); }
+  .lhicons .vsep { width: 1px; height: 12px; background: #4a4a51; margin: 0 2px; }
+  .lhicons .hbtn { background: none; border: 0; padding: 0; cursor: pointer; display: flex; }
+  .lhicons .hbtn img { width: 15px; height: 15px; display: block; filter: invert(.35); }
+  .lhicons .hbtn img[src*="DeleteLayer"] { filter: none; }
+  .minib.newbtn { margin-left: 5px; display: flex; align-items: center; gap: 5px;
+    background: #3a3a40; border: 1px solid #4a4a51; border-radius: 9px; color: #c8c8cc;
+    font-size: 10px; padding: 0 4px 0 8px; cursor: pointer; height: 16px; }
+  .minib.newbtn .arrow { width: 12px; height: 12px; border-radius: 50%; background: #55555c;
+    color: #d0d0d4; font-size: 8px; display: flex; align-items: center; justify-content: center; }
+  .lhicons .hsp { flex: 1 1 auto; }
+  .lhicons .flag { background: none; border: 0; padding: 0; cursor: pointer; display: flex; }
+  .lhicons .flag img { width: 14px; height: 14px; filter: invert(.85); }
+  .lhicons .flag.off img { opacity: .4; }
+  .llayer { height: 60px; width: 345px; box-sizing: border-box; border-bottom: 1px solid #2B2B30;
+    display: flex; flex-direction: column; position: relative; z-index: 2; cursor: pointer; }
+  .llayer .lrowbg { position: absolute; left: 27px; right: 0; top: 0; bottom: 0; background: #313136; z-index: 0; }
+  .llayer.cur .lrowbg { background: #3C3C43; }
+  .llayer .lname { height: 19px; display: flex; align-items: center; gap: 4px; padding: 0 3px 0 44px;
+    position: relative; z-index: 1; }
+  .llayer .lminus { color: #9a9aa0; font-size: 11px; line-height: 1; }
+  .llayer .lname .nm { flex: 1; font-size: 12px; color: #b8b8be; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .llayer .lname .lmore { opacity: .7; display: flex; cursor: pointer; }
+  .llayer .lname .lmore img { width: 13px; height: 13px; filter: invert(.35); }
+  .llayer .lbody { flex: 1; display: grid; grid-template-columns: 53px 1fr 78px;
+    grid-template-rows: 22px 19px; column-gap: 6px; align-items: start;
+    padding: 0 8px 0 60px; position: relative; z-index: 1; }
+  .llayer .ltype { position: absolute; left: 8px; top: 6px; width: 18px; height: 18px;
+    opacity: .95; z-index: 2; filter: invert(.8); }
+  .llayer .lthumb { grid-column: 1; grid-row: 1 / span 2; width: 52px; height: 26px; background: #fff;
+    border: 1px solid #2B2B30; border-radius: 2px; margin-top: 0; }
+  .llayer .lmid { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column;
+    gap: 0; min-width: 0; padding-left: 0; }
+  .llayer .lplay { display: flex; align-items: center; gap: 1px; height: 18px; }
+  .llayer .lplay .dot { width: 5px; height: 5px; border-radius: 50%; background: #55555c; margin-right: 4px; }
+  .llayer .lplay button { background: none; border: 0; padding: 0; cursor: pointer; opacity: .85; display: flex; }
+  .llayer .lplay img { width: 16px; height: 16px; display: block; filter: invert(.75); }
+  .llayer .lplay .looppb { margin-left: 3px; }
+  .llayer .lplay .looppb img { width: 15px; height: 15px; filter: invert(.45); }
+  .llayer .lcolor { font-size: 10px; color: #8f8f95; padding-left: 0; }
+  .llayer .lflags { grid-column: 3; grid-row: 1; display: flex; align-items: flex-end; gap: 5px; height: 22px; }
+  .llayer .lflags .flag { background: none; border: 0; padding: 0; cursor: pointer; display: flex; }
+  .llayer .lflags img { width: 15px; height: 15px; filter: invert(.85); }
+  .llayer .lflags .flag.off img { opacity: .4; }
+  .llayer .dots { display: flex; gap: 6px; padding-bottom: 3px; }
+  .llayer .dots i { width: 5px; height: 5px; border-radius: 50%; background: #5a5a61; display: block; }
+  .llayer .lop { grid-column: 3; grid-row: 2; display: flex; align-items: center; gap: 3px; margin-top: 2px;
+    background: #2D2D32; border: 1px solid #2B2B30; border-radius: 3px; height: 16px; padding: 0 3px; }
+  .llayer .lop span { font-size: 10px; color: #9a9a9f; }
+  .llayer .lop input[type=range] { flex: 1; height: 3px; min-width: 16px; -webkit-appearance: none;
+    appearance: none; background: transparent; }
+  .llayer .lop input[type=range]::-webkit-slider-runnable-track { height: 3px; background: #66666d;
+    border-radius: 2px; }
+  .llayer .lop input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 8px;
+    margin-top: -2.5px; border-radius: 50%; background: #cfcfd4; }
+  .llayer .lop .lval { font-size: 10px; color: #c8c8cc; }
+  .camrow { height: 17px; padding: 0 6px; gap: 3px; flex: none; display: flex; align-items: center;
+    background: #3C3C43; border-bottom: 1px solid #2B2B30; width: 345px; box-sizing: border-box; }
+  .camrow .nm { flex: 1; font-size: 11px; }
+  #tlTrack { overflow: auto; position: relative; display: flex; flex-direction: column;
+    scrollbar-width: none; -ms-overflow-style: none; }
+  #tlTrack::-webkit-scrollbar { width: 0; height: 0; }
+  .ruler { display: flex; height: 17px; flex: none; background: #2D2D32; position: sticky; top: 0;
+    z-index: 6; border-bottom: 1px solid #2B2B30; }
+  .ruler.bot { border-bottom: 0; border-top: 1px solid #2B2B30; position: sticky; bottom: 0;
+    top: auto; z-index: 6; }
+  .ruler .tick { width: 40px; min-width: 40px; flex: none; font-size: 11px; color: #a4a4aa;
+    position: relative; padding: 1px 0 0 4px; box-sizing: border-box; }
+  .ruler .tick.cur { background: #3E476B; color: #fff; }
+  .ruler .tick.in { color: #7fae7f; }
+  .ruler .band { position: absolute; bottom: 0; height: 2px; background: #3d6fd9; pointer-events: none; }
   .ruler .band.green { background: #4f7a4a; }
-  .strip { display: flex; height: 40px; border-bottom: 1px solid #2B2B30; position: relative; }
-  .cell { width: 40px; min-width: 40px; flex: none; border-right: 1px solid #2B2B30; position: relative;
-    cursor: pointer; background: #2D2D32; }
-  .cell.keyw { background: #efefef; }
-  .cell.hold { background: #efefef; }
-  .cell.blockend::after { content: attr(data-exp); position: absolute; right: 2px; top: 2px;
-    background: #2D2D32; color: #B6B6B6; font-size: 10px; padding: 0 4px; border-radius: 2px; }
-  .cell .pin { position: absolute; right: -7px; top: 12px; width: 14px; height: 14px; z-index: 3;
-    font-size: 12px; color: #898989; }
-  .cell .kdot { position: absolute; left: 2px; top: 1px; font-size: 9px; color: #333; }
-  .cell .plus { position: absolute; left: 50%; top: -8px; transform: translateX(-50%); width: 18px; height: 14px;
-    z-index: 3; color: #a7d3a7; background: none; border: 0; font-size: 12px; cursor: pointer;
-    display: none; }
-  .strip:hover .cell:not(:first-child) .plus { display: block; }
-  .cell.playhead::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0;
-    width: 2px; background: #ffd24a; z-index: 2; }
-  .cell.curf { outline: 1px solid #6fa8c9; }
-  .tlfoot { display: flex; align-items: center; gap: 4px; background: #313136;
-    border-top: 1px solid #2B2B30; padding: 2px 6px; }
-  .tlfoot .ftab { background: #313136; border: 1px solid #2B2B30; border-radius: 3px;
-    padding: 2px 12px; cursor: pointer; color: #898989; font-size: 11px; }
-  .tlfoot .ftab.on { background: #3E476B; color: #B6B6B6; }
-  .blockend::after { display: none; }
-  /* animation cell block: one rounded container per drawing (key .. key+exposure-1) */
-  .strip { margin-bottom: 15px; }
-  .strip .pin { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
-    color: #71767c; font-size: 11px; }
-  .strip .pin:first-child { left: -2px; }
-  .strip .pin:last-child { left: auto; right: -4px; }
-  .blk { position: absolute; top: 0; bottom: 0; border: 1px solid #5A5A61; border-radius: 6px;
-    background: rgba(140, 150, 160, 0.07); pointer-events: none; z-index: 1; }
-  .blk .knob { position: absolute; top: -5px; left: -5px; width: 9px; height: 9px;
-    border-radius: 50%; background: #5A5A61; border: 1px solid #313136; }
-  .blk.grabbed { border-color: #5A66CC; }
-  .blk.grabbed .knob { background: #5A66CC; }
-  .blkExp { position: absolute; right: 2px; top: -1px; background: #2D2D32; color: #B6B6B6;
-    font-size: 10px; font-style: normal; padding: 0 5px; border-radius: 3px; z-index: 2; }
-  .blkFrame { position: absolute; left: 3px; top: -1px; color: #898989; font-size: 10px;
-    font-style: normal; z-index: 2; }
-  /* empty drawing = checkerboard cell (white = ink present, like TVPaint) */
-  .cell.empty { background: repeating-conic-gradient(#cfcfcf 0% 25%, #f2f2f2 0% 50%) 0 0 / 8px 8px; }
-  /* drawing number label BELOW the strip */
-  .knum { position: absolute; bottom: -13px; left: 1px; font-size: 9px; color: #B6B6B6; z-index: 2; }
-  .cell .kdot { display: none; }
-  .cell .vsigil { position: absolute; left: 1px; top: 50%; transform: translateY(-50%);
-    color: #B6B6B6; font-size: 9px; background: rgba(0, 0, 0, 0.3); border-radius: 50%;
-    width: 12px; height: 12px; line-height: 12px; text-align: center; z-index: 2; }
-  /* red current-image line: full track height (through both rulers) */
-  #curLine { position: absolute; top: 0; bottom: 0; width: 2px; background: #c05555;
-    z-index: 5; pointer-events: none; }
-  /* blue current-frame column through the whole track, red edges mark the image bounds */
-  #curCol { position: absolute; top: 0; bottom: 0; width: 40px; z-index: 4; pointer-events: none;
-    background: rgba(61, 111, 217, 0.55); border-left: 1px solid #c05555; border-right: 1px solid #c05555; }
-  #curCol::before { content: ""; position: absolute; inset: 0;
-    background: rgba(61, 111, 217, 0.35); }
-  /* exposure end handle at the last drawing block: drag to increase the length */
-  .expHandle { position: absolute; right: -2px; top: 0; bottom: 0; width: 8px; cursor: ew-resize;
-    z-index: 6; touch-action: none; }
-  .expHandle::after { content: ""; position: absolute; right: 3px; top: 4px; bottom: 4px;
-    width: 2px; background: #b8bdc2; }
-  /* timing handles: small gray squares at the top corners of every key cell */
-  .cell .dh { position: absolute; top: -2px; width: 7px; height: 7px; background: #5A5A61;
+  .ttopspacer { height: 29px; flex: none; }
+  .tlspacer { flex: 1 0 auto; min-height: 0; }
+  .strip { height: 60px; flex: none; display: flex; position: relative; background: #313136;
+    border-bottom: 1px solid #2B2B30; box-sizing: border-box; }
+  .strip.sel { background: #3C3C43; }
+  .strip .cells { display: flex; height: 40px; flex: none; }
+  .cell { width: 40px; min-width: 40px; flex: none; height: 40px; position: relative;
+    cursor: pointer; background: transparent; border: 0; }
+  .cell.keyw::before { content: ""; position: absolute; left: 0; top: 0; width: 40px; height: 40px;
+    background: linear-gradient(#2B2B30, #3A3A3F 42%, #3A3A3F 58%, #2B2B30);
+    box-shadow: inset 0 1px 0 #77777d; z-index: 0; }
+  .cell .cellimg { position: absolute; left: 0; top: 9px; width: 40px; height: 22px;
+    background: #fff; border-top: 1px solid #C9C9CE; border-bottom: 1px solid #C9C9CE;
+    box-sizing: border-box; z-index: 2; }
+  .cell .cellimg.empty { background: repeating-conic-gradient(#cfcfcf 0% 25%, #f2f2f2 0% 50%) 0 0 / 8px 8px; }
+  .cell .cellimg canvas { display: block; width: 40px; height: 22px; }
+  .cell.hold::after { content: ""; position: absolute; left: 50%; top: 20px; width: 16px; height: 2px;
+    transform: translate(-50%, -50%); background: #6a6a70; z-index: 1; }
+  .cell .knum { position: absolute; left: 2px; top: 40px; font-size: 10px; color: #b0b0b6; z-index: 3; }
+  .cell .empin { position: absolute; left: 50%; top: 20px; transform: translate(-50%, -50%);
+    color: #8a8a90; font-size: 15px; z-index: 2; }
+  .cell .plus { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); width: 16px; height: 14px;
+    z-index: 5; color: #a7d3a7; background: none; border: 0; font-size: 12px; cursor: pointer; display: none; }
+  .strip:hover .cell .plus { display: block; }
+  .cell .dh { position: absolute; top: 1px; width: 7px; height: 7px; background: #6a6a70;
     z-index: 4; cursor: ew-resize; touch-action: none; }
   .cell .dh.l { left: 1px; }
   .cell .dh.r { right: 1px; }
   .cell .dh.grab { background: #5A66CC; }
-  /* add-drawing + at the left edge of each strip */
-  .plus.stripstart { position: absolute; display: block; right: auto; left: -10px; top: -7px; }
-  /* transport row above the ruler (REA: Mark In / fps / play / zoom / Mark Out) */
-  #tlTransport { display: flex; align-items: center; gap: 6px; background: #313136;
-    border-bottom: 1px solid #2B2B30; padding: 3px 8px; min-height: 30px; }
-  #tlTransport .tbtn { background: none; border: 0; color: #B6B6B6; cursor: pointer;
-    font-size: 13px; padding: 1px 4px; }
-  #tlTransport .tbtn.ton { color: #9fe08f; }
-  #tlTransport .tinput { background: #2D2D32; color: #B6B6B6; border: 1px solid #2B2B30;
-    border-radius: 3px; font-size: 11px; padding: 2px 5px; width: 46px; }
-  #tlTransport .tlbl { color: #898989; font-size: 11px; }
-  #tlInfoRow { text-align: right; color: #898989; font-size: 11px; padding: 0 2px 2px;
-    background: transparent; margin-left: auto; white-space: nowrap; overflow: hidden; }
-  #tlInfoRow span { margin-left: 16px; }
-  /* camera layer strip: thin row with always-visible + inserts */
+  .expLine { position: absolute; top: 1px; height: 1px; background: #9a9aa0; z-index: 3; pointer-events: none; }
+  .expLine .knob { position: absolute; top: -3px; width: 7px; height: 7px; background: #6a6a70; }
+  .expHandle { position: absolute; top: 0; width: 9px; height: 40px; cursor: ew-resize; z-index: 6; touch-action: none; }
+  .expHandle::after { content: ""; position: absolute; left: 1px; top: 1px; width: 7px; height: 7px; background: #6a6a70; }
+  .blkExp, .blkFrame { display: none; }
+  /* red current-image bounds, full track height (verified #CB0B0C in the real app) */
+  #curCol { position: absolute; top: 29px; bottom: 0; width: 40px; z-index: 5; pointer-events: none;
+    border-left: 1px solid #c0403f; border-right: 1px solid #c0403f; background: transparent; }
+  #curCol::before { display: none; }
+  /* ---- transport: two-line Mark In / overview bar + remote icons / two-line Mark Out ---- */
+  #tlTransport { display: flex; align-items: stretch; height: 64px; flex: none;
+    background: linear-gradient(#2D2D32 0 25px, #313136 25px 46px, #2D2D32 46px 100%);
+    border-bottom: 1px solid #2B2B30; }
+  .tr-spacer { width: 208px; flex: none; }
+  .tr-mark { width: 94px; flex: none; position: relative; }
+  .tr-mark .lbl { position: absolute; left: 0; right: 0; top: 23px; height: 12px; color: #898989;
+    font-size: 10px; display: flex; align-items: center; gap: 5px; white-space: nowrap; padding-left: 4px; }
+  .tr-mark.right { width: 84px; margin-right: 21px; }
+  .tr-mark.right .lbl { justify-content: flex-end; padding: 0 4px 0 0; }
+  .tr-mark .mk { color: #9a9a9f; font-size: 11px; }
+  .tr-mark input { position: absolute; left: 0; top: 47px; width: 94px; height: 16px; background: #46464D;
+    color: #c8c8cc; border: 0; border-radius: 1px; padding: 0 5px; font-size: 10px; box-sizing: border-box; }
+  .tr-mark.right input { left: auto; right: 0; width: 84px; }
+  .tr-center { flex: 1; position: relative; min-width: 0; margin: 0 6px 0 9px; }
+  .tr-scroll { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 40%;
+    height: 9px; background: transparent; z-index: 3; }
+  #tsThumb { width: 100%; height: 9px; background: #46464D; cursor: grab; }
+  #tsThumb.drag { cursor: grabbing; }
+  .tr-center #ovBar { position: absolute; left: 0; right: 0; top: 47px; height: 16px; border-radius: 0;
+    background: #2D2D32; border: 0; margin: 0; overflow: hidden; width: auto; }
+  #ovFill { display: none; }
+  #ovCur { position: absolute; top: 0; height: 13px; background: #3E476B; }
+  #ovIn { position: absolute; left: 0; bottom: 0; width: 3px; height: 4px; background: #2E7550; }
+  #ovOut { position: absolute; left: 0; bottom: 0; width: 3px; height: 4px; background: #6E3550; }
+  #ovNum { position: absolute; top: 0; height: 13px; line-height: 13px; color: #6b7390;
+    font-size: 12px; pointer-events: none; }
+  .tr-center #ovBar .ovt { position: absolute; bottom: 0; width: 1px; height: 9px;
+    background: #000; pointer-events: none; }
+  .tr-center #ovBar .ovticks { display: none; }
+  .tr-btns { position: absolute; left: 0; right: 0; top: 23px; display: flex; align-items: center;
+    justify-content: center; gap: 7px; }
+  .tr-btns .tib { width: 22px; height: 22px; padding: 0; }
+  .tr-btns .tib img { width: 18px; height: 18px; display: block; filter: invert(.32) brightness(1.05); }
+  .fpswrap { position: relative; display: inline-flex; align-items: center; flex: none; }
+  .tr-btns .fps { width: 72px; height: 22px; background: #3a3a40; color: #cfcfd4; border: 0;
+    border-radius: 4px; font-size: 11px; padding: 0 20px 0 7px; appearance: none; -webkit-appearance: none; }
+  .fpsarrow { position: absolute; right: 3px; width: 14px; height: 14px; border-radius: 50%;
+    background: #4a4a51; color: #d0d0d4; font-size: 8px; line-height: 14px; text-align: center;
+    pointer-events: none; }
   .strip.cam { height: 20px; }
-  .strip.cam .cell { background: #2D2D32; }
+  .strip.cam .cell { background: transparent; }
   .plus.always { display: block; top: -7px; }
-  /* blue selected layer row */
-  .trow.cur { background: #3E476B; color: #B6B6B6; }
-  .trow.cur .nm { color: #B6B6B6; }
-  .lblock { background: #313136; border-radius: 4px; margin: 3px 4px; padding: 4px 6px; }
-  .lblock .thumbrow { display: flex; gap: 6px; align-items: center; }
-  .lblock .lthumb { width: 44px; height: 26px; background: #fff; border: 1px solid #2D2D32; border-radius: 2px; }
-  .lblock .minic { display: flex; gap: 4px; color: #898989; font-size: 10px; }
-  .lblock .oprow { display: flex; gap: 4px; align-items: center; margin-top: 3px; color: #898989; }
-  .lblock .oprow input[type=range] { width: 90px; }
-  .dots { display: flex; gap: 3px; margin-top: 2px; }
-  .dots i { width: 7px; height: 7px; border-radius: 50%; background: #51565c; display: block; cursor: pointer; }
-  .dots i.on { background: #9fd3ef; }
-  #tstatus { background: #2D2D32; border-top: 1px solid #2B2B30; display: flex;
-    align-items: center; gap: 18px; padding: 2px 10px; font-size: 11px; color: #898989; }
-  #tstatus b { color: #B6B6B6; font-weight: 600; }
-  .minirow { display: flex; gap: 3px; align-items: center; margin: 2px 4px; }
-  .minib { background: #313136; border: 1px solid #2B2B30; border-radius: 3px;
-    color: #B6B6B6; padding: 2px 7px; cursor: pointer; font-size: 11px; }
-  .minib:hover { background: #3d4249; }
-
+  /* footer: two rows like TVPaint (tabs row + Background / Start Frame row) */
+  .tlfoot { flex: none; background: #2D2D32; border-top: 1px solid #2B2B30; display: flex;
+    align-items: center; height: 18px; }
+  .tlfoot .frow2 { height: 18px; width: 100%; display: flex; align-items: center; gap: 4px; padding: 0 6px;
+    box-sizing: border-box; }
+  .lfrow1 { position: absolute; left: 0; bottom: 0; width: 345px; height: 17px; display: flex;
+    align-items: center; gap: 2px; padding: 0 6px; box-sizing: border-box; background: #2D2D32;
+    border-top: 1px solid #2B2B30; z-index: 3; }
+  .lfrow1 .ftab { flex: 1 1 0; height: 15px; font-size: 10px; padding: 0 2px; }
+  .lfrow1 .lfsep { width: 1px; height: 11px; background: #4a4a51; margin: 0 2px; }
+  .lfrow1 .lfgrip { color: #8a8a90; font-size: 11px; cursor: ns-resize; padding: 0 2px; }
+  .ftab { background: #3a3a41; border: 0; border-radius: 2px; padding: 1px 8px; cursor: pointer;
+    color: #a8a8ae; font-size: 10px; }
+  .ftab.on { color: #e0e0e4; background: #46464D; }
+  .tlfoot .frow2 > span { color: #a6a6ac; font-size: 11px; }
+  .tlfoot .frow2 .ftstart { margin-left: 10px; color: #b6b6bc; font-size: 11px; }
+  .tlfoot .frow2 input { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 4px;
+    color: #c8c8cc; font-size: 11px; padding: 0 5px; width: 46px; height: 18px; box-sizing: border-box; }
+  .tlfoot .frow2 select.ftfield { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 4px;
+    color: #b6b6bc; font-size: 11px; padding: 0 4px; width: 160px; height: 18px; box-sizing: border-box; }
+  .tlfoot .ftresize { margin-left: 9px; width: 15px; height: 15px; opacity: .8; cursor: ns-resize;
+    filter: invert(.4); }
   /* ---- status ---- */
-  #statusbar { background: #2D2D32; display: flex; align-items: center; gap: 16px;
-    padding: 0 10px; color: #898989; font-size: 11px; }
-  #statusbar .right { margin-left: auto; display: flex; gap: 14px; align-items: center; }
-  #proxyLbl { background: #2f5a43; color: #bfe8d2; border-radius: 3px; padding: 1px 10px; }
-  /* current-frame cell: solid blue like TVPaint, above the column tint */
-  .cell.curf { background: #3d6fd9 !important; z-index: 6;
-    box-shadow: inset 0 0 0 1px #6fa8c9; outline: none; }
-  .cell.curf canvas { visibility: hidden; }
-  .cell.curf .knum { color: #e8eef5; z-index: 7; }
-  .cell.curf .fnum { position: absolute; left: 3px; top: 2px; font-size: 10px;
-    color: #fff; z-index: 7; }
-  .cell.curf .vsigil { z-index: 7; }
-  .cell.curf .dh { z-index: 8; }
+  #statusbar { background: #2D2D32; display: flex; align-items: center; gap: 0;
+    padding: 0 8px; color: #b0b0b6; font-size: 11px; border-top: 1px solid #2B2B30; }
+  #statusbar .right { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+  #statusXY { width: 86px; flex: none; }
+  #rgbaLbl { width: 178px; flex: none; }
+  #proxyLbl { width: 180px; height: 20px; flex: none; margin-left: 80px; border-radius: 4px;
+    background: linear-gradient(#4E7350, #3F5B42); color: #cfe8d2; display: flex;
+    align-items: center; justify-content: center; font-size: 11px; }
+  #sbInfo { color: #b0b0b6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-left: 26px; display: flex; gap: 26px; }
+  #sbInfo b { color: #c9c9cf; font-weight: 400; }
+  #sbInfo span { margin: 0; }
+  #roomSel { height: 18px; width: 104px; background: #46464D; color: #c8c8cc; border: 1px solid #2B2B30;
+    border-radius: 3px; font-size: 10px; }
+  /* floating George console (moved out of the status bar to match TVPaint) */
+  #georgeWin { position: fixed; right: 14px; bottom: 36px; width: 360px; z-index: 400;
+    background: #26262b; border: 1px solid #4a4a51; border-radius: 4px; display: none;
+    flex-direction: column; gap: 4px; padding: 6px; box-shadow: 0 8px 24px #0008; }
+  #georgeWin .gw-head { display: flex; align-items: center; color: #c8c8cc; font: 11px Consolas, monospace; }
+  #georgeWin .gw-head button { margin-left: auto; background: none; border: 0; color: #898989;
+    cursor: pointer; font-size: 12px; }
+  #georgeIn { background: #1f1f23; color: #9fe08f; border: 1px solid #3a3a40; border-radius: 3px;
+    padding: 3px 6px; width: 100%; box-sizing: border-box; font: 11px Consolas, monospace; }
+  #georgeOut { color: #9fe08f; font: 10px Consolas, monospace; max-height: 80px; overflow: auto;
+    white-space: pre-wrap; }
+  .tbtn { background: none; border: 0; color: #B6B6B6; cursor: pointer; font-size: 13px; padding: 1px 4px; }
+  .tbtn.ton { color: #9fe08f; }
+  #toastMsg { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%) translateY(8px);
+    background: #1f1f23; color: #d0d4d8; border: 1px solid #4a4a51; border-radius: 4px;
+    padding: 4px 12px; font-size: 11px; opacity: 0; pointer-events: none;
+    transition: opacity .15s, transform .15s; z-index: 500; }
+  #toastMsg.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -305,12 +375,22 @@
         <canvas id="art"></canvas>
         <canvas id="ovl"></canvas>
       </div>
+      <div id="vbRow">
+        <div id="canvasScroll"><div id="canvasScrollThumb"></div></div>
+        <div id="vbRight">
+          <span class="vbrot" title="rotation">⟳</span>
+          <span id="zoomLbl">100.00%</span>
+          <button class="tib" id="zoomOut" title="zoom out">−</button>
+          <button class="tib" id="zoomIn" title="zoom in">+</button>
+          <select id="dispSel" style="background:#2D2D32;color:#B6B6B6;border:1px solid #2B2B30;border-radius:3px">
+            <option>Display</option><option>Display 1:1</option><option>Fit</option></select>
+        </div>
+      </div>
     </div>
   </div>
   <div id="tlpanel">
     <div id="tlTransport"></div>
     <div id="tlTabsRow">
-      <div id="tlTabs"></div>
       <div id="tlInfoRow"></div>
     </div>
     <div id="tlBody">
@@ -318,7 +398,6 @@
       <div id="tlTrack"></div>
     </div>
     <div id="tlFoot" class="tlfoot"></div>
-    <div id="tstatus"></div>
   </div>
   <div id="statusbar"></div>
 </div>

@@ -27,9 +27,18 @@ const art = $("art"), ovl = $("ovl");
 const actx = art.getContext("2d"), octx = ovl.getContext("2d");
 let ghostTmp = null;
 
+let toastTimer = null;
 function toast(m) {
-  const s = $("statusMsg2");
-  if (s) s.textContent = m;
+  let s = document.getElementById("toastMsg");
+  if (!s) {
+    s = document.createElement("div");
+    s.id = "toastMsg";
+    document.body.appendChild(s);
+  }
+  s.textContent = m;
+  s.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => s.classList.remove("show"), 2200);
 }
 
 // ================= shared render pipeline (from v3) =================
@@ -107,7 +116,7 @@ function openLayerPlayback(i, btn) {
   const r = btn.getBoundingClientRect();
   m.style.left = r.left + "px";
   m.style.top = (r.bottom + 2) + "px";
-  m.innerHTML = ["None", "Loop", "Ping-Pong", "Hold"].map(k =>
+  m.innerHTML = `<div class="pbhead">Loop Mode</div>` + ["None", "Loop", "Ping-Pong", "Hold"].map(k =>
     `<div class="pbi${k === cur ? " on" : ""}" data-k="${k}"><span class="chk">${k === cur ? "✓" : ""}</span>${k}</div>`).join("");
   document.body.appendChild(m);
   m.querySelectorAll(".pbi").forEach(el => el.onclick = (ev) => {
@@ -129,8 +138,19 @@ function renderArtOnly() {
   actx.translate(view.x, view.y);
   actx.scale(view.zoom, view.zoom);
   actx.imageSmoothingEnabled = proj.antiAlias !== "None";
-  actx.fillStyle = "#ffffff";
-  actx.fillRect(0, 0, proj.width, proj.height);
+  // paper background (timeline footer: Background dropdown)
+  const bg = proj.background || "Background";
+  if (bg === "Checkerboard") {
+    const s = 16;
+    actx.fillStyle = "#f2f2f2"; actx.fillRect(0, 0, proj.width, proj.height);
+    actx.fillStyle = "#cfcfcf";
+    for (let y = 0; y < proj.height; y += s)
+      for (let x = 0; x < proj.width; x += s)
+        if (((x / s) + (y / s)) % 2 === 0) actx.fillRect(x, y, s, s);
+  } else {
+    actx.fillStyle = bg === "Black" ? "#000000" : "#ffffff";
+    actx.fillRect(0, 0, proj.width, proj.height);
+  }
   const camKeys = proj.cameraKeys && proj.cameraKeys.length;
   // TVPaint: the camera IS the lens — with camera keys present the canvas always
   // renders through the camera (the Camera View toggle only shows/hides the overlay).
@@ -479,7 +499,16 @@ const MENUS = [
     null, ["Fit View", () => fitView()], ["Zoom 100%", () => zoomTo()]
   ]],
   ["Windows", [["Main Panel", () => togglePanel(0)], ["Tool Panel", () => togglePanel(1)], ["Camera Panel", () => togglePanel(2)], ["Timeline", null, 1]]],
-  ["Help", [["About my-version", () => alert("my-version — rebuilt from REA analysis of TVPaint Animation 12 Pro. No original code copied.")]]]
+  ["Help", [
+    ["George Console…", () => {
+      const w = $("georgeWin");
+      if (!w) return;
+      const show = w.style.display !== "flex";
+      w.style.display = show ? "flex" : "none";
+      if (show) $("georgeIn").focus();
+    }],
+    ["About my-version", () => alert("my-version — rebuilt from REA analysis of TVPaint Animation 12 Pro. No original code copied.")]
+  ]]
 ];
 let menusBuilt = false;
 function buildMenubar() {
@@ -1150,41 +1179,9 @@ function dlgLayerLength(prefill, dir) {
   }, true], ["Cancel", () => {}]]);
 }
 
-// ================= viewport bottom row =================
+// ================= viewport bottom row (canvas scrollbar + zoom/Display) =================
 function buildVbRow() {
-  const r = $("vbRow");
-  r.innerHTML = `
-    <span style="color:#898989">Mark In</span>
-    <div id="ovBar"><div id="ovFill"></div><div id="ovIn"></div><div id="ovOut"></div><div id="ovMark"></div></div>
-    <button class="tib remote" id="rFirst" title="Go to first image"><img src="icons/Remote-Goto-FirstImage-x20.png"></button>
-    <button class="tib remote" id="rPrev" title="Previous image"><img src="icons/Remote-Goto-PreviousImage-x20.png"></button>
-    <button class="tib remote" id="rPlay" title="Play/Stop (Space)"><img src="icons/Remote-PlaySmall-x20.png"></button>
-    <button class="tib remote" id="rNext" title="Next image"><img src="icons/Remote-Goto-NextImage-x20.png"></button>
-    <button class="tib remote" id="rLast" title="Go to last image"><img src="icons/Remote-Goto-LastImage-x20.png"></button>
-    <button class="tib remote" id="rLoop" title="Loop"><img src="icons/Remote-LoopOn-x20.png"></button>
-    <select id="fpsSel" style="background:#2D2D32;color:#B6B6B6;border:1px solid #2B2B30;border-radius:3px;width:76px">
-      ${[12, 24, 25, 30, 50, 60].map(f => `<option ${f === 24 ? "selected" : ""}>${f} fps</option>`).join("")}
-    </select>
-    <button class="tib" id="zoomOut" title="zoom out">−</button>
-    <button class="tib" id="zoomIn" title="zoom in">+</button>
-    <span id="zoomLbl">100.00%</span>
-    <select id="dispSel"><option>Display</option><option>Display 1:1</option><option>Fit</option></select>`;
-  $("rFirst").onclick = () => remote("first");
-  $("rPrev").onclick = () => remote("prev");
-  $("rPlay").onclick = () => remote("play");
-  $("rNext").onclick = () => remote("next");
-  $("rLast").onclick = () => remote("last");
-  $("rLoop").onclick = () => toggleLoop();
-  $("fpsSel").onchange = (e) => { proj.fps = parseInt(e.target.value) || 24; renderTimeline(); renderTimelineStatus(); };
-  window.syncFpsSel = () => {   // keep the fps select in sync (Modify Project / New Project)
-    const s = $("fpsSel");
-    const want = proj.fps + " fps";
-    if (![...s.options].some(o => o.value === want || o.text === want)) {
-      const o = document.createElement("option"); o.textContent = want; s.appendChild(o);
-    }
-    [...s.options].forEach(o => o.selected = (o.text === want || o.value === want));
-  };
-  syncFpsSel();
+  if (!$("vbRow")) return;
   $("zoomIn").onclick = () => { view.zoom = Math.min(20, view.zoom * 1.25); renderAll(); };
   $("zoomOut").onclick = () => { view.zoom = Math.max(0.05, view.zoom * 0.8); renderAll(); };
   $("dispSel").onchange = (e) => {
@@ -1196,13 +1193,14 @@ function buildVbRow() {
       renderAll();
     }
   };
+  updateZoomLbl();
 }
 
 // ================= timeline panel =================
 function buildTlTabs() {
-  $("tlTabs").innerHTML = `<div class="tab">Project</div><div class="tab on" id="tabClip">Clip: Timeline</div>`;
-  $("tlTabs").querySelectorAll(".tab").forEach(t =>
-    t.onclick = () => $("tlTabs").querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === t)));
+  // tabs now live in the layer header row (real TVPaint 12: 29 px tab row above the icon row)
+  document.querySelectorAll(".ltabs .tab").forEach(t =>
+    t.onclick = () => document.querySelectorAll(".ltabs .tab").forEach(x => x.classList.toggle("on", x === t)));
 }
 // A drawing is "empty" when its canvas carries no ink: TVPaint then paints the
 // cell as a checkerboard; inked drawings stay white. Same rule as the key-cell
@@ -1226,81 +1224,87 @@ function renderTimeline() {
   const visFrames = Math.max(2, 2 * Math.floor(((track && track.clientWidth) || 800) / (2 * CW)));
   // even frame count so the 2-frame ruler ticks fill the track without overflow
   const maxF = Math.ceil(Math.max(proj.outFrame + 4, proj.currentFrame + 4, visFrames) / 2) * 2;
-  // left column — row-for-row mirror of the track (lhead = ruler+camera strip, llayer = one strip)
+  // left column — 355 px layer panel + 40 px separator column (⊘), row-for-row with the track
   const camOn = !!(proj.cameraKeys && proj.cameraKeys.length);
-  let lh = `<div class="lhead${camOn ? " withcam" : ""}">
-    <div class="lhicons">
-      <img class="sq" src="icons/FileNew-x20.png" title="new" style="opacity:.8">
-      <img class="sq" src="icons/FileOpen-x20.png" title="open" style="opacity:.8">
-      <img class="sq" src="icons/FileSave-x20.png" title="save" style="opacity:.8">
-      <img class="sq" src="icons/LayerSquigglesOn-x20.png" title="curves" style="opacity:.8">
-      <img class="sq" src="icons/LayerActiveOn-x20.png" title="layers" style="opacity:.8">
-      <button class="minib" onclick="layerAdd()" title="New Layer">New ▾</button>
-      <span style="color:#B6B6B6;cursor:pointer" title="favorites" onclick="toast('(prototype)')">♡</span>
-    </div>
-    ${camOn ? `<div class="trow camrow" onclick="selectTool(&quot;camera&quot;)" title="Camera Layer">
+  const cl0 = proj.layers[proj.currentLayer] || {};
+  const flagBtn = (flag, on, iconOn, iconOff, title) =>
+    `<button class="flag${on ? "" : " off"}" title="${title}" onclick="event.stopPropagation();toggleLayerFlagAt(${proj.currentLayer},'${flag}')">
+      <img src="icons/${iconOn}-x20.png"></button>`;
+  let lh = `<div class="lhead">
+    <div class="ltabs"><div class="tab">Project</div><div class="tab on">Clip: Timeline</div></div>
+  </div>
+  <div class="lhiconsrow"><div class="lhicons">
+      <img class="sq" src="icons/MiscLayers-x20.png" title="layers">
+      <img class="sq" src="icons/LayerAnim-x20.png" title="animation layers">
+      <span class="vsep"></span>
+      <button class="hbtn" onclick="layerAdd()" title="Create a new animation layer."><img src="icons/CreateAnimLayer-x20.png"></button>
+      <button class="hbtn" onclick="event.stopPropagation();toast('folder layers — not in this prototype')" title="Create a new folder layer"><img src="icons/CreateFolderLayer-x20.png"></button>
+      <button class="hbtn" onclick="event.stopPropagation();toast('CTG layers — not in this prototype')" title="Create a new CTG layer"><img src="icons/CreateCTGLayer-x20.png"></button>
+      <button class="hbtn" onclick="layerDel()" title="Delete the current layer"><img src="icons/DeleteLayer-x20.png"></button>
+      <button class="minib newbtn" onclick="layerAdd()" title="New layer">New <span class="arrow">▾</span></button>
+      <span class="hsp"></span>
+      ${flagBtn("visible", cl0.visible !== false, "LayerActiveOn", "LayerActiveOff", "Show/Hide")}
+      ${flagBtn("locked", cl0.locked, "LayerLockOn", "LayerLockOff", "Lock Layer")}
+      ${flagBtn("lighttable", cl0.lighttable, "LayerLighttableOn", "LayerLighttableOff", "Light table")}
+      ${flagBtn("preserveTransparency", cl0.preserveTransparency, "LayerPreserveTransparencyOn", "LayerPreserveTransparencyOff", "Preserve transparency")}
+      <button class="flag" title="Stencil" onclick="event.stopPropagation();toast('stencil — not in this prototype')"><img src="icons/LayerStencil-x20.png"></button>
+      <button class="flag" title="Layer display options" onclick="event.stopPropagation();toast('layer display options — not in this prototype')"><img src="icons/LayerSquigglesOn-x20.png"></button>
+    </div></div>
+  ${camOn ? `<div class="camrow" onclick="selectTool(&quot;camera&quot;)" title="Camera Layer">
       <img class="sq" src="icons/Shape-Camera-x20.png">
       <span class="nm">Camera Layer</span>
-      <button class="sf" title="delete camera keys" onclick="event.stopPropagation();proj.cameraKeyAt=null;toast('camera keys kept')"><img src="icons/ReqLockOff-x20.png"></button>
-    </div>` : ""}
-  </div>`;
+      <button class="flag" title="camera keys kept" onclick="event.stopPropagation();toast('camera keys kept')"><img src="icons/ReqLockOff-x20.png"></button>
+    </div>` : ""}`;
   proj.layers.forEach((l, i) => {
-    lh += `<div class="llayer" onclick="pickLayer(${i})">
-    <div class="trow lname ${i === proj.currentLayer ? "cur" : ""}">
-      <img class="sq" src="icons/LayerSquigglesOn-x20.png" style="opacity:.8">
+    const cur = i === proj.currentLayer;
+    lh += `<div class="llayer${cur ? " cur" : ""}" data-layer="${i}" onclick="pickLayer(${i})">
+    <div class="lrowbg"></div>
+    <div class="lname">
+      <span class="lminus">⊖</span>
       <span class="nm">${l.name}</span>
-      <button class="sf ${l.visible ? "on" : ""}" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'visible')"
-        title="Show/Hide (eye)"><img src="icons/${l.visible ? "LayerActiveOn" : "LayerActiveOff"}-x20.png"></button>
-      <button class="sf ${l.preserveTransparency ? "on" : ""}" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'preserveTransparency')"
-        title="Preserve transparency"><img src="icons/${l.preserveTransparency ? "LayerPreserveTransparencyOn" : "LayerPreserveTransparencyOff"}-x20.png"></button>
-      <button class="sf ${l.lighttable ? "on" : ""}" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'lighttable')"
-        title="Light table"><img src="icons/${l.lighttable ? "LayerLighttableOn" : "LayerLighttableOff"}-x20.png"></button>
-      <button class="sf ${l.locked ? "on" : ""}" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'locked')"
-        title="Lock Layer"><img src="icons/${l.locked ? "ReqLockOn" : "ReqLockOff"}-x20.png"></button>
-      <button class="pbBtn" data-pb="${i}" title="Loop Mode"
-        onclick="event.stopPropagation();openLayerPlayback(${i},this)">${l.playback || "None"} ▾</button>
+      <span class="lmore" title="layer options" onclick="event.stopPropagation();layerMenu(${i},this)"><img src="icons/Timeline-Resize-x20.png"></span>
     </div>
-    <div class="lblock">
-      <canvas class="lthumb" data-layer="${i}" width="34" height="20"></canvas>
-      <div class="lcol">
-        <div class="minic">
-          <span>▸ ⏸ ⏭ ▣</span>
-          <span style="margin-left:auto">Color</span>
+    <div class="lbody">
+      <img class="ltype" src="icons/SketchHand-x20.png" title="drag to move">
+      <canvas class="lthumb" data-layer="${i}" width="52" height="26"></canvas>
+      <div class="lmid">
+        <div class="lplay"><span class="dot"></span>
+          <button title="previous instance" onclick="event.stopPropagation();layerInst(${i},-1)"><img src="icons/Remote-Goto-PreviousInstance-x20.png"></button>
+          <button title="next instance" onclick="event.stopPropagation();layerInst(${i},1)"><img src="icons/Remote-Goto-NextInstance-x20.png"></button>
+          <button class="looppb" data-pb="${i}" title="Loop Mode" onclick="event.stopPropagation();openLayerPlayback(${i},this)"><img src="icons/${({ None: "LayerLoopNone", Loop: "LayerLoopRepeatAfter", "Ping-Pong": "LayerLoopPingPong", Hold: "LayerLoopHoldAfter" })[l.playback || "None"]}-x20.png"></button>
         </div>
-        <div class="minic">
-          <span class="dots">
-            <i class="${l.lighttable ? "on" : ""}" title="light table" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'lighttable')"></i>
-            <i class="${l.preserveTransparency ? "on" : ""}" title="preserve transparency" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'preserveTransparency')"></i>
-            <i class="${l.locked ? "on" : ""}" title="lock" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'locked')"></i>
-          </span>
-        </div>
-        <div class="oprow"><span style="font-size:12px">⊖</span>
-          <input type="range" data-lop="${i}" min="0" max="100" value="${Math.round(l.opacity * 100)}">
-          <span class="lval">${Math.round((l.opacity || 1) * 100)}%</span></div>
+        <div class="lcolor">Color</div>
       </div>
+      <div class="lflags">
+        <button class="flag${l.visible !== false ? "" : " off"}" title="Show/Hide" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'visible')"><img src="icons/${l.visible !== false ? "LayerActiveOn" : "LayerActiveOff"}-x20.png"></button>
+        <span class="dots"><i></i><i></i><i></i><i></i></span>
+      </div>
+      <div class="lop"><span>⊖</span>
+        <input type="range" data-lop="${i}" min="0" max="100" value="${Math.round((l.opacity ?? 1) * 100)}">
+        <span class="lval">${Math.round((l.opacity ?? 1) * 100)}%</span></div>
     </div>
   </div>`;
   });
+  lh += `<div class="lsep"><span class="pin">⊘</span></div>`;
   left.innerHTML = lh;
+  buildTlTabs();
   left.querySelectorAll("[data-lop]").forEach(r => {
     r.oninput = (e) => {
       proj.layers[+r.dataset.lop].opacity = +e.target.value / 100;
-      const row = r.closest(".oprow"); row.querySelector(".lval").textContent = e.target.value + "%";
+      const row = r.closest(".lop"); row.querySelector(".lval").textContent = e.target.value + "%";
       fastRenderAll();
     };
   });
-  left.querySelectorAll("[data-pb]").forEach(s => {
-    s.onclick = (e) => { e.stopPropagation(); openLayerPlayback(+s.dataset.pb, s); };
-  });
-  // track: top ruler + strips + bottom ruler (TVPaint mirrors the ruler)
+  // track: top ruler + one 64 px row per layer + flexible filler + bottom ruler
   const lastUsed = Math.max(1, ...proj.layers.map(l =>
     Math.max(0, ...Object.keys(l.frames).map(Number).map(k => k + (l.frames[k].exposure || 1) - 1))));
   const inF = proj.inFrame, outF = Math.max(proj.outFrame, inF);
-  const ticks = Array.from({ length: Math.ceil(maxF / 2) }, (_, i) => {
-    const f = i * 2 + 1;
+  // one tick per frame (40 px); numbers on odd frames like TVPaint; current frame = blue tick
+  let ticks = "";
+  for (let f = 1; f <= maxF; f++) {
     const cls = [f === proj.currentFrame ? "cur" : "", f === proj.inFrame ? "in" : ""].join(" ");
-    return `<div class="tick ${cls}">${f}</div>`;
-  }).join("");
+    ticks += `<div class="tick ${cls}" data-tf="${f}">${f % 2 === 1 ? f : ""}</div>`;
+  }
   // info row (REA/status format): Project / Clip / Layer-count includes camera / Current Image
   const info = $("tlInfoRow");
   if (info) {
@@ -1319,7 +1323,8 @@ function renderTimeline() {
   }
   const blueBand = `<div class="band" style="left:${(inF - 1) * CW}px;width:${(Math.min(maxF, outF) - inF + 1) * CW}px"></div>`;
   const mkBands = `<div class="band green" style="left:0;width:${Math.min(maxF, lastUsed) * CW}px"></div>${blueBand}`;
-  let th = `<div class="ruler" id="rulerRow">${ticks}${mkBands}</div>`;
+  const topPad = camOn ? 46 : 29;
+  let th = `<div class="ttopspacer" style="height:${topPad}px"></div><div class="ruler" id="rulerRow">${ticks}${mkBands}</div>`;
   // camera-layer strip: the "+" marks ARE the camera key frames (user-verified)
   if (proj.cameraKeys && proj.cameraKeys.length) {
     const camKeyFrames = new Set(proj.cameraKeys.map(k => Math.round(k.frame)));
@@ -1329,61 +1334,51 @@ function renderTimeline() {
         ? `<button class="plus always" data-camf="${f}" title="${camKeyFrames.has(f) ? "camera key frame" : "add camera key here"}">+</button>` : "";
       camCells += `<div class="cell" data-f="${f}" data-l="cam">${plus}</div>`;
     }
-    th += `<div class="strip cam"><span class="pin">⊘</span>${camCells}<span class="pin">⊘</span></div>`;
+    th += `<div class="strip cam"><div class="cells">${camCells}</div></div>`;
   }
   proj.layers.forEach((l, li) => {
-    th += `<div class="strip" data-layer="${li}"><span class="pin">⊘</span>`;
-    // ONE rounded container per layer spanning first key .. last exposure end
-    // (REA: the reference shows a single continuous container with the "n" badge at
-    // its end and knobs at the key seams) — Exposure %d %d from FUN_14040ddc0.
+    const sel = li === proj.currentLayer;
     const keys = Object.keys(l.frames).map(Number).filter(k => k >= 1 && k <= maxF).sort((a, b) => a - b);
-    // sample each drawing once per render (hold cells reuse the result)
     const emptyByKey = new Map(keys.map(k => [k, frameIsEmpty(l.frames[k])]));
-    if (keys.length) {
-      const first = keys[0];
-      const lastKey = keys[keys.length - 1];
-      const lastEnd = Math.max(...keys.map(k => k + (l.frames[k].exposure || 1) - 1));
-      const left = (first - 1) * CW;
-      const w = Math.max(CW, (lastEnd - first + 1) * CW);
-      let knobs = "";
-      keys.forEach((k, i) => { if (i > 0) knobs += `<i class="knob" style="left:${(k - first) * CW - 5}px"></i>`; });
-      const lastExp = l.frames[lastKey].exposure || 1;
-      th += `<div class="blk" id="blk-${li}" style="left:${left}px;width:${w}px" data-first="${first}" data-l="${li}">` +
-        knobs +
-        `<i class="blkFrame" title="image at frame ${first}">${first}</i>` +
-        `${lastExp > 1 ? `<i class="blkExp">${lastExp}</i>` : ""}` +
-        `<i class="expHandle" data-k="${lastKey}" data-l="${li}" title="drag right: increase length"></i></div>`;
-    }
+    const lastEnd = keys.length ? Math.max(...keys.map(k => k + (l.frames[k].exposure || 1) - 1)) : 0;
+    const firstEmpty = keys.length ? lastEnd + 1 : 1;
+    let cells = "";
     for (let f = 1; f <= maxF; f++) {
       const k = playbackKey(l, f);
-      const cls = k !== null ? (k === f ? "keyw" : "hold") + (emptyByKey.get(k) ? " empty" : "") : "";
-      const cur = (f === proj.currentFrame && li === proj.currentLayer) ? " curf" : "";
-      // frame number inside the blue current cell (TVPaint: white "n" at top-left)
-      const fnum = cur ? `<span class="fnum">${f}</span>` : "";
-      // cell label = the DRAWING number (1., 2., 3. ...), shown below the strip
-      const num = k === f ? `<span class="knum">${keys.indexOf(k) + 1}.</span>` : "";
-      // small ⊘ sigil inside the first key of the strip
-      const vs = (k === f && keys.length && k === keys[0]) ? `<span class="vsigil">⊘</span>` : "";
-      // timing handles: every key cell carries gray squares at its top corners;
-      // drag right = longer exposure, drag left = move the drawing earlier/later
-      const dh = k === f ? `<span class="dh l" data-k="${k}" data-l="${li}"></span>` +
-        `<span class="dh r" data-k="${k}" data-l="${li}"></span>` : "";
-      th += `<div class="cell ${cls}${cur}" data-f="${f}" data-l="${li}">${fnum}${num}${vs}${dh}
-        <button class="plus" title="add drawing here" data-plus="${f}" data-pl="${li}">+</button></div>`;
+      const isKey = k === f;
+      const cls = k !== null ? (isKey ? "keyw" : "hold") + (emptyByKey.get(k) ? " empty" : "") : "";
+      let inner = "";
+      if (isKey) {
+        inner += `<div class="cellimg${emptyByKey.get(k) ? " empty" : ""}"></div>`;
+        inner += `<span class="knum">${keys.indexOf(k) + 1}.</span>`;
+        inner += `<span class="dh l" data-k="${k}" data-l="${li}"></span><span class="dh r" data-k="${k}" data-l="${li}"></span>`;
+      } else if (k === null && f === firstEmpty) {
+        inner += `<span class="empin">⊘</span>`;
+      }
+      inner += `<button class="plus" title="add drawing here" data-plus="${f}" data-pl="${li}">+</button>`;
+      cells += `<div class="cell ${cls}" data-f="${f}" data-l="${li}">${inner}</div>`;
     }
-    th += `<span class="pin" style="right:0">⊘</span>
-      <button class="plus stripstart" data-plus="1" data-pl="${li}" title="add drawing at start">+</button></div>`;
+    // exposure line + seam knobs + right-edge length handle
+    let overlay = "";
+    if (keys.length) {
+      const lineW = Math.max(CW, (lastEnd - keys[0] + 1) * CW);
+      let knobs = "";
+      keys.forEach(k => { knobs += `<i class="knob" style="left:${(k - keys[0]) * CW}px"></i>`; });
+      overlay = `<div class="expLine" data-first="${keys[0]}" style="left:${(keys[0] - 1) * CW}px;width:${lineW}px">${knobs}</div>` +
+        `<i class="expHandle" style="left:${(lastEnd - 1) * CW + CW - 5}px" data-k="${keys[keys.length - 1]}" data-l="${li}" title="drag right: increase length"></i>`;
+    }
+    th += `<div class="strip${sel ? " sel" : ""}" data-layer="${li}"><div class="cells">${cells}</div>${overlay}</div>`;
   });
+  th += `<div class="tlspacer"></div>`;
   th += `<div class="ruler bot" id="rulerBot">${ticks}${mkBands}</div>`;
-  // blue current-frame column runs the full track height with red image-bound edges
-  th += `<div id="curCol" style="left:${(proj.currentFrame - 1) * CW}px"></div>`;
+  th += `<div id="curCol" style="left:${(proj.currentFrame - 1) * CW}px;top:${topPad}px"></div>`;
   track.innerHTML = th;
-  // clamp the blue column to the bottom ruler (the track box itself stretches to fill the panel)
+  // clamp the red current-image bounds to the bottom ruler
   {
     const col = track.querySelector("#curCol"), bot = track.querySelector("#rulerBot");
     if (col && bot) {
       const tr = track.getBoundingClientRect(), br = bot.getBoundingClientRect();
-      col.style.height = Math.max(0, Math.round(br.bottom - tr.top)) + "px";
+      col.style.height = Math.max(0, Math.round(br.bottom - tr.top - topPad)) + "px";
     }
   }
   track.querySelectorAll(".cell[data-f]").forEach(c => {
@@ -1391,9 +1386,10 @@ function renderTimeline() {
   });
   // ruler numbers are clickable in TVPaint: click a number to jump to that frame
   track.querySelectorAll(".ruler .tick").forEach(tk => {
+    const f = +tk.dataset.tf;
     tk.style.cursor = "pointer";
-    tk.title = "go to image " + tk.textContent;
-    tk.onclick = () => gotoFrame(+tk.textContent, proj.currentLayer);
+    tk.title = "go to image " + f;
+    tk.onclick = () => gotoFrame(f, proj.currentLayer);
   });
   track.querySelectorAll(".plus[data-plus]").forEach(b => {
     b.onclick = (e) => { e.stopPropagation(); gotoFrame(+b.dataset.plus, +b.dataset.pl);
@@ -1409,15 +1405,17 @@ function renderTimeline() {
       else gotoFrame(f, proj.currentLayer);
       renderAll(); };
   });
-  // exposure end handles: drag the last drawing block's right edge to change the length
+  // exposure end handles: drag the square at the exposure end to change the layer length
   track.querySelectorAll(".expHandle").forEach(h => {
-    const blk = h.closest(".blk"), strip = h.closest(".strip");
+    const strip = h.closest(".strip");
     h.onpointerdown = (e) => {
       e.stopPropagation(); e.preventDefault();
       const li = +h.dataset.l, k = +h.dataset.k, l = proj.layers[li];
       const startExp = l.frames[k].exposure || 1;
       const sr = strip.getBoundingClientRect();
-      blk.classList.add("grabbed");
+      const line = strip.querySelector(".expLine");
+      const first = line ? +line.dataset.first : 1;
+      strip.classList.add("grabbed");
       try { h.setPointerCapture(e.pointerId); } catch (err) {/* synthetic events */}
       let exp = startExp, moved = false;
       h.dataset.expBound = String(startExp);
@@ -1426,13 +1424,11 @@ function renderTimeline() {
         exp = Math.max(1, Math.min(end - k + 1, maxF - k + 1));
         if (exp === +h.dataset.expBound) return;
         moved = true;
-        blk.style.width = ((end - k + 1) * CW) + "px";
-        const badge = blk.querySelector(".blkExp");
-        if (badge) badge.textContent = exp > 1 ? exp : "";
+        if (line) line.style.width = ((k + exp - first) * CW) + "px";
         h.dataset.expBound = String(exp);
       };
       const up = () => {
-        blk.classList.remove("grabbed");
+        strip.classList.remove("grabbed");
         try { h.releasePointerCapture(e.pointerId); } catch (err) {}
         h.removeEventListener("pointermove", mv);
         h.removeEventListener("pointerup", up);
@@ -1462,9 +1458,8 @@ function renderTimeline() {
       h.classList.add("grab");
       try { h.setPointerCapture(e.pointerId); } catch (err) {}
       const startExp = l.frames[k].exposure || 1;
-      const blk = strip.querySelector(`#blk-${li}`);
-      const first = blk ? +blk.dataset.first : 1;
-      const lastKeyOfLayer = Math.max(...Object.keys(l.frames).map(Number));
+      const line = strip.querySelector(".expLine");
+      const first = line ? +line.dataset.first : 1;
       let exp = startExp, startK = k, moved = false;
       h.dataset.expBound = String(startExp);
       h.dataset.kBound = String(k);
@@ -1474,21 +1469,13 @@ function renderTimeline() {
           exp = Math.max(1, Math.min(pos - k + 1, maxF - k + 1));
           if (exp === +h.dataset.expBound) return;
           moved = true;
-          if (blk) {
-            const lastEndNow = Math.max(k + exp - 1,
-              ...Object.keys(l.frames).map(Number).map(kk => kk + (l.frames[kk].exposure || 1) - 1));
-            blk.style.width = ((lastEndNow - first + 1) * CW) + "px";
-            if (k === lastKeyOfLayer) {
-              const badge = blk.querySelector(".blkExp");
-              if (badge) badge.textContent = exp > 1 ? exp : "";
-            }
-          }
+          if (line) line.style.width = ((k + exp - first) * CW) + "px";
           h.dataset.expBound = String(exp);
         } else {
           const newK = Math.max(1, Math.min(pos, k + startExp - 1));
           if (newK === +h.dataset.kBound) return;
           moved = true;
-          if (blk) blk.style.left = ((newK - 1) * CW) + "px";
+          if (line) line.style.left = ((newK - 1) * CW) + "px";
           h.dataset.kBound = String(newK);
         }
       };
@@ -1517,44 +1504,51 @@ function renderTimeline() {
       h.addEventListener("pointerup", up);
     };
   });
-  // paint thumbnails — white when the drawing has ink, checkerboard when empty
+  // paint layer thumbnails — white when the drawing has ink, checkerboard when empty
   left.querySelectorAll("canvas.lthumb").forEach(cv => {
     const li = +cv.dataset.layer, l = proj.layers[li];
     const c = cv.getContext("2d");
-    c.fillStyle = "#fff"; c.fillRect(0, 0, 44, 26);
+    c.fillStyle = "#fff"; c.fillRect(0, 0, 52, 26);
     const k = E.effectiveFrameKey(l, proj.currentFrame);
     const surf = k !== null ? l.frames[k].canvas : null;
-    if (surf && surf.getContext) c.drawImage(surf, 0, 0, 44, 26);
+    if (surf && surf.getContext) c.drawImage(surf, 0, 0, 52, 26);
   });
-  // key-cell thumbnails; ink presence decides white vs checker (TVPaint cell look)
+  // key-cell thumbnails: 40 x 22 beveled drawing previews (checkerboard when empty)
   track.querySelectorAll(".cell.keyw").forEach(cell => {
     const f = +cell.dataset.f, li = +cell.dataset.l;
     const l = proj.layers[li];
+    const img = cell.querySelector(".cellimg");
+    if (!img) return;
     const surf = l.frames[f] && l.frames[f].canvas;
-    if (!surf || !surf.getContext) return;
+    if (!surf || !surf.getContext || frameIsEmpty(l.frames[f])) { img.classList.add("empty"); return; }
     const c = document.createElement("canvas");
-    c.width = 38; c.height = 38;
+    c.width = 40; c.height = 22;
     const cc = c.getContext("2d");
-    cc.fillStyle = "#fff"; cc.fillRect(0, 0, 38, 38);
-    cc.drawImage(surf, 0, 0, 38, 38);
-    const d = cc.getImageData(0, 0, 38, 38).data;
-    let ink = 0;
-    for (let i = 0; i < d.length; i += 4) if (d[i] < 248 || d[i + 1] < 248 || d[i + 2] < 248 || d[i + 3] < 250) ink++;
-    if (ink <= 2) { cell.classList.add("empty"); return; }
-    cell.appendChild(c);
-    c.style.cssText = "position:absolute;left:0;top:0;width:39px;height:39px;pointer-events:none";
+    cc.fillStyle = "#fff"; cc.fillRect(0, 0, 40, 22);
+    cc.drawImage(surf, 0, 0, 40, 22);
+    img.appendChild(c);
   });
-  // footer (REA: TLNotesOpen/TLNotesClose, TimelineAudio, Color Group)
+  // footer: Notes/Sound/Color Group sit in the left column on the same row as the
+  // bottom ruler (real 977..993); Background / Start Frame are the row below (994..1012)
   const foot = $("tlFoot");
   if (foot) foot.innerHTML = `
+    <div class="frow2">
+      <select id="ftBg" class="ftfield" title="paper background">${["Background", "White", "Black", "Checkerboard"].map(b => `<option ${(proj.background || "Background") === b ? "selected" : ""}>${b}</option>`).join("")}</select>
+      <span class="ftstart">⇤ Start Frame</span>
+      <input id="ftStartVal" class="ftnum" type="number" min="1" value="${proj.inFrame}">
+      <img class="ftresize" src="icons/Timeline-Resize-x20.png" title="drag up/down to resize the timeline">
+    </div>`;
+  const leftFoot = document.createElement("div");
+  leftFoot.className = "lfrow1";
+  leftFoot.innerHTML = `
     <button class="ftab" id="ftNotes">Notes</button>
     <button class="ftab" id="ftSound">Sound</button>
     <button class="ftab" id="ftColor">Color Group</button>
-    <span style="flex:1"></span>
-    <button class="ftab" onclick="toast('background — not in this prototype')">Background ▾</button>
-    <button class="ftab" id="ftStart" title="mark in here">⇤ Start Frame</button>`;
+    <span class="lfsep"></span>
+    <span class="lfgrip">⇔</span>`;
+  left.appendChild(leftFoot);
   if (foot) {
-    foot.querySelector("#ftNotes").onclick = function () {
+    leftFoot.querySelector("#ftNotes").onclick = function () {
       this.classList.toggle("on");
       let ta = document.getElementById("tlNotesTa");
       if (!ta && this.classList.contains("on")) {
@@ -1566,18 +1560,54 @@ function renderTimeline() {
         track.appendChild(ta);
       } else if (ta && !this.classList.contains("on")) ta.remove();
     };
-    foot.querySelector("#ftSound").onclick = () => toast("sound — not in this prototype");
-    foot.querySelector("#ftColor").onclick = () => toast("color groups — not in this prototype");
-    foot.querySelector("#ftStart").onclick = () => { proj.inFrame = proj.currentFrame; renderAll(); toast("start frame = " + proj.currentFrame); };
+    leftFoot.querySelector("#ftSound").onclick = () => toast("sound — not in this prototype");
+    leftFoot.querySelector("#ftColor").onclick = () => toast("color groups — not in this prototype");
+    leftFoot.querySelector(".lfgrip").onpointerdown = (e) => startTlResize(e);
+    foot.querySelector("#ftBg").onchange = (e) => {
+      proj.background = e.target.value;
+      renderAll();
+      toast("background: " + e.target.value);
+    };
+    foot.querySelector("#ftStartVal").onchange = (e) => {
+      proj.inFrame = Math.max(1, +e.target.value || 1);
+      renderAll();
+    };
+    foot.querySelector(".ftresize").onpointerdown = (e) => startTlResize(e);
   }
-  // overview bar
+  // in/out scrub bar (real: clip 1..outFrame, per-frame tick lines, blue current
+  // block + large frame number, green in / magenta out half-frame stripes)
   const ob = $("ovBar");
   if (ob) {
-    $("ovFill").style.left = ((proj.inFrame - 1) / maxF * 100) + "%";
-    $("ovFill").style.width = ((outF - proj.inFrame + 1) / maxF * 100) + "%";
-    $("ovIn").style.left = ((proj.inFrame - 1) / maxF * 100) + "%";
-    $("ovOut").style.left = (outF / maxF * 100) + "%";
-    $("ovMark").style.left = ((proj.currentFrame - 1) / maxF * 100) + "%";
+    const bf = Math.max(1, proj.outFrame);
+    const cur = Math.min(bf, Math.max(1, proj.currentFrame));
+    const curLeft = (cur - 1) / bf * 100;
+    const inF = Math.min(bf, Math.max(1, proj.inFrame));
+    const outF = Math.min(bf, Math.max(inF, proj.outFrame));
+    const half = 50 / bf;
+    $("ovCur").style.left = curLeft + "%";
+    $("ovCur").style.width = (100 / bf) + "%";
+    $("ovIn").style.left = ((inF - 1) / bf * 100) + "%";
+    $("ovIn").style.width = half + "%";
+    $("ovOut").style.left = (((outF - 1) + 0.5) / bf * 100) + "%";
+    $("ovOut").style.width = half + "%";
+    let num = $("ovNum");
+    if (!num) {
+      num = document.createElement("div");
+      num.id = "ovNum";
+      ob.appendChild(num);
+    }
+    num.textContent = cur;
+    let nl = curLeft + 100 / bf;
+    if (nl > 95) nl = 95 - 100 / bf;
+    num.style.left = nl + "%";
+    num.style.marginLeft = "4px";
+    ob.querySelectorAll(".ovt").forEach(e => e.remove());
+    for (let f = 3; f <= bf; f += 2) {
+      const t = document.createElement("div");
+      t.className = "ovt";
+      t.style.left = ((f - 1) / bf * 100) + "%";
+      ob.appendChild(t);
+    }
   }
 }
 function renderLayersPanel() { /* thumbnails handled in renderTimeline */ }
@@ -1598,12 +1628,12 @@ function renderTimelineSoon() {
   const o = Math.max(proj.outFrame, proj.currentFrame);
   $("projTab").innerHTML = `${proj.name.startsWith("*") ? "" : "*"}${proj.name}
     <button onclick="" title="close (demo)">✕</button>`;
-  $("tstatus").innerHTML =
+  const sb = $("sbInfo");
+  if (sb) sb.innerHTML =
     `<span>Project: <b>${proj.name}</b> [1 , ${o} (${o})]</span>` +
     `<span>Clip: <b>Clip_001</b> [1 , ${o} (${o})]</span>` +
     `<span>Layer(${(camOn ? proj.currentLayer + 2 : proj.currentLayer + 1)}/${proj.layers.length + (camOn ? 1 : 0)}): <b>${l.name}</b> [${fK} , ${lEnd} (${lEnd - fK + 1})]</span>` +
-    `<span>Current Image: <b>${proj.currentFrame}</b></span>` +
-    `<span style="margin-left:auto;color:#898989">${proj.width}×${proj.height} · ${proj.fps} fps</span>`;
+    `<span>Current Image: <b>${proj.currentFrame}</b></span>`;
   syncTransport();
 }
 
@@ -1704,6 +1734,77 @@ function zoomToRect(x, y, w, h) {
 
 // ================= layers / xsheet / remote =================
 window.pickLayer = (i) => { proj.currentLayer = i; renderAll(); };
+// jump to the previous / next drawing (instance) of a layer
+window.layerInst = (i, dir) => {
+  const keys = Object.keys(proj.layers[i].frames).map(Number).sort((a, b) => a - b);
+  const f = dir < 0 ? keys.filter(k => k < proj.currentFrame).pop() : keys.find(k => k > proj.currentFrame);
+  if (f !== undefined) gotoFrame(f, i);
+};
+// small layer context menu (⋯ in the layer row)
+window.layerMenu = (i, btn) => {
+  document.querySelectorAll(".pbmenu").forEach(x => x.remove());
+  const m = document.createElement("div");
+  m.className = "pbmenu";
+  const r = btn.getBoundingClientRect();
+  m.style.left = r.left + "px";
+  m.style.top = (r.bottom + 2) + "px";
+  m.innerHTML = `<div class="pbi" data-a="rename">Rename…</div>
+    <div class="pbi" data-a="dup">Duplicate Layer</div>
+    <div class="pbi" data-a="del">Delete Layer</div>`;
+  document.body.appendChild(m);
+  m.querySelectorAll(".pbi").forEach(el => el.onclick = (ev) => {
+    ev.stopPropagation();
+    m.remove();
+    proj.currentLayer = i;
+    if (el.dataset.a === "rename") {
+      const n = prompt("Layer name:", proj.layers[i].name);
+      if (n) { proj.layers[i].name = n; renderAll(); }
+    } else if (el.dataset.a === "dup") layerDup();
+    else layerDel();
+  });
+  const off = (ev) => {
+    if (!m.contains(ev.target)) { m.remove(); document.removeEventListener("pointerdown", off, true); }
+  };
+  document.addEventListener("pointerdown", off, true);
+};
+// drag the timeline resize handle (transport ⋯ / footer ⋯) to change the timeline height
+function startTlResize(e) {
+  e.preventDefault();
+  const app = $("app");
+  const startY = e.clientY;
+  const startH = parseInt(getComputedStyle(app).gridTemplateRows.split(" ")[3], 10) || 320;
+  const mv = (ev) => {
+    const h = Math.max(180, Math.min(window.innerHeight - 240, startH - (ev.clientY - startY)));
+    app.style.gridTemplateRows = `24px 32px 1fr ${h}px 26px`;
+    renderTimeline();
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", mv);
+    window.removeEventListener("pointerup", up);
+  };
+  window.addEventListener("pointermove", mv);
+  window.addEventListener("pointerup", up);
+}
+function startTlScroll(e) {
+  e.preventDefault();
+  const tr = $("tlTrack"), th = $("tsThumb");
+  if (!tr || !th) return;
+  const startX = e.clientX, startScroll = tr.scrollLeft;
+  const maxScroll = Math.max(1, tr.scrollWidth - tr.clientWidth);
+  const thumbW = th.getBoundingClientRect().width || 1;
+  const range = Math.max(1, th.parentElement.getBoundingClientRect().width - thumbW);
+  th.classList.add("drag");
+  const mv = (ev) => {
+    tr.scrollLeft = Math.max(0, Math.min(maxScroll, startScroll + (ev.clientX - startX) * maxScroll / range));
+  };
+  const up = () => {
+    th.classList.remove("drag");
+    window.removeEventListener("pointermove", mv);
+    window.removeEventListener("pointerup", up);
+  };
+  window.addEventListener("pointermove", mv);
+  window.addEventListener("pointerup", up);
+}
 window.toggleLayerFlagAt = (i, flag, v) => {
   const l = proj.layers[i]; l[flag] = v === undefined ? !l[flag] : v; renderAll();
 };
@@ -2262,39 +2363,68 @@ window.georgeRun = function (lineIn) {
   }
 };
 
-// ================= timeline transport (TVPaint remote icon row) =================
+// ================= timeline transport (two-line Mark In/Out + TVPaint remote row) =================
 function buildTransport() {
   const T = $("tlTransport");
   if (!T) return;
   T.innerHTML = `
-    <span class="tlbl">Mark In</span><input class="tinput" id="tMarkIn" type="number" min="1">
-    <div id="ovBar"><div id="ovFill"></div><div id="ovIn"></div><div id="ovOut"></div><div id="ovMark"></div></div>
-    <button class="tib" id="rSound" title="Sound"><img src="icons/Remote-SoundOn-x20.png"></button>
-    <button class="tib" id="rLoop" title="Loop"><img src="icons/Remote-Loop${loop ? "On" : "Off"}-x20.png"></button>
-    <select id="fpsSel" style="background:#2D2D32;color:#B6B6B6;border:1px solid #2B2B30;border-radius:3px;width:72px">
-      ${[12, 24, 25, 30, 50, 60].map(f => `<option ${f === 24 ? "selected" : ""}>${f} fps</option>`).join("")}
-    </select>
-    <button class="tib remote" id="rPlay" title="Play/Stop (Space)"><img src="icons/Remote-PlaySmall-x20.png"></button>
-    <button class="tib remote" id="rStop" title="Stop"><img src="icons/Remote-Stop-x20.png"></button>
-    <span style="width:6px"></span>
-    <button class="tib remote" id="rFirst" title="Go to first image"><img src="icons/Remote-Goto-FirstImage-x20.png"></button>
-    <button class="tib remote" id="rPrev" title="Previous image"><img src="icons/Remote-Goto-PreviousImage-x20.png"></button>
-    <button class="tib remote" id="rNext" title="Next image"><img src="icons/Remote-Goto-NextImage-x20.png"></button>
-    <button class="tib remote" id="rLast" title="Go to last image"><img src="icons/Remote-Goto-LastImage-x20.png"></button>
-    <span style="flex:1"></span>
-    <button class="tib" id="zoomOut" title="zoom out">−</button>
-    <span id="zoomLbl">100.00%</span>
-    <button class="tib" id="zoomIn" title="zoom in">+</button>
-    <select id="dispSel" style="background:#2D2D32;color:#B6B6B6;border:1px solid #2B2B30;border-radius:3px">
-      <option>Display</option><option>Display 1:1</option><option>Fit</option></select>
-    <span class="tlbl">Mark Out</span><input class="tinput" id="tMarkOut" type="number" min="1">`;
+    <div class="tr-spacer"></div>
+    <div class="tr-mark left">
+      <div class="lbl"><span class="mk">◉</span>Mark In</div>
+      <input id="tMarkIn" type="number" min="1">
+    </div>
+    <div class="tr-center">
+      <div class="tr-scroll"><div id="tsThumb"></div></div>
+      <div id="ovBar"><div id="ovFill"></div><div id="ovCur"></div><div id="ovIn"></div><div id="ovOut"></div></div>
+      <div class="tr-btns">
+        <button class="tib" id="rSound" title="Sound"><img src="icons/Remote-SoundOn-x20.png"></button>
+        <button class="tib" id="rLoop" title="Loop"><img src="icons/Remote-Loop${loop ? "On" : "Off"}-x20.png"></button>
+        <button class="tib" id="rPlayClip" title="Play Clip"><img src="icons/Remote-Play-Clip-x20.png"></button>
+        <span class="fpswrap"><select id="fpsSel" class="fps">
+          ${[12, 24, 25, 30, 50, 60].map(f => `<option ${f === 24 ? "selected" : ""}>${f} fps</option>`).join("")}
+        </select><span class="fpsarrow">▾</span></span>
+        <button class="tib" id="rPlay" title="Play/Stop (Space)"><img src="icons/Remote-PlaySmall-x20.png"></button>
+        <button class="tib" id="rStop" title="Stop"><img src="icons/Remote-Stop-x20.png"></button>
+        <button class="tib" id="rFirst" title="First image"><img src="icons/Remote-Goto-FirstImage-x20.png"></button>
+        <button class="tib" id="rLast" title="Last image"><img src="icons/Remote-Goto-LastImage-x20.png"></button>
+        <button class="tib" id="rPrevInst" title="Previous instance"><img src="icons/Remote-Goto-PreviousInstance-x20.png"></button>
+        <button class="tib" id="rNextInst" title="Next instance"><img src="icons/Remote-Goto-NextInstance-x20.png"></button>
+        <button class="tib" id="rPrev" title="Previous image"><img src="icons/Remote-Goto-PreviousImage-x20.png"></button>
+        <button class="tib" id="rNext" title="Next image"><img src="icons/Remote-Goto-NextImage-x20.png"></button>
+        <button class="tib" id="rPin" title="Recenter timeline"><img src="icons/Remote-Recenter-Timeline-x20.png"></button>
+        <button class="tib" id="rResize" title="Drag up/down to resize the timeline"><img src="icons/Timeline-Resize-x20.png"></button>
+      </div>
+    </div>
+    <div class="tr-mark right">
+      <div class="lbl">Mark Out<span class="mk">◉</span></div>
+      <input id="tMarkOut" type="number" min="1">
+    </div>`;
   $("rFirst").onclick = () => remote("first");
-  $("rPrev").onclick = () => remote("prev");
-  $("rPlay").onclick = () => remote("play");
-  $("rStop").onclick = () => stopPlayback();
-  $("rNext").onclick = () => remote("next");
   $("rLast").onclick = () => remote("last");
+  $("rPrev").onclick = () => remote("prev");
+  $("rNext").onclick = () => remote("next");
+  // previous / next *instance* = previous / next drawing of the current layer
+  $("rPrevInst").onclick = () => {
+    const keys = Object.keys(proj.layers[proj.currentLayer].frames).map(Number).sort((a, b) => a - b);
+    const prev = keys.filter(k => k < proj.currentFrame).pop();
+    if (prev) gotoFrame(prev);
+  };
+  $("rNextInst").onclick = () => {
+    const keys = Object.keys(proj.layers[proj.currentLayer].frames).map(Number).sort((a, b) => a - b);
+    const next = keys.find(k => k > proj.currentFrame);
+    if (next) gotoFrame(next);
+  };
+  $("rPlay").onclick = () => togglePlay();
+  $("rPlayClip").onclick = () => togglePlay();
+  $("rStop").onclick = () => stopPlayback();
   $("rLoop").onclick = () => toggleLoop();
+  $("rPin").onclick = () => {
+    const tr = $("tlTrack");
+    if (tr) tr.scrollLeft = Math.max(0, (proj.currentFrame - 1) * CW - tr.clientWidth / 2 + CW);
+  };
+  $("rResize").onpointerdown = (e) => startTlResize(e);
+  const thumb = $("tsThumb");
+  if (thumb) thumb.onpointerdown = (e) => startTlScroll(e);
   $("rSound").onclick = () => {
     soundOn = !soundOn;
     $("rSound").innerHTML = `<img src="icons/Remote-Sound${soundOn ? "On" : "Off"}-x20.png">`;
@@ -2302,14 +2432,6 @@ function buildTransport() {
   $("fpsSel").onchange = (e) => { proj.fps = parseInt(e.target.value) || 24; renderTimeline(); renderTimelineStatus(); };
   $("tMarkIn").onchange = (e) => { proj.inFrame = Math.max(1, +e.target.value || 1); renderAll(); };
   $("tMarkOut").onchange = (e) => { proj.outFrame = Math.max(proj.inFrame, +e.target.value || 25); renderAll(); };
-  $("zoomIn").onclick = () => { view.zoom = Math.min(20, view.zoom * 1.25); syncTransport(); renderAll(); };
-  $("zoomOut").onclick = () => { view.zoom = Math.max(0.05, view.zoom * 0.8); syncTransport(); renderAll(); };
-  $("dispSel").onchange = (e) => {
-    const v = e.target.value;
-    if (v === "Display 1:1") { view.zoom = 1; }
-    else if (v === "Fit") { fitView(); }
-    renderAll();
-  };
   window.syncFpsSel = () => {   // keep the fps select in sync (Modify Project / New Project)
     const s = $("fpsSel");
     if (!s) return;
@@ -2336,25 +2458,33 @@ function syncTransport() {
   if (fps && document.activeElement !== fps) fps.value = proj.fps + ' fps';
   if (z) z.textContent = (view.zoom * 100).toFixed(2) + '%';
 }
-// ================= status bar =================
+// ================= status bar (TVPaint: coords / RGBA / proxy / project info / room) =================
 function buildStatusbar() {
   $("statusbar").innerHTML =
-    `<span id="statusMsg2" style="color:#898989"></span>
-     <span style="color:#6E6E75">Start Frame</span>
-     <svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="1" width="12" height="12" fill="none" stroke="#7fd07f"/></svg>
-     <span id="georgeHint" style="color:#9fe08f;font:11px Consolas,monospace;cursor:pointer"
-       title="click, then type a tv_ command">George</span>
-     <input id="georgeIn" placeholder="tv_pen penbrush" style="background:#2D2D32;color:#9fe08f;
-       border:1px solid #2B2B30;border-radius:3px;padding:1px 6px;width:170px;font:11px Consolas,monospace"
-       onkeydown="if(event.key==='Enter'){georgeRun(this.value);this.value=''}">
-     <span id="georgeOut" style="color:#9fe08f;font:10px Consolas,monospace;max-width:220px;
-       overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title=""></span>
-     <span id="statusXY">X:0 Y:0</span>
+    `<span id="statusXY">X:0 Y:0</span>
+     <span id="rgbaLbl">R:000 G:000 B:000 A:000</span>
+     <span id="proxyLbl">Proxy: 100%</span>
+     <span id="sbInfo"></span>
      <span class="right">
-       <span id="rgbaLbl">R:000 G:000 B:000 A:000</span><span id="colorChip" style="color:#898989;cursor:pointer" title="colors" onclick="toast('colors — not in this prototype')">Color</span>
-       <span id="proxyLbl">Proxy: 100%</span>
-       <span id="zoomLbl2">100.00%</span><select id="roomSel" title="workspace room" style="background:#2D2D32;color:#B6B6B6;border:1px solid #2B2B30;border-radius:3px;font-size:11px"><option>🏠 Room 1</option><option>Room 2</option><option>Room 3</option><option>Room 4</option></select>
+       <span id="zoomLbl2" style="display:none"></span>
+       <select id="roomSel" title="workspace room">
+         <option>⌂ Room 1</option><option>Room 2</option><option>Room 3</option><option>Room 4</option></select>
      </span>`;
+  const room = $("roomSel");
+  if (room) room.onchange = (e) => toast(e.target.value + " — rooms are not in this prototype");
+  buildGeorgeWin();
+  renderTimelineStatus();
+}
+function buildGeorgeWin() {
+  if ($("georgeWin")) return;
+  const d = document.createElement("div");
+  d.id = "georgeWin";
+  d.innerHTML = `<div class="gw-head">George console
+      <button onclick="document.getElementById('georgeWin').style.display='none'">✕</button></div>
+    <div id="georgeOut"></div>
+    <input id="georgeIn" placeholder="tv_pen penbrush"
+      onkeydown="if(event.key==='Enter'){georgeRun(this.value);this.value=''}">`;
+  document.body.appendChild(d);
 }
 
 // ================= keyboard / wheel =================
@@ -2397,6 +2527,7 @@ function boot() {
   buildPanels();
   buildCameraPanel();
   buildTlTabs();
+  buildVbRow();
   buildTransport();
   buildStatusbar();
   syncToolPanel();

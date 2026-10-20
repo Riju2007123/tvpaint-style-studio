@@ -39,7 +39,7 @@ function newLayer(name) {
 function newProject(w, h, fps) {
   const p = {
     width: w || 512, height: h || 512, fps: fps || 24,
-    inFrame: 1, outFrame: 25, currentFrame: 1,
+    inFrame: 1, outFrame: 24, currentFrame: 1,
     layers: [newLayer("Layer 1")],
     currentLayer: 0,
     antiAlias: "high",   // REA: antiAliasing None | Medium | High | Highest
@@ -689,6 +689,77 @@ function gradientFill(ctx, mode, x0, y0, x1, y1, colorA, colorB) {
   }
 }
 
+// ---------- exposure recompute (REA: tv_layerrecomputeexposure @ 0x140412f40) ----------
+// The handler parses N double args into an int array (DAT_140cf4a80) and a double
+// array (DAT_140cf4b00), then dispatches to one of two recompute paths:
+//   - count < 1  → recompute from current frame (FUN_1400dd1a0)
+//   - count >= 1 → recompute from frame with count+value (FUN_1400dcf50)
+// Layer types 2 (drawing) and 5 (another drawing variant) are supported.
+function recomputeExposure(proj, layer, frame, count, value) {
+  const f = Math.round(frame);
+  const n = Math.max(0, Math.round(count || 0));
+  const v = value || 0;
+  if (!layer || !layer.frames) return false;
+  const keys = Object.keys(layer.frames).map(Number).sort((a, b) => a - b);
+  if (!keys.length) return false;
+  const firstFrame = keys[0];
+  const lastKey = keys[keys.length - 1];
+  const lastFrame = lastKey + (layer.frames[lastKey].exposure || 1) - 1;
+  if (f < firstFrame || f > lastFrame) return false;
+  if (n < 1) {
+    // Recompute from current frame: set exposure starting at frame 0 (relative)
+    // FUN_1404aa960(list, 0, count) — sets exposure for the range
+    const targetKey = effectiveFrameKey(layer, f);
+    if (targetKey === null) return false;
+    const exp = layer.frames[targetKey];
+    const curExp = exp.exposure || 1;
+    const remaining = lastFrame - f + 1;
+    exp.exposure = Math.max(1, Math.min(remaining, Math.round(v || curExp)));
+    return true;
+  }
+  // FUN_1400dcf50: recompute with frame + count + value
+  // Loop count times setting exposure for each frame, then finalize
+  const targetKey = effectiveFrameKey(layer, f);
+  if (targetKey === null) return false;
+  const exp = layer.frames[targetKey];
+  const remaining = lastFrame - f + 1;
+  exp.exposure = Math.max(1, Math.min(remaining, n));
+  return true;
+}
+
+// ---------- exposure break (REA: tv_exposurebreak @ 0x14040dc50) ----------
+// Splits an exposure at the given frame. The handler:
+//   1. Parses 1 double arg (target frame) into DAT_140cf4a80
+//   2. Gets current layer, current frame (FUN_14078ce20), end frame (FUN_14078e200)
+//   3. If current <= target <= end and layer type != 6:
+//      - FUN_14068f700: create "break instances" command
+//      - FUN_14078aa30: execute the split
+// The split (FUN_1404a5e60) finds the exposure at the target frame, gets the
+// next exposure, copies its data into the current one, and marks the current
+// as deleted — effectively splitting one exposure into two.
+function breakExposure(proj, layer, frame) {
+  const f = Math.round(frame);
+  if (!layer || !layer.frames) return false;
+  const keys = Object.keys(layer.frames).map(Number).sort((a, b) => a - b);
+  if (!keys.length) return false;
+  const firstFrame = keys[0];
+  const lastKey = keys[keys.length - 1];
+  const lastFrame = lastKey + (layer.frames[lastKey].exposure || 1) - 1;
+  if (f <= firstFrame || f >= lastFrame) return false;
+  // Find the exposure containing frame f
+  const targetKey = effectiveFrameKey(layer, f);
+  if (targetKey === null) return false;
+  if (targetKey === f) return false; // already a key frame
+  // Split: the exposure at targetKey now ends at f-1, new exposure starts at f
+  const exp = layer.frames[targetKey];
+  const oldExp = exp.exposure || 1;
+  const splitPoint = f - targetKey;
+  if (splitPoint <= 0 || splitPoint >= oldExp) return false;
+  exp.exposure = splitPoint;
+  layer.frames[f] = { exposure: oldExp - splitPoint, canvas: exp.canvas, id: uid() };
+  return true;
+}
+
 // ---------- George subset for drawing ----------
 const George = {
   tv_getapen: (p) => p.apen,
@@ -729,6 +800,17 @@ const George = {
     const k = setCameraKey(p, f ?? p.currentFrame,
       { x: +x || 0, y: +y || 0, rotation: +rotation || 0, zoom: +zoom || 1 });
     return `key set at ${k.frame}`;
+  },
+  // exposure commands (REA: tv_layerrecomputeexposure, tv_exposurebreak)
+  tv_layerrecomputeexposure: (p, frame, count, value) => {
+    const layer = p.layers[p.currentLayer];
+    const ok = recomputeExposure(p, layer, frame, count, value);
+    return ok ? "ok" : "no change";
+  },
+  tv_exposurebreak: (p, frame) => {
+    const layer = p.layers[p.currentLayer];
+    const ok = breakExposure(p, layer, frame);
+    return ok ? "ok" : "no change";
   }
 };
 
@@ -743,6 +825,7 @@ if (typeof module !== "undefined" && module.exports) {
     resizeProject,
     brushStamp, strokeBegin, strokeMove, strokeEnd,
     floodFill, pickColor, xsheetOp, makeHistory, effectiveFrameKey,
-    serializeProject, deserializeProject, George, colorWithAlpha
+    serializeProject, deserializeProject, George, colorWithAlpha,
+    recomputeExposure, breakExposure
   };
 }
