@@ -174,10 +174,13 @@ function renderArtOnly() {
   actx.fillStyle = "#313136";
   actx.fillRect(0, 0, art.width, art.height);
   actx.imageSmoothingEnabled = proj.antiAlias !== "None";
-  // paper background (timeline footer: Background dropdown — loc 25300..25302)
+  // paper background (timeline footer: Background dropdown — loc 25300..25302).
+  // "Show Paper" in the canvas Display popup switches the paper off.
   const bg = proj.background || "none";
   const bgA = proj.bgA || "#ffffff", bgB = proj.bgB || "#cfcfcf";
-  if (bg === "check" || bg === "Checkerboard") {
+  if (proj.showPaper === false) {
+    // no paper: the drawing area stays transparent
+  } else if (bg === "check" || bg === "Checkerboard") {
     const s = 16;
     actx.fillStyle = bgA; actx.fillRect(0, 0, proj.width, proj.height);
     actx.fillStyle = bgB;
@@ -197,19 +200,49 @@ function renderArtOnly() {
         if (((x / s) + (y / s)) % 2 === 0) actx.fillRect(x, y, s, s);
   }
   const camKeys = proj.cameraKeys && proj.cameraKeys.length;
-  // Live TVPaint 12: the project window shows the DRAWING AREA (the live camera
-  // project showed the whole 3840x2160 area at 27.13% with the 1920x1080 camera
-  // frame drawn inside it). Only "View > Camera View" switches the window to
-  // the camera view itself.
+  // Live TVPaint 12: the project window shows the DRAWING AREA and the camera
+  // view is the visible output - everything the camera does not see is covered
+  // with a solid grey (measured 126,126,126) and the camera view keeps the
+  // paper and the artwork. "Follow Camera" (canvas Display popup) switches the
+  // window to the camera view itself.
   let camSave = false;
-  if (camKeys && camView) {
+  if (camKeys && proj.followCamera) {
     applyCameraViewTransform(actx, art.width, art.height);
     camSave = true;
   } else {
     actx.translate(view.x, view.y);
     actx.scale(view.zoom, view.zoom);
   }
+  // the camera view polygon (used for the grey cover and for the artwork clip)
+  const camPoly = () => {
+    if (!camKeys) return;
+    const r = E.cameraRect(proj, E.cameraEvaluate(proj, proj.currentFrame));
+    const rot = (r.rot || 0) * Math.PI / 180;
+    const cs = Math.cos(rot), sn = Math.sin(rot);
+    const hw = r.w / 2, hh = r.h / 2;
+    const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]
+      .map(([dx, dy]) => [r.cx + dx * cs - dy * sn, r.cy + dx * sn + dy * cs]);
+    actx.moveTo(corners[0][0], corners[0][1]);
+    for (let i = 1; i < 4; i++) actx.lineTo(corners[i][0], corners[i][1]);
+    actx.closePath();
+  };
+  if (camKeys && !proj.followCamera) {
+    actx.save();
+    actx.beginPath();
+    actx.rect(0, 0, proj.width, proj.height);
+    camPoly();
+    actx.fillStyle = "rgb(126,126,126)";
+    actx.fill("evenodd");
+    actx.beginPath();
+    camPoly();
+    actx.fillStyle = "#ffffff";
+    actx.fill();
+    actx.restore();
+  }
   const cur = proj.layers[proj.currentLayer];
+  // the artwork is only visible through the camera view
+  actx.save();
+  if (camKeys && !proj.followCamera) { actx.beginPath(); camPoly(); actx.clip(); }
   if (proj.onion.enabled) {
     for (let i = 1; i <= proj.onion.before; i++)
       drawGhost(cur, proj.currentFrame - i, proj.onion.tintBefore, 0.35 / i);
@@ -228,6 +261,7 @@ function renderArtOnly() {
     actx.globalCompositeOperation = "source-over";
     actx.globalAlpha = 1;
   });
+  actx.restore();
   if (camSave) actx.restore();
 }
 function renderOverlayOnly() {
@@ -248,12 +282,36 @@ function renderOverlayOnly() {
     } else drawShapePath(octx, preview.pts, preview.kind, !!preview.fill);
     octx.restore();
   }
-  if (sel) drawSelectionOverlay();
+  if (sel && proj.showSelection !== false) drawSelectionOverlay();
   if (proj.cameraKeys && proj.cameraKeys.length) {
-    if (camFrame) drawCameraOverlay();
+    if (proj.showCamera !== false) drawCameraOverlay();
     if (panelEls[2] && panelEls[2].querySelector(".pbody")._syncCamera)
       panelEls[2].querySelector(".pbody")._syncCamera();
   }
+  drawCanvasHud();
+}
+
+// The canvas HUD: the animator disk (the colour disc of the current brush) and
+// the timeline notes. Both are part of the live display options.
+function drawCanvasHud() {
+  octx.save();
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  if (proj.showAnimatorDisk !== false) {
+    // REA colour token "64 64 64 128" for the disc ring
+    const x = 18, y = 18, r = 20;
+    octx.beginPath(); octx.arc(x, y, r, 0, Math.PI * 2);
+    octx.fillStyle = proj.apen || "#000000"; octx.fill();
+    octx.lineWidth = 2; octx.strokeStyle = "rgba(64,64,64,0.5)"; octx.stroke();
+    octx.beginPath(); octx.arc(x, y, r * 0.55, 0, Math.PI * 2);
+    octx.fillStyle = proj.bpen || "#ffffff"; octx.fill();
+  }
+  if (proj.showTimelineNotes !== false && proj.notes) {
+    octx.font = "12px sans-serif";
+    octx.fillStyle = "rgba(0,0,0,0.5)";
+    const lines = String(proj.notes).split("\n").slice(0, 12);
+    lines.forEach((ln, i) => octx.fillText(ln, 18, 62 + i * 14));
+  }
+  octx.restore();
 }
 // The camera view mode uses the same transform as the artwork so the camera
 // frame, the path and the drawing stay aligned.
@@ -307,7 +365,8 @@ function updateZoomLbl() {
 function drawSelectionOverlay() {
   octx.save();
   octx.drawImage(sel.img, sel.x + sel.dx, sel.y + sel.dy);
-  octx.strokeStyle = "#ffd24a"; octx.lineWidth = 1 / view.zoom;
+  // REA colour token "0 0 0 128" (the selection outline of the canvas overlay)
+  octx.strokeStyle = "rgba(0,0,0,0.5)"; octx.lineWidth = 1 / view.zoom;
   octx.setLineDash([4 / view.zoom, 3 / view.zoom]);
   if (sel.poly) {
     octx.beginPath();
@@ -567,7 +626,7 @@ const MENUS = [
     ["Grid", () => toggleGuide("grid", !proj.guidelines.grid)],
     ["Safe Area", () => toggleGuide("safeArea", !proj.guidelines.safeArea)],
     ["Rule of Thirds", () => toggleGuide("thirds", !proj.guidelines.thirds)],
-    null, ["Camera View", () => { camView = !camView; toast("camera view " + (camView ? "on" : "off")); renderAll(); }],
+    null, ["Follow Camera", () => { proj.followCamera = !proj.followCamera; toast("follow camera " + (proj.followCamera ? "on" : "off")); renderAll(); }],
     null, ["Fit View", () => fitView()], ["Zoom 100%", () => zoomTo()]
   ]],
   ["Windows", [["Main Panel", () => togglePanel(0)], ["Tool Panel", () => togglePanel(1)], ["Camera Panel", () => togglePanel(2)], ["Timeline", null, 1]]],
@@ -1114,10 +1173,42 @@ function adjustLayersToCamera() {
   const n = (() => { let c = 0; tvCommit(() => { c = E.bakeCameraIntoLayers(proj); }); return c; })();
   toast(n ? n + " image(s) adjusted to the camera" : "the layers already follow the camera");
 }
+// ---- canvas display options (live TVPaint 12 "Display" popup) ----
+// The live popup contains, in this order:
+//   Show Stencil / Show Paper / Show Selection (checked)
+//   Show Animator Disk (checked) / Show Camera (checked) / Follow Camera
+//   Show Timeline Notes
+// The internal tokens found in the binary: ToggleShowStencil, ToggleShowPaper,
+// ToggleShowSelection, ToggleAnimatorDisk, ToggleShowCamera, ToggleFollowCamera
+// and the overlay colours "64 64 64 128" (animator disk / layer attenuation),
+// "255 255 0 255" (reticule), "128 128 255 255" (camera profile) and
+// "0 0 0 128" (selection).
+function toggleDisplayFlag(key, label) {
+  if (proj[key] === undefined) proj[key] = true;
+  proj[key] = !proj[key];
+  toast(label + ": " + (proj[key] ? "on" : "off"));
+  renderAll();
+}
+function openDisplayMenu(anchor) {
+  const r = anchor ? anchor.getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0 };
+  const on = (k) => (proj[k] === undefined ? true : !!proj[k]);
+  openTvMenu([
+    { label: "Show Stencil", checked: on("showStencil"), action: () => toggleDisplayFlag("showStencil", "stencil") },
+    { label: "Show Paper", checked: on("showPaper"), action: () => toggleDisplayFlag("showPaper", "paper") },
+    { label: "Show Selection", checked: on("showSelection"), action: () => toggleDisplayFlag("showSelection", "selection") },
+    { sep: true },
+    { label: "Show Animator Disk", checked: on("showAnimatorDisk"), action: () => toggleDisplayFlag("showAnimatorDisk", "animator disk") },
+    { label: "Show Camera", checked: on("showCamera"), action: () => toggleDisplayFlag("showCamera", "camera") },
+    { label: "Follow Camera", checked: on("followCamera"), action: () => toggleDisplayFlag("followCamera", "follow camera") },
+    { sep: true },
+    { label: "Show Timeline Notes", checked: on("showTimelineNotes"), action: () => toggleDisplayFlag("showTimelineNotes", "timeline notes") }
+  ], r.right - 150, r.bottom + 2);
+}
 // The camera row's right hand button: show / hide the camera frame overlay.
 function toggleCameraFrame() {
-  camFrame = !camFrame;
-  toast("camera frame " + (camFrame ? "shown" : "hidden"));
+  if (proj.showCamera === undefined) proj.showCamera = true;
+  proj.showCamera = !proj.showCamera;
+  toast("camera " + (proj.showCamera ? "shown" : "hidden"));
   renderAll();
 }
 function drawCameraOverlay() {
@@ -1125,7 +1216,7 @@ function drawCameraOverlay() {
   const cur = E.cameraEvaluate(proj, proj.currentFrame);
   const curR = E.cameraRect(proj, cur);
   // in camera view mode the overlay follows the artwork (same transform)
-  const camMode = camView;
+  const camMode = !!proj.followCamera;
   octx.save();
   if (camMode) applyCameraViewTransform(octx, ovl.width, ovl.height);
   const z = camMode ? 1 : view.zoom;
@@ -1133,21 +1224,6 @@ function drawCameraOverlay() {
   // it is covered with a solid grey (measured 126,126,126) and the camera
   // profile is drawn in the camera profile colour 128,128,255 with its corner
   // squares and the centre cross.
-  if (!camMode) {
-    octx.beginPath();
-    octx.rect(0, 0, proj.width, proj.height);
-    const rot = (curR.rot || 0) * Math.PI / 180;
-    const cs = Math.cos(rot), sn = Math.sin(rot);
-    const hw = curR.w / 2, hh = curR.h / 2;
-    const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]
-      .map(([dx, dy]) => [curR.cx + dx * cs - dy * sn, curR.cy + dx * sn + dy * cs]);
-    octx.moveTo(corners[0][0], corners[0][1]);
-    for (let i = 1; i < 4; i++) octx.lineTo(corners[i][0], corners[i][1]);
-    octx.closePath();
-    octx.fillStyle = "rgb(126,126,126)";
-    octx.fill("evenodd");
-  }
-  octx.lineWidth = 1.5 / z;
   octx.strokeStyle = "#8080FF";
   strokeRotRect(octx, curR);
   // the four corner squares of the camera profile
@@ -4355,6 +4431,7 @@ function buildStatusbar() {
     `<span id="statusXY">X:0 Y:0</span>
      <span id="rgbaLbl">R:000 G:000 B:000 A:000</span>
      <span id="proxyLbl">Proxy: 100%</span>
+     <button id="displayBtn" class="minib" title="Canvas display options">Display &#9662;</button>
      <span id="sbInfo"></span>
      <span class="right">
        <span id="zoomLbl2" style="display:none"></span>
@@ -4363,6 +4440,8 @@ function buildStatusbar() {
      </span>`;
   const room = $("roomSel");
   if (room) room.onchange = (e) => toast(e.target.value + " — rooms are not in this prototype");
+  const disp = $("displayBtn");
+  if (disp) disp.onclick = (e) => { e.stopPropagation(); openDisplayMenu(disp); };
   buildGeorgeWin();
   renderTimelineStatus();
 }

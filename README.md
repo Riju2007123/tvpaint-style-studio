@@ -95,12 +95,19 @@ Works from `file://` too — just open `index.html`.
   `Paste keyframe` and `Invert all keys` (inverts the camera path).
 - The project window shows the **drawing area** with the camera view as the
   visible output: everything outside the camera view is covered with the same
-  solid grey the live app uses (`rgb(126,126,126)`) and the camera profile is
-  drawn in the camera colour `#8080FF` with its four corner squares, the centre
-  square and the horizontal line to the right edge. `View > Camera View` shows
-  the camera view full-bleed. `Project > Render Camera` renders the camera view
-  of every frame into a new project (`Into a New Project` / `Into a New merged
-  Project`).
+  solid grey the live app uses (`rgb(126,126,126)`), the artwork is clipped to
+  the camera view and the camera profile is drawn in the camera colour `#8080FF`
+  with its four corner squares, the centre square and the horizontal line to the
+  right edge. `Project > Render Camera` renders the camera view of every frame
+  into a new project (`Into a New Project` / `Into a New merged Project`).
+- **Canvas display options**: the `Display ▾` popup of the status bar carries
+  the live TVPaint 12 entries and their live states - `Show Stencil`,
+  `Show Paper`, `Show Selection` (on), `Show Animator Disk` (on), `Show Camera`
+  (on), `Follow Camera`, `Show Timeline Notes` - and they really switch the
+  paper, the selection overlay, the animator disc, the camera overlay, the
+  camera-follow mode and the notes. The overlay colours come from the binary's
+  own tokens (`0 0 0 128` selection, `64 64 64 128` animator disk / layer
+  attenuation, `255 255 0 255` reticule, `128 128 255 255` camera profile).
 - Layer order: the layer rows can be dragged onto each other to reorder them
   (with `Move Selected Layers` armed, the whole selection travels as a block),
   and the layer menu's `Move` submenu now carries the exact TVPaint 12 entries
