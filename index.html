@@ -64,6 +64,13 @@
     padding: 0; font-size: 10px; }
   .pw:hover { color: #B6B6B6; }
   .pbody { padding: 6px; overflow: hidden; }
+  /* the Camera[Pro] rows are right aligned and fit the 215 px column */
+  .camopts .orow { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  .camopts .orow label { flex: 0 0 86px !important; text-align: right; }
+  .camopts .pbody { padding: 2px 0; }
+  .camopts .orow input[type=number],
+  .camopts .orow select { flex: 1 1 auto; min-width: 0; box-sizing: border-box; }
+  .camopts .orow .revbtn { flex: none; padding: 0 2px; font-size: 10px; }
   /* the tab bar of the left dock (TVPaint: a floating panel dropped on it
      becomes a tab next to "Main Panel") */
   #tabbar { display: flex; align-items: center; gap: 2px; padding: 3px 4px;

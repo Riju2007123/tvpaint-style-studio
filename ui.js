@@ -321,8 +321,8 @@ function renderOverlayOnly() {
   octx.restore();
   if (camKeys) {
     if (proj.showCamera !== false) drawCameraOverlay();
-    if (panelEls[2] && panelEls[2].querySelector(".pbody")._syncCamera)
-      panelEls[2].querySelector(".pbody")._syncCamera();
+    const camBody = document.querySelector("[data-panel-key=camera] .pbody");
+    if (camBody && camBody._syncCamera) camBody._syncCamera();
   }
   drawCanvasHud();
 }
@@ -685,7 +685,7 @@ const TV_MENUS = {
     { label: "Share Manager", checked: () => tvPanelOpen("share"), action: () => tvTogglePanel("share") },
     { label: "Navigator", checked: () => tvPanelOpen("navigator"), action: () => tvTogglePanel("navigator") },
     { label: "Library", checked: () => tvPanelOpen("library"), action: () => tvTogglePanel("library") },
-    { label: "Camera Panel", checked: () => panelEls[2] && panelEls[2].style.display !== "none", action: () => { if (panelEls[2]) panelEls[2].style.display = panelEls[2].style.display === "none" ? "" : "none"; } }
+    { label: "Camera Panel", checked: () => { const q = document.querySelector("[data-panel-key=camera]"); return !!q && q.style.display !== "none"; }, action: () => { const q = document.querySelector("[data-panel-key=camera]"); if (q) q.style.display = q.style.display === "none" ? "" : "none"; } }
   ],
   "Custom Panels": [
     { label: "Animator Panel", checked: true, action: () => togglePane("animator") },
@@ -1111,18 +1111,36 @@ function syncTVPanels() {
   const a = $("cpAPen"), b = $("cpBPen");
   if (a) a.style.background = proj.apen;
   if (b) b.style.background = proj.bpen;
+  if (wheelSync) wheelSync();
   const hex = $("cpColHex");
   if (hex) hex.textContent = (proj.apen || "").toUpperCase();
+  // the palette drop down only READS the current colour - it must never set
+  // it, or every render would overwrite the colour the user just picked
   const sel = $("cpSel");
-  if (sel && !sel.options.length) {
-    (proj.palette || []).forEach(c => {
-      const o = document.createElement("option"); o.textContent = c.name; o.value = c.color; sel.appendChild(o);
-    });
-    if (!sel.options.length) {
-      const o = document.createElement("option"); o.textContent = proj.apen; o.value = proj.apen; sel.appendChild(o);
+  if (sel) {
+    const pal = proj.palette || [];
+    if (!sel.dataset.built) {
+      sel.dataset.built = "1";
+      pal.forEach(c => {
+        const o = document.createElement("option");
+        o.textContent = c.name; o.value = c.color;
+        sel.appendChild(o);
+      });
+      const o = document.createElement("option");
+      o.textContent = proj.apen.toUpperCase(); o.value = proj.apen;
+      sel.appendChild(o);
+      sel.onchange = () => setApen(sel.value);
     }
+    // keep the drop down in sync with the current colour
+    let found = false;
+    for (const op of sel.options) if (op.value === proj.apen) { found = true; break; }
+    if (!found) {
+      const o = document.createElement("option");
+      o.textContent = proj.apen.toUpperCase(); o.value = proj.apen;
+      sel.appendChild(o);
+    }
+    sel.value = proj.apen;
   }
-  if (sel && sel.value) setApen(sel.value);
   // Light Table: the light table of every layer (TVPaint dims the other layers)
   const lt = $("ltList");
   if (lt) {
@@ -1427,6 +1445,7 @@ function makePanelDraggable(panel, head) {
   });
 }
 let panelEls = [];
+let wheelSync = null;   // the chromatic wheel follows the current APen
 function buildPanels() {
   const wrap = $("panels"); wrap.innerHTML = ""; panelEls = [];
   const mkPanel = (title, key) => {
@@ -1656,6 +1675,11 @@ function buildPanels() {
     if (rgb) rgb.textContent = "R:" + String(cr).padStart(3, "0") + " G:" + String(cg).padStart(3, "0") + " B:" + String(cb).padStart(3, "0");
     drawWheel();
   }
+  wheelSync = () => {
+    const h = rgb2hsv(...(proj.apen.match(/[0-9a-f]{2}/gi) || ["00","00","00"]).map(v => parseInt(v,16)));
+    wheelState.h = h.h; wheelState.s = h.s; wheelState.v = h.v;
+    drawWheel();
+  };
   drawWheel();
   $("wheelCv").addEventListener("pointerdown", (e) => {
     if (e.button === 2) { toast("additional colours — not in this prototype"); return; }
@@ -1772,9 +1796,10 @@ function buildPanels() {
   lb.innerHTML = `<div id="lbList" style="max-height:220px;overflow:auto"></div>`;
   // ---- Tool : <name> Panel ----
   const tp = mkPanel("Tool : Pen Brush", "tool");
-  panelEls[1].id = "toolPanel";
+  document.querySelector("[data-panel-key=tool]").id = "toolPanel";
   tp.innerHTML = `
     <div class="toolgrid g6" id="toolGrid"></div>
+    <div id="toolOpts">
     <h4 style="margin:6px 0 2px;color:#898989;font-size:10px">GRAPHS</h4>
     <div class="toolgrid g6" id="graphGrid" style="max-height:132px;overflow-y:auto"></div>
     <div class="orow"><label>Color</label>
@@ -1815,6 +1840,7 @@ function buildPanels() {
         style="background:#2D2D32;border:1px solid #2D2D32;border-radius:3px"></canvas></div>
       <div class="minirow" style="justify-content:center">
         <button class="minib" id="btnBinClear2">Clear Bin</button></div>
+    </div>
     </div>`;
   buildBtnGrid($("toolGrid"), TOOLGRID);
   buildBtnGrid($("graphGrid"), GRAPHS);
@@ -1881,7 +1907,9 @@ function selectTool(id) {
   // the live app shows the camera options while the Camera tool is active
   if (id === "camera") {
     $("toolPanel").querySelector(".pt").textContent = "Tool : Camera[Pro]";
-    if (panelEls[2]) panelEls[2].style.display = "";
+    if (window.__showCameraOptions) window.__showCameraOptions(true);
+  } else if (window.__showCameraOptions) {
+    window.__showCameraOptions(false);
   }
   syncToolPanel();
   renderAll();
@@ -1938,11 +1966,14 @@ function renderBin() {
 }
 function togglePanel(i) { panelEls[i].style.display = panelEls[i].style.display === "none" ? "" : "none"; }
 // The Windows / Custom Panels menus toggle the dockable windows of TVPaint.
-// The prototype only has the main, tool, camera and timeline panes, the other
-// windows are reported instead of silently doing nothing.
 function togglePane(name) {
-  const map = { "Main": 0, "Tools": 1, "Camera Panel": 2, "Timeline": 3, "color": 1 };
-  if (map[name] !== undefined) { togglePanel(map[name]); return; }
+  const map = { "Main": "main", "Tools": "tool", "Timeline": "timeline", "color": "color" };
+  const key = map[name];
+  if (key) {
+    const el = tvPanelElement(key);
+    if (el) el.style.display = el.style.display === "none" ? "" : "none";
+    return;
+  }
   toast("the " + name + " window is not in this prototype");
 }
 
@@ -1968,6 +1999,31 @@ let camLocks = { x: false, y: false, rotation: false, zoom: false };
 let camLocksAll = false;      // "Lock All": no camera parameter can be changed
 function buildCameraPanel() {
   const body = mkThirdPanel("Camera[Proj]", "camera");
+  body.classList.add("camopts");
+  // In the live TVPaint the camera options are NOT a separate panel: they are
+  // the options of the Camera TOOL, so they live in the tool panel and the
+  // header reads "Tool : Camera[Pro]".
+  const camPanel = document.querySelector("[data-panel-key=camera]");
+  const toolBody = document.querySelector("[data-panel-key=tool] .pbody");
+  const toolOpts = $("toolOpts");
+  camPanel.style.display = "none";
+  let placed = false;
+  const showCameraOptions = (on) => {
+    if (on) {
+      if (!placed) { toolBody.appendChild(camPanel); placed = true; }
+      camPanel.style.display = "";
+      camPanel.querySelector(".phead").style.display = "none";
+      if (toolOpts) toolOpts.style.display = "none";
+      const grid = $("toolGrid");
+      if (grid) grid.style.display = "none";
+    } else {
+      camPanel.style.display = "none";
+      if (toolOpts) toolOpts.style.display = "";
+      const grid = $("toolGrid");
+      if (grid) grid.style.display = "";
+    }
+  };
+  window.__showCameraOptions = showCameraOptions;
   body.innerHTML = `
     ${mrow("Command", `<select id="camCmd" style="flex:1">
         <option value="">Command</option>
@@ -1977,7 +2033,6 @@ function buildCameraPanel() {
         <option value="reset">Reset</option>
         <option value="resetfit">Reset and Fit to project</option></select>`)}
     ${mrow("Lock All", `<input type="checkbox" id="camLockAll">`)}
-    ${mrow("Time Profile", `<button class="revbtn" id="camProfile" style="flex:1">Time Profile</button>`)}
     ${mrow("See bookmarks", `<input type="checkbox" id="camBookmarks">`)}
     ${mrow("Toggle all", `<button class="revbtn" id="camToggle" style="padding:1px 10px">🔑</button>`)}
     ${mrow("Mode", `<select id="camMode" style="flex:1">
@@ -1986,12 +2041,10 @@ function buildCameraPanel() {
         <option value="bezier">Bezier curve</option>
         <option value="smart">Smart Spline</option></select>`)}
     ${mrow("Motion Blur", `<input type="number" id="camBlur" value="0.00" min="0" max="100" step="0.5"> %`)}
-    ${mrow("X", `<button class="revbtn" id="camLockX" style="padding:0 4px">🔓</button>
-        <input type="number" id="camX" step="1" style="flex:1">`)}
-    ${mrow("Y", `<button class="revbtn" id="camLockY" style="padding:0 4px">🔓</button>
-        <input type="number" id="camY" step="1" style="flex:1">`)}
-    ${mrow("Width", `<input type="number" id="camW" step="1" min="1" style="flex:1">`)}
-    ${mrow("Height", `<input type="number" id="camH" step="1" min="1" style="flex:1">`)}
+    ${mrow("X", `<button class="revbtn" id="camLockX" style="padding:0 2px;flex:none;font-size:10px">🔓</button>
+        <input type="number" id="camX" step="1" style="flex:1;min-width:0;padding:1px 3px">`)}
+    ${mrow("Y", `<button class="revbtn" id="camLockY" style="padding:0 2px;flex:none;font-size:10px">🔓</button>
+        <input type="number" id="camY" step="1" style="flex:1;min-width:0;padding:1px 3px">`)}
     ${mrow("Modify ratio", `<input type="checkbox" id="camRatio">`)}
     ${mrow("Rotation", `<button class="revbtn" id="camLockRot" style="padding:0 4px">🔓</button>
         <input type="number" id="camRot" step="0.1" value="0.00" style="width:70px"> °`)}
@@ -2002,11 +2055,10 @@ function buildCameraPanel() {
     <div class="orow" style="justify-content:center"><button class="revbtn" id="camParams">Parameters ...</button></div>`;
   const sync = () => {
     const cam = E.cameraEvaluate(proj, proj.currentFrame);
-    $("camX").value = (proj.width / 2 + cam.x).toFixed(0);   // absolute coords like TVPaint
-    $("camY").value = (proj.height / 2 + cam.y).toFixed(0);
-    const r = E.cameraRect(proj, cam);
-    $("camW").value = Math.round(cam.w || (proj.cameraView ? proj.cameraView.w : proj.width * 0.5));
-    $("camH").value = Math.round(cam.h || (proj.cameraView ? proj.cameraView.h : proj.height * 0.5));
+    // the live TVPaint shows the camera CENTRE in drawing-area coordinates with
+    // one decimal (1920.0 / 1080.0 on a 3840x2160 project)
+    $("camX").value = (proj.width / 2 + cam.x).toFixed(1);
+    $("camY").value = (proj.height / 2 + cam.y).toFixed(1);
     $("camRot").value = cam.rotation.toFixed(2);
     $("camZoom").value = (cam.zoom * 100).toFixed(2);
     $("camFlipX").checked = !!cam.flipX;
@@ -2018,7 +2070,7 @@ function buildCameraPanel() {
     $("camRatio").checked = !!proj.cameraModifyRatio;
     [["camLockX", "x"], ["camLockY", "y"], ["camLockRot", "rotation"], ["camLockZoom", "zoom"]]
       .forEach(([id, key]) => { const b = $(id); if (b) b.textContent = camLocks[key] ? "🔒" : "🔓"; });
-    ["camX", "camY", "camW", "camH", "camRot", "camZoom", "camMode", "camFlipX", "camFlipY"].forEach(id => {
+    ["camX", "camY", "camRot", "camZoom", "camMode", "camFlipX", "camFlipY"].forEach(id => {
       $(id).disabled = !(proj.cameraKeys && proj.cameraKeys.length) || !!camLocksAll;
     });
   };
@@ -2036,29 +2088,16 @@ function buildCameraPanel() {
     E.setCameraKey(proj, f, merged);
     sync(); renderAll();
   };
+  // the X and Y fields are the camera CENTRE in drawing-area coordinates
   $("camX").onchange = e => edit({ x: (+e.target.value || 0) - proj.width / 2 });
   $("camY").onchange = e => edit({ y: (+e.target.value || 0) - proj.height / 2 });
-  // Width / Height are the camera size (the "size" channel).  "Modify ratio"
-  // locks the width/height ratio while one of them is changed (loc 009582260).
-  const editSize = (which) => e => {
-    const v = Math.max(1, Math.round(+e.target.value || 1));
-    const cur = E.cameraEvaluate(proj, proj.currentFrame);
-    const w0 = cur.w || (proj.cameraView ? proj.cameraView.w : proj.width * 0.5);
-    const h0 = cur.h || (proj.cameraView ? proj.cameraView.h : proj.height * 0.5);
-    const patch = which === "w" ? { w: v } : { h: v };
-    if (proj.cameraModifyRatio) {
-      if (which === "w") patch.h = Math.max(1, Math.round(h0 * v / w0));
-      else patch.w = Math.max(1, Math.round(w0 * v / h0));
-    }
-    edit(patch);
-  };
-  $("camW").onchange = editSize("w");
-  $("camH").onchange = editSize("h");
+  // the live Camera[Pro] panel has no Width / Height rows - the camera size is
+  // set in the "Parameters ..." request (Format / width / height / frame rate /
+  // pixel aspect ratio / field order).
   $("camRot").onchange = e => edit({ rotation: +e.target.value || 0 });
   $("camZoom").onchange = e => edit({ zoom: Math.max(0.05, (+e.target.value || 100) / 100) });
   $("camFlipX").onchange = e => edit({ flipX: e.target.checked });
   $("camFlipY").onchange = e => edit({ flipY: e.target.checked });
-  $("camProfile").onclick = () => openCameraTimeProfile();
   $("camMode").onchange = e => {
     const k = E.cameraKeyAt(proj, proj.currentFrame);
     if (k) { k.interp = e.target.value; toast("camera interpolation: " + e.target.value); renderAll(); }
@@ -2130,8 +2169,10 @@ function buildCameraPanel() {
       renderAll();
       toast("camera reset");
     } else if (cmd === "resetfit") {
+      // "Reset and Fit to project": the camera goes back to the centre of the
+      // drawing area - the live app keeps the camera SIZE (measured: the field
+      // of view stays 1920x1080 on a 3840x2160 project)
       proj.cameraKeys = [E.newCameraKey(1, {})];
-      proj.cameraView = { w: proj.width, h: proj.height };
       renderAll();
       toast("camera reset and fitted to the project");
     }
@@ -5241,6 +5282,9 @@ ovl.addEventListener("pointermove", (e) => {
   if (conducting.mode === "camDrag") {
     E.setCameraKey(proj, proj.currentFrame,
       { x: conducting.ox + (p.x - conducting.sx), y: conducting.oy + (p.y - conducting.sy) });
+    // the live app updates the X / Y fields of the camera panel while dragging
+    const cb2 = document.querySelector("[data-panel-key=camera] .pbody");
+    if (cb2 && cb2._syncCamera) cb2._syncCamera();
     return renderOverlayOnly();
   }
   if (conducting.mode === "fgrad") {

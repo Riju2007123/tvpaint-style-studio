@@ -1278,6 +1278,43 @@ right click) and the real dock (tab bar, drag a tab out to float it, drop a
 floating panel on the tab bar to dock it, the title bar of a floating panel is
 its drag handle and the docked tab bar carries the title).
 
+### v34 pass - the colour bug, and the camera used live
+
+**The colour bug (found by using the app):** picking a colour and then drawing
+gave a black stroke.  The cause was in `syncTVPanels()`: the Color Panel's
+palette drop down called `setApen(sel.value)` on **every render**, so the colour
+the user had just picked was overwritten by the drop down's value (black) on the
+next frame.  The drop down now only *reads* the current colour and sets it
+only when the user picks from it, and the Chromatic Wheel follows the current
+APen.
+
+**The camera, used in the running TVPaint:**
+
+- The camera options are **not a separate panel** - they are the options of the
+  Camera TOOL, so the header reads `Tool : Camera[Pro]` and the rows are
+  `Command / Lock All / See bookmarks / Toggle all / Mode / Motion Blur / X / Y /
+  Modify ratio / Rotation / Zoom / Flip X / Flip Y / Parameters ...`.  There is
+  **no `Time Profile` row and no Width / Height row** in the live panel (the size
+  is set in the `Parameters ...` request), so both were removed.
+- **X and Y are the camera CENTRE in drawing-area coordinates** with one
+  decimal: the live project shows `1920.0 / 1080.0` on a 3840x2160 drawing
+  area, and typing `2400` moved the camera's field of view by exactly
+  2400-1920 = 480 canvas pixels (measured 160 screen px at 33.33 %).
+- **Dragging the camera on the canvas with the Camera tool moves it** and the
+  panel follows: a drag of (+195, -106) screen px at 33.33 % changed the
+  fields to `2506.5 / 763.5` (a delta of 586.5 / -316.5 canvas px).
+- **`Reset and Fit to project`** puts the camera back at the centre of the
+  drawing area (X = 1920.0, Y = 1080.0) and keeps the camera SIZE (the field
+  of view stayed 1920x1080).
+- The `Command` menu is `Invert / Load... / Save... / Reset / Reset and Fit to
+  project`.
+
+**A real bug found while doing this:** the camera panel was addressed by
+`panelEls[2]`, but adding the Chromatic Wheel panel had shifted the indexes, so
+the camera panel never synced and its X / Y fields stayed empty.  The panels are
+now addressed by their key (`data-panel-key`) so the indexes can never drift
+again.
+
 ### Still not captured
 - Exact Role submenu appearance/order. The labels are known from the loc's role
   assignment commands: `Keyframe`, `Breakdown`, `Inbetween (To Do)`,
