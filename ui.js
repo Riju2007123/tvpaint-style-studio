@@ -1236,18 +1236,23 @@ function renderTimeline() {
   }
   proj.layers.forEach((l, li) => {
     th += `<div class="strip" data-layer="${li}"><span class="pin">⊘</span>`;
-    // rounded block containers, one per drawing: span = key frame .. key+exposure-1
-    // knob at each key seam inside, black exposure badge at block end (REA: Exposure %d %d)
+    // ONE rounded container per layer spanning first key .. last exposure end
+    // (REA: the reference shows a single continuous container with the "n" badge at
+    // its end and knobs at the key seams) — Exposure %d %d from FUN_14040ddc0.
     const keys = Object.keys(l.frames).map(Number).filter(k => k >= 1 && k <= maxF).sort((a, b) => a - b);
-    for (const k of keys) {
-      const exp = l.frames[k].exposure || 1;
-      const end = Math.min(maxF, k + exp - 1);
-      const w = Math.max(32, (end - k + 1) * 32);
-      const isLastKey = k === keys[keys.length - 1];
-      th += `<div class="blk" style="left:${(k - 1) * 32}px;width:${w}px" data-k="${k}" data-l="${li}">` +
-        `<i class="knob" style="left:-5px"></i>` +
-        `${exp > 1 ? `<i class="blkExp">${exp}</i>` : ""}` +
-        `${isLastKey ? `<i class="expHandle" data-k="${k}" data-l="${li}" title="drag right: increase length"></i>` : ""}</div>`;
+    if (keys.length) {
+      const first = keys[0];
+      const lastKey = keys[keys.length - 1];
+      const lastEnd = Math.max(...keys.map(k => k + (l.frames[k].exposure || 1) - 1));
+      const left = (first - 1) * 32;
+      const w = Math.max(32, (lastEnd - first + 1) * 32);
+      let knobs = "";
+      keys.forEach((k, i) => { if (i > 0) knobs += `<i class="knob" style="left:${(k - first) * 32 - 5}px"></i>`; });
+      const lastExp = l.frames[lastKey].exposure || 1;
+      th += `<div class="blk" id="blk-${li}" style="left:${left}px;width:${w}px" data-first="${first}" data-l="${li}">` +
+        knobs +
+        `${lastExp > 1 ? `<i class="blkExp">${lastExp}</i>` : ""}` +
+        `<i class="expHandle" data-k="${lastKey}" data-l="${li}" title="drag right: increase length"></i></div>`;
     }
     for (let f = 1; f <= maxF; f++) {
       const k = E.effectiveFrameKey(l, f);
@@ -1346,7 +1351,9 @@ function renderTimeline() {
       h.classList.add("grab");
       try { h.setPointerCapture(e.pointerId); } catch (err) {}
       const startExp = l.frames[k].exposure || 1;
-      const blk = strip.querySelector(`.blk[data-k="${k}"]`);
+      const blk = strip.querySelector(`#blk-${li}`);
+      const first = blk ? +blk.dataset.first : 1;
+      const lastKeyOfLayer = Math.max(...Object.keys(l.frames).map(Number));
       let exp = startExp, startK = k, moved = false;
       h.dataset.expBound = String(startExp);
       h.dataset.kBound = String(k);
@@ -1357,9 +1364,13 @@ function renderTimeline() {
           if (exp === +h.dataset.expBound) return;
           moved = true;
           if (blk) {
-            blk.style.width = ((exp) * 32) + "px";
-            const badge = blk.querySelector(".blkExp");
-            if (badge) badge.textContent = exp > 1 ? exp : "";
+            const lastEndNow = Math.max(k + exp - 1,
+              ...Object.keys(l.frames).map(Number).map(kk => kk + (l.frames[kk].exposure || 1) - 1));
+            blk.style.width = ((lastEndNow - first + 1) * 32) + "px";
+            if (k === lastKeyOfLayer) {
+              const badge = blk.querySelector(".blkExp");
+              if (badge) badge.textContent = exp > 1 ? exp : "";
+            }
           }
           h.dataset.expBound = String(exp);
         } else {
