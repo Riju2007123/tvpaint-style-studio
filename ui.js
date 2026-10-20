@@ -227,22 +227,20 @@ function renderArtOnly() {
     actx.closePath();
   };
   if (camKeys && !proj.followCamera) {
+    // Live TVPaint 12 (captured with artwork): the paper outside the camera view
+    // is covered with a solid grey (126,126,126) - the camera view stays white
+    // - and the artwork is drawn over the whole drawing area, it is NOT clipped.
     actx.save();
     actx.beginPath();
     actx.rect(0, 0, proj.width, proj.height);
     camPoly();
     actx.fillStyle = "rgb(126,126,126)";
     actx.fill("evenodd");
-    actx.beginPath();
-    camPoly();
-    actx.fillStyle = "#ffffff";
-    actx.fill();
     actx.restore();
   }
   const cur = proj.layers[proj.currentLayer];
-  // the artwork is only visible through the camera view
-  actx.save();
-  if (camKeys && !proj.followCamera) { actx.beginPath(); camPoly(); actx.clip(); }
+  // the artwork is drawn over the whole drawing area (the live app does not
+  // clip it to the camera view)
   if (proj.onion.enabled) {
     for (let i = 1; i <= proj.onion.before; i++)
       drawGhost(cur, proj.currentFrame - i, proj.onion.tintBefore, 0.35 / i);
@@ -267,7 +265,6 @@ function renderArtOnly() {
       actx.fillRect(0, 0, proj.width, proj.height);
     }
   });
-  actx.restore();
   if (camSave) actx.restore();
 }
 function renderOverlayOnly() {
@@ -313,14 +310,9 @@ function drawCanvasHud() {
     octx.moveTo(mx, my - 8); octx.lineTo(mx, my + 8);
     octx.stroke();
   }
-  if (proj.showAnimatorDisk !== false) {
-    // REA colour token "64 64 64 128" for the disc ring
-    const x = 18, y = 18, r = 20;
-    octx.beginPath(); octx.arc(x, y, r, 0, Math.PI * 2);
-    octx.fillStyle = proj.apen || "#000000"; octx.fill();
-    octx.lineWidth = 2; octx.strokeStyle = "rgba(64,64,64,0.5)"; octx.stroke();
-    octx.beginPath(); octx.arc(x, y, r * 0.55, 0, Math.PI * 2);
-    octx.fillStyle = proj.bpen || "#ffffff"; octx.fill();
+  if (proj.showAnimatorDisk !== false && false) {
+    // the animator disk lives in the tool panel, TVPaint does not draw it on the
+    // canvas (verified live: no disc in the project window)
   }
   if (proj.showTimelineNotes !== false && proj.notes) {
     octx.font = "12px sans-serif";
@@ -332,6 +324,16 @@ function drawCanvasHud() {
 }
 // The camera view mode uses the same transform as the artwork so the camera
 // frame, the path and the drawing stay aligned.
+// Zoom in / out around the centre of the project window (the live app keeps
+// the image centred while the zoom percentage changes).
+function zoomBy(factor) {
+  const w = art.width || 800, h = art.height || 600;
+  const cx = w / 2, cy = h / 2;
+  const dx = (cx - view.x) / view.zoom, dy = (cy - view.y) / view.zoom;
+  view.zoom = Math.max(0.01, Math.min(16, view.zoom * factor));
+  view.x = cx - dx * view.zoom;
+  view.y = cy - dy * view.zoom;
+}
 function applyCameraViewTransform(ctx, w, h) {
   const cam = E.cameraEvaluate(proj, proj.currentFrame);
   const r = E.cameraRect(proj, cam);
@@ -1239,10 +1241,12 @@ function drawCameraOverlay() {
   octx.save();
   if (camMode) applyCameraViewTransform(octx, ovl.width, ovl.height);
   const z = camMode ? 1 : view.zoom;
-  // Live TVPaint 12: the camera view is the final output, everything outside of
-  // it is covered with a solid grey (measured 126,126,126) and the camera
-  // profile is drawn in the camera profile colour 128,128,255 with its corner
-  // squares and the centre cross.
+  // Live TVPaint 12 (captured with artwork): the camera view - the final
+  // output - is framed in green (0,255,0), the camera profile is drawn in the
+  // camera profile colour 128,128,255 with its corner squares, the centre
+  // square and the horizontal line, and the key path joins the keys.
+  octx.strokeStyle = "rgb(0,255,0)";
+  strokeRotRect(octx, curR);
   octx.strokeStyle = "#8080FF";
   strokeRotRect(octx, curR);
   // the four corner squares of the camera profile
@@ -4428,8 +4432,8 @@ function buildTransport() {
     syncTransport();
   };
   const zi = $("rZoomIn"), zo = $("rZoomOut");
-  if (zi) zi.onclick = () => { view.zoom = Math.min(16, view.zoom * 1.25); renderAll(); syncTransport(); };
-  if (zo) zo.onclick = () => { view.zoom = Math.max(0.01, view.zoom / 1.25); renderAll(); syncTransport(); };
+  if (zi) zi.onclick = () => { zoomBy(1.25); renderAll(); syncTransport(); };
+  if (zo) zo.onclick = () => { zoomBy(1 / 1.25); renderAll(); syncTransport(); };
   const zfit = $("rZoomFit"), vfit = $("rFitView");
   if (zfit) zfit.onclick = () => { fitView(); syncTransport(); };
   if (vfit) vfit.onclick = () => { fitView(); syncTransport(); };

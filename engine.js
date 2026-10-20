@@ -82,7 +82,7 @@ function newProject(w, h, fps) {
     showRoles: false, roleLayerOnly: false,
     timelineTC: false,
     // canvas display options (live TVPaint 12 "Display" popup defaults)
-    showStencil: false, showPaper: false, showSelection: true,
+    showStencil: false, showPaper: true, showSelection: true,
     showAnimatorDisk: true, showCamera: true, followCamera: false,
     showTimelineNotes: false, showReticule: true, layerAttenuation: false,
     loopLimits: { mode: "mark", start: 1, end: null },

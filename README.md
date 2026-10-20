@@ -94,12 +94,14 @@ Works from `file://` too — just open `index.html`.
   the camera movement into the drawings), `Cut keyframe` / `Copy keyframe` /
   `Paste keyframe` and `Invert all keys` (inverts the camera path).
 - The project window shows the **drawing area** with the camera view as the
-  visible output: everything outside the camera view is covered with the same
-  solid grey the live app uses (`rgb(126,126,126)`), the artwork is clipped to
-  the camera view and the camera profile is drawn in the camera colour `#8080FF`
-  with its four corner squares, the centre square and the horizontal line to the
-  right edge. `Project > Render Camera` renders the camera view of every frame
-  into a new project (`Into a New Project` / `Into a New merged Project`).
+  visible output: outside the camera view the paper is covered with the same
+  solid grey the live app uses (`rgb(126,126,126)`), the camera view keeps the
+  white paper and is framed in green (`0,255,0`), the artwork is drawn over the
+  **whole** drawing area (the live app does not clip it) and the camera profile
+  is drawn in the camera colour `#8080FF` with its four corner squares, the
+  centre square and the horizontal line to the right edge.
+  `Project > Render Camera` renders the camera view of every frame into a new
+  project (`Into a New Project` / `Into a New merged Project`).
 - **Canvas footer** (live layout): `Rotate the view` (LMB drag turns the view,
   RMB opens the rotation menu), a fit button, the zoom percentage field, a
   zoom-fit button, `−` / `+` and the `Display ▾` popup. The view can be rotated
