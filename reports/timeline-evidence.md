@@ -1207,6 +1207,40 @@ The prototype now has all of that: the panels float and dock, the Chromatic
 Wheel is a real wheel, the Light Table and the Remote Control have the live
 layout, and the left column is the 215 px of the live app.
 
+### v32 pass - the panels were used, not guessed
+
+The live program was **used**: the floating panels were dragged by their title
+bars, the header buttons were clicked and their tool tips read, a floating panel
+was dropped on the left column and the colour wheel was clicked.
+
+**The title bar is draggable** - TVPaint says so itself: *"Title bar / Contains
+the menu title. / Click and drag on this bar to move the menu."*
+
+**The header buttons of a panel are [dot][chevron][cross]**
+- the **dot** opens the panel's own options,
+- the **chevron COLLAPSES the body** - the panel shrinks to its title bar (it
+  does *not* float the panel; the prototype had it wrong),
+- the **cross** closes the panel.
+
+**A floating window** has the title bar plus [float][maximize][cross]; the
+maximize button's tool tip is *"Maximize/minimize / Click to enlarge the
+window to its maximum size / reduce it to its minimum size."*
+
+**The left column is a dock with a TAB BAR on top.**  Dragging the floating
+`Light Table` onto the `Main Panel` tab turned it into a **tab** next to it
+(`Main Panel | Light Table`), and the tab label is a title bar of its own.
+So the left column is not a plain stack: the first row is a tab bar and the
+panels below are the stacked sections (`Color Panel`, `Chromatic Wheel`,
+`Tool : ...`).
+
+**The Chromatic Wheel sets the APen colour** when it is clicked (the swatch in
+the Color Panel follows).
+
+The prototype now has: the tab bar (with the dropped panel becoming a tab and
+the tab switching the content), the chevron collapsing the body, the float and
+maximize buttons on a floating window, a draggable title bar, the drop-on-the-
+tab-bar docking, and a working colour wheel.
+
 ### Still not captured
 - Exact Role submenu appearance/order. The labels are known from the loc's role
   assignment commands: `Keyframe`, `Breakdown`, `Inbetween (To Do)`,

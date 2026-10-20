@@ -1247,11 +1247,21 @@ function syncTVPanels() {
   }
 }
 // ---------------------------------------------------------------------------
-// The panels of TVPaint 12 can be DOCKED in the left column or FLOATED over
-// the project window; the chevron in the panel header switches between the
-// two, and a floating panel can be dragged by its title bar.
+// The panels of TVPaint 12 (observed on the running program):
+//  * the left column is a dock whose FIRST ROW IS A TAB BAR ("Main Panel" and
+//    every floating panel that is dropped on it become tabs - the tab label is
+//    a title bar: "Contains the menu title. Click and drag on this bar to move
+//    the menu."),
+//  * every panel below is a section with the header [title][dot][chevron][cross]:
+//    the dot opens the panel options, the chevron COLLAPSES the body, the cross
+//    closes the panel,
+//  * a floating panel is a window with a draggable title bar; collapsed it
+//    shows [dot][float][maximize][cross] and the maximize button is
+//    "Maximize/minimize: Click to enlarge the window to its maximum size".
 // ---------------------------------------------------------------------------
 let floatLayer = null;
+let tabBar = null;
+const dockTabs = ["main"];          // the tabs of the left dock
 function ensureFloatLayer() {
   if (floatLayer) return floatLayer;
   floatLayer = document.createElement("div");
@@ -1259,6 +1269,52 @@ function ensureFloatLayer() {
   const wrap = $("cwrap");
   if (wrap) { wrap.style.position = "relative"; wrap.appendChild(floatLayer); }
   return floatLayer;
+}
+function ensureTabBar() {
+  if (tabBar) return tabBar;
+  tabBar = document.createElement("div");
+  tabBar.id = "tabbar";
+  const cols = $("panels");
+  if (cols) cols.insertBefore(tabBar, cols.firstChild);
+  return tabBar;
+}
+function renderTabBar() {
+  const bar = ensureTabBar();
+  bar.innerHTML = dockTabs.map(k => {
+    const d = k === "main" ? { title: "Main Panel" } : (tvPanelDef(k) || { title: k });
+    return `<div class="ptab${k === "main" ? " on" : ""}" data-tab="${k}">${d.title}</div>`;
+  }).join("") +
+    `<span style="flex:1"></span>
+     <button class="pw" title="panel options">•</button>
+     <button class="pw" title="collapse">▾</button>
+     <button class="pw" title="close">✕</button>`;
+  bar.querySelectorAll(".ptab").forEach(t => t.onclick = () => {
+    const k = t.dataset.tab;
+    if (k === "main") { panelEls[0].style.display = ""; }
+    else { const p = tvPanelElement(k); if (p) p.style.display = ""; }
+    dockTabs.forEach(x => { if (x !== k) { const q = tvPanelElement(x); if (q) q.style.display = "none"; } });
+    bar.querySelectorAll(".ptab").forEach(o => o.classList.toggle("on", o.dataset.tab === k));
+  });
+  const mainHead = panelEls[0] && panelEls[0].querySelector(".phead");
+  const mainBody = panelEls[0] && panelEls[0].querySelector(".pbody");
+  if (mainHead && mainBody) {
+    // the tab bar IS the header row of the dock (the live app has no second
+    // "Main Panel" title under it)
+    mainHead.style.display = "none";
+    const col = bar.querySelector("button[title=collapse]");
+    if (col) col.onclick = (e) => {
+      e.stopPropagation();
+      mainBody.style.display = mainBody.style.display === "none" ? "" : "none";
+    };
+  }
+  // a floating panel dragged over the tab bar is docked as a tab
+  bar.addEventListener("dragover", (e) => { e.preventDefault(); bar.classList.add("over"); });
+  bar.addEventListener("dragleave", () => bar.classList.remove("over"));
+  bar.addEventListener("drop", (e) => {
+    e.preventDefault(); bar.classList.remove("over");
+    const k = e.dataTransfer.getData("text/panel");
+    if (k && dockTabs.indexOf(k) < 0) { dockTabs.push(k); renderTabBar(); }
+  });
 }
 // floats a docked panel over the project window
 function floatPanel(panel, x, y) {
@@ -1269,12 +1325,14 @@ function floatPanel(panel, x, y) {
   panel.classList.add("floatpanel");
   panel.style.left = (x === undefined ? 320 : x) + "px";
   panel.style.top = (y === undefined ? 120 : y) + "px";
-  panel.style.width = "";
   floatLayer.appendChild(panel);
   const head = panel.querySelector(".phead");
   const btn = head.querySelector("[title=collapse]");
-  if (btn) btn.title = "dock the panel";
+  if (btn) btn.title = "collapse";
   makePanelDraggable(panel, head);
+  // the collapsed window shows [dot][float][maximize][cross]
+  const extra = head.querySelector(".pwin");
+  if (extra) extra.style.display = "";
 }
 // docks a floating panel back into the left column
 function dockPanel(panel) {
@@ -1287,29 +1345,43 @@ function dockPanel(panel) {
   const head = panel.querySelector(".phead");
   const btn = head.querySelector("[title=collapse]");
   if (btn) btn.title = "collapse";
-  else if (head) {
-    const b = document.createElement("button");
-    b.className = "pw"; b.title = "collapse";
-    b.textContent = "▼";
-    b.onclick = (e) => { e.stopPropagation(); floatPanel(panel); };
-    head.appendChild(b);
-  }
+  const extra = head.querySelector(".pwin");
+  if (extra) extra.style.display = "none";
 }
 function makePanelDraggable(panel, head) {
   if (!head || head.dataset.drag) return;
   head.dataset.drag = "1";
+  head.draggable = false;
   head.addEventListener("pointerdown", (e) => {
     if (e.target.tagName === "BUTTON") return;
     const sx = e.clientX, sy = e.clientY;
     const r = panel.getBoundingClientRect();
     const ox = r.left, oy = r.top;
+    let overTab = false;
     const mv = (ev) => {
       panel.style.left = Math.max(0, ox + ev.clientX - sx) + "px";
       panel.style.top = Math.max(0, oy + ev.clientY - sy) + "px";
+      // over the tab bar of the left dock -> dock it as a tab
+      const tb = ensureTabBar().getBoundingClientRect();
+      const inside = ev.clientX >= tb.left && ev.clientX <= tb.right &&
+        ev.clientY >= tb.top && ev.clientY <= tb.bottom;
+      if (inside !== overTab) {
+        overTab = inside;
+        ensureTabBar().classList.toggle("over", overTab);
+      }
     };
-    const up = () => {
+    const up = (ev) => {
       window.removeEventListener("pointermove", mv);
       window.removeEventListener("pointerup", up);
+      ensureTabBar().classList.remove("over");
+      if (overTab) {
+        const key = panel.dataset.panelKey;
+        if (key && dockTabs.indexOf(key) < 0) { dockTabs.push(key); }
+        dockPanel(panel);
+        renderTabBar();
+        const t = ensureTabBar().querySelector(`[data-tab="${key}"]`);
+        if (t) t.click();
+      }
     };
     window.addEventListener("pointermove", mv);
     window.addEventListener("pointerup", up);
@@ -1318,25 +1390,39 @@ function makePanelDraggable(panel, head) {
 let panelEls = [];
 function buildPanels() {
   const wrap = $("panels"); wrap.innerHTML = ""; panelEls = [];
-  const mkPanel = (title) => {
+  const mkPanel = (title, key) => {
     const p = document.createElement("div"); p.className = "panel";
+    if (key) p.dataset.panelKey = key;
     p.innerHTML = `<div class="phead"><span class="pt">${title}</span>
       <button class="pw" title="panel options">•</button>
-      <button class="pw" title="collapse">▼</button>
-      <button class="pw" title="close">✕</button></div><div class="pbody"></div>`;
+      <button class="pw" title="collapse">▾</button>
+      <button class="pw" title="close">✕</button>
+      <span class="pwin"><button class="pw" title="float">▶</button>
+        <button class="pw" title="maximize">▬</button></span></div><div class="pbody"></div>`;
     wrap.appendChild(p);
     const [head, body] = [p.querySelector(".phead"), p.querySelector(".pbody")];
     head.querySelector('button[title="panel options"]').onclick =
       (e) => { e.stopPropagation(); toast(title + " — the panel options of the live app"); };
+    // the chevron COLLAPSES the body (live behaviour)
     head.querySelector("button[title=collapse]").onclick =
-      (e) => { e.stopPropagation(); floatPanel(p); };
+      (e) => { e.stopPropagation(); body.style.display = body.style.display === "none" ? "" : "none"; };
     head.querySelector("button[title=close]").onclick =
       (e) => { e.stopPropagation(); p.style.display = "none"; };
+    head.querySelector("button[title=float]").onclick =
+      (e) => { e.stopPropagation(); floatPanel(p); };
+    head.querySelector("button[title=maximize]").onclick = (e) => {
+      e.stopPropagation();
+      const big = p.dataset.max === "1";
+      p.dataset.max = big ? "0" : "1";
+      p.style.width = big ? "" : "420px";
+      p.style.height = big ? "" : "320px";
+    };
     panelEls.push(p);
     return body;
   };
   // ---- Main Panel ----
-  const main = mkPanel("Main Panel");
+  const main = mkPanel("Main Panel", "main");
+  renderTabBar();
   main.innerHTML = `<div class="toolgrid g6" id="mainGrid"></div>
     <div class="minirow">
       <button class="minib" id="btnBinClear" title="clear Custom Brush">Clear Bin</button>
@@ -1351,16 +1437,29 @@ function buildPanels() {
     const d = tvPanelDef(key);
     const p = document.createElement("div");
     p.className = "panel"; p.id = "tvpanel-" + key;
+    p.dataset.panelKey = key;
     p.innerHTML = `<div class="phead"><span class="pt">${d.title}</span>
       <button class="pw" title="panel options">•</button>
-      <button class="pw" title="collapse">▼</button>
-      <button class="pw" title="close">✕</button></div><div class="pbody"></div>`;
+      <button class="pw" title="collapse">▾</button>
+      <button class="pw" title="close">✕</button>
+      <span class="pwin"><button class="pw" title="float">▶</button>
+        <button class="pw" title="maximize">▬</button></span></div><div class="pbody"></div>`;
     $("panels").appendChild(p);
     const body = p.querySelector(".pbody");
     p.querySelector('.phead button[title="panel options"]').onclick =
       (e) => { e.stopPropagation(); toast(d.title + " — the panel options of the live app"); };
+    // the chevron COLLAPSES the body (live behaviour)
     p.querySelector(".phead button[title=collapse]").onclick =
+      (e) => { e.stopPropagation(); body.style.display = body.style.display === "none" ? "" : "none"; };
+    p.querySelector('.phead button[title="float"]').onclick =
       (e) => { e.stopPropagation(); floatPanel(p); };
+    p.querySelector('.phead button[title="maximize"]').onclick = (e) => {
+      e.stopPropagation();
+      const big = p.dataset.max === "1";
+      p.dataset.max = big ? "0" : "1";
+      p.style.width = big ? "" : "420px";
+      p.style.height = big ? "" : "320px";
+    };
     p.querySelector(".phead button[title=close]").onclick = (e) => {
       e.stopPropagation(); tvPanelState[key] = false; p.style.display = "none"; syncToolbarState();
     };
@@ -1419,6 +1518,27 @@ function buildPanels() {
     g.strokeStyle = "#d8d8dc"; g.lineWidth = 1; g.stroke();
   };
   drawWheel();
+  // clicking the wheel sets the APen colour (live behaviour)
+  $("wheelCv").addEventListener("pointerdown", (e) => {
+    const cv = $("wheelCv");
+    const r = cv.getBoundingClientRect();
+    const x = (e.clientX - r.left) * cv.width / r.width - cv.width / 2;
+    const y = (e.clientY - r.top) * cv.height / r.height - cv.height / 2;
+    const d = Math.hypot(x, y), R = cv.width / 2 - 2;
+    if (d > R) return;
+    const h = (Math.atan2(y, x) * 180 / Math.PI + 90 + 360) % 360;
+    const s = d / R, v = 1 - s * s;
+    const c = v * 255, hh = h / 60, X = c * (1 - Math.abs(hh % 2 - 1));
+    let rr = 0, gg = 0, bb = 0;
+    if (hh < 1) { rr = c; gg = X; } else if (hh < 2) { rr = X; gg = c; }
+    else if (hh < 3) { gg = c; bb = X; } else if (hh < 4) { gg = X; bb = c; }
+    else if (hh < 5) { rr = X; bb = c; } else { rr = c; bb = X; }
+    const m = (1 - s) * 255;
+    const hex = "#" + [rr + m, gg + m, bb + m].map(n =>
+      Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0")).join("");
+    setApen(hex);
+    toast("APen: " + hex.toUpperCase());
+  });
   // Light Table: the light table of every layer (TVPaint dims the other layers)
   const lt = mkTVPanel("lt");
   lt.innerHTML = `
