@@ -62,6 +62,10 @@ Works from `file://` too — just open `index.html`.
   restored `Define Loop Limits` entry at the bottom. `Select Image from Key` is
   grayed at a key start, matching the live menu; it is enabled on a hold and
   selects the held image at its key start.
+- Scrubbing: dragging the timeline ruler scrubs the clip and stops at the end
+  of the selected layer (the rule TVPaint documents for the timeline area); a
+  single click on a ruler number jumps straight to that frame. The transport
+  bar under the canvas scrubs the whole clip.
 - Timeline zoom and fit: the timeline footer carries TVPaint's interactive
   zoom ratio (shipped `LayerZoomRatio` icon, drag left/right to change the frame
   width) and a `Fit` popup with the shipped loc entries `Fit to Clip`, `Fit to

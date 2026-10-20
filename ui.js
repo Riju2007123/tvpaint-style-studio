@@ -1444,6 +1444,59 @@ function timelineMenu(mx, my) {
       action: () => { proj.timelineTC = !proj.timelineTC; renderAll(); } }
   ], mx, my);
 }
+// ---- ruler scrubbing ----
+// loc 25320 "Timeline: Left clicking and dragging in this area will scrub the
+// clip. A clip can only be scrubbed to the end of the selected layer. A single
+// left click in this area jumps to that frame."
+function startRulerScrub(e) {
+  if (e.button !== 0) return;
+  const track = $("tlTrack");
+  if (!track) return;
+  const layer = tvCurrentLayer();
+  const limit = Math.max(1, E.layerEnd(layer) || 1);
+  const frameAt = (clientX) => {
+    const tr = track.getBoundingClientRect();
+    const x = clientX - tr.left + track.scrollLeft;
+    return Math.max(1, Math.round(x / CW) + 1);
+  };
+  const apply = (ev) => {
+    const f = Math.min(limit, frameAt(ev.clientX));
+    if (f !== proj.currentFrame) { proj.currentFrame = f; renderAll(); }
+  };
+  apply(e);
+  let moved = false;
+  const mv = (ev) => { moved = true; apply(ev); };
+  const up = () => {
+    window.removeEventListener("pointermove", mv);
+    window.removeEventListener("pointerup", up);
+    if (moved) tlSuppressClickUntil = performance.now() + 300;
+  };
+  window.addEventListener("pointermove", mv);
+  window.addEventListener("pointerup", up);
+}
+// The transport bar under the canvas scrubs the whole clip.
+function startTransportScrub(e) {
+  if (e.button !== 0) return;
+  const ob = $("ovBar");
+  if (!ob) return;
+  const bf = Math.max(1, proj.outFrame);
+  const apply = (ev) => {
+    const r = ob.getBoundingClientRect();
+    const t = Math.max(0, Math.min(1, (ev.clientX - r.left) / Math.max(1, r.width)));
+    const f = Math.max(1, Math.min(bf, Math.round(1 + t * (bf - 1))));
+    if (f !== proj.currentFrame) { proj.currentFrame = f; renderAll(); }
+  };
+  apply(e);
+  let moved = false;
+  const mv = (ev) => { moved = true; apply(ev); };
+  const up = () => {
+    window.removeEventListener("pointermove", mv);
+    window.removeEventListener("pointerup", up);
+    if (moved) tlSuppressClickUntil = performance.now() + 300;
+  };
+  window.addEventListener("pointermove", mv);
+  window.addEventListener("pointerup", up);
+}
 function renderTimeline() {
   const left = $("tlLeft"), track = $("tlTrack");
   if (track) track.style.setProperty("--cw", CW + "px");
@@ -1722,8 +1775,14 @@ function renderTimeline() {
     const f = +tk.dataset.tf;
     tk.style.cursor = "pointer";
     tk.title = "go to image " + f;
-    tk.onclick = () => gotoFrame(f, proj.currentLayer);
+    tk.onclick = () => {
+      if (performance.now() < tlSuppressClickUntil) return;
+      gotoFrame(f, proj.currentLayer);
+    };
   });
+  // Left clicking and dragging in the ruler scrubs the clip (loc 25320: "A clip
+  // can only be scrubbed to the end of the selected layer").
+  track.querySelectorAll(".ruler").forEach(r => { r.onpointerdown = (e) => startRulerScrub(e); });
   track.querySelectorAll(".plus[data-plus]").forEach(b => {
     b.onclick = (e) => { e.stopPropagation();
       const pl = +b.dataset.pl, pf = +b.dataset.plus;
@@ -3694,6 +3753,8 @@ function buildTransport() {
   $("rLast").onclick = () => remote("last");
   $("rPrev").onclick = () => remote("prev");
   $("rNext").onclick = () => remote("next");
+  const ovBar = $("ovBar");
+  if (ovBar) ovBar.onpointerdown = (e) => startTransportScrub(e);
   // previous / next *instance* = previous / next drawing of the current layer
   $("rPrevInst").onclick = () => {
     const keys = Object.keys(proj.layers[proj.currentLayer].frames).map(Number).sort((a, b) => a - b);
