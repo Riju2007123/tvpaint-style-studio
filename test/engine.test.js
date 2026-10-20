@@ -290,11 +290,129 @@ test("insertImages before/after/duplicate", () => {
   assert.strictEqual(l.frames[8].canvas.tag, "B", "source still intact");
 });
 
-test("deleteImageAt closes the gap", () => {
+test("deleteImageAt delete modes (live Keep empty evidence)", () => {
+  // Live: deleting key 2 of a [1,2][3,4][5,7] layer with Keep empty left
+  // frames 3-4 empty, kept key 3 at frame 5 and kept the layer at 7.
   const p = E.newProject(); const l = p.layers[0];
-  l.frames = { 1: E.newFrame(), 4: E.newFrame(), 8: E.newFrame() };
-  E.deleteImageAt(l, 4);
-  assert.deepStrictEqual(E.layerKeys(l), [1, 7]);
+  l.frames = { 1: E.newFrame(), 3: E.newFrame(), 5: E.newFrame() };
+  l.frames[1].exposure = 2; l.frames[3].exposure = 2; l.frames[5].exposure = 3;
+  E.deleteImageAt(l, 3, "keep");
+  assert.deepStrictEqual(E.layerKeys(l), [1, 5], "following image stays put");
+  assert.strictEqual(l.frames[1].exposure, 2, "previous exposure unchanged");
+  assert.strictEqual(E.effectiveFrameKey(l, 3), null, "frames 3-4 are empty");
+  assert.strictEqual(E.layerEnd(l), 7, "layer length preserved");
+
+  // Fill gap from left extends the previous drawing over the gap.
+  const a = E.newProject().layers[0];
+  a.frames = { 1: E.newFrame(), 3: E.newFrame(), 5: E.newFrame() };
+  a.frames[1].exposure = 2; a.frames[3].exposure = 2; a.frames[5].exposure = 3;
+  E.deleteImageAt(a, 3, "fill-left");
+  assert.strictEqual(a.frames[1].exposure, 4);
+  assert.deepStrictEqual(E.layerKeys(a), [1, 5]);
+
+  // Fill gap from right reaches back with the next drawing, later keys stay.
+  const b = E.newProject().layers[0];
+  b.frames = { 1: E.newFrame(), 3: E.newFrame(), 5: E.newFrame() };
+  b.frames[1].exposure = 2; b.frames[3].exposure = 2; b.frames[5].exposure = 3;
+  E.deleteImageAt(b, 3, "fill-right");
+  assert.deepStrictEqual(E.layerKeys(b), [1, 3]);
+  assert.strictEqual(b.frames[3].exposure, 5);
+  assert.strictEqual(E.layerEnd(b), 7);
+
+  // Deleting the last drawing: Keep empty keeps the trailing gap, Stay put trims.
+  const c = E.newProject().layers[0];
+  c.frames = { 1: E.newFrame(), 5: E.newFrame() };
+  c.frames[1].exposure = 2; c.frames[5].exposure = 3;
+  E.deleteImageAt(c, 5, "keep");
+  assert.deepStrictEqual(E.layerKeys(c), [1]);
+  assert.strictEqual(E.layerEnd(c), 7);
+  assert.strictEqual(c.emptyEnd, 7, "Keep empty remembers the trailing gap");
+  const d = E.newProject().layers[0];
+  d.frames = { 1: E.newFrame(), 5: E.newFrame() };
+  d.frames[1].exposure = 2; d.frames[5].exposure = 3;
+  E.deleteImageAt(d, 5, "stay");
+  assert.strictEqual(E.layerEnd(d), 2);
+  assert.strictEqual(d.emptyEnd, 0, "Stay put closes the trailing gap");
+  // The layer remembers the last chosen mode (default Stay put).
+  assert.strictEqual(E.newProject().layers[0].deleteMode, "stay");
+  const h = E.makeHistory(10);
+  h.pushModel(E.newProject());
+  h.clear();
+  assert.strictEqual(h.undo(E.newProject(), { rebuildModel() {}, restoreFrame() {} }), false,
+    "new/open projects clear the undo history");
+  const e = E.newProject().layers[0];
+  e.frames = { 1: E.newFrame(), 5: E.newFrame() };
+  e.frames[1].exposure = 2; e.frames[5].exposure = 3;
+  E.deleteImageAt(e, 5);
+  assert.strictEqual(E.layerEnd(e), 2);
+});
+
+test("splitExposure breaks holds including the last held frame", () => {
+  const p = E.newProject(); const l = p.layers[0];
+  l.frames = { 1: E.newFrame() };
+  l.frames[1].exposure = 3;
+  l.frames[1].canvas = { tag: "hold" };
+  const nf = E.splitExposure(l, 3, (cv) => ({ tag: cv.tag + "-copy" }));
+  assert.ok(nf);
+  assert.deepStrictEqual(E.layerKeys(l), [1, 3]);
+  assert.strictEqual(l.frames[1].exposure, 2);
+  assert.strictEqual(nf.exposure, 1);
+  assert.strictEqual(l.frames[1].canvas.tag, "hold");
+  assert.strictEqual(nf.canvas.tag, "hold-copy", "new instance owns a copy");
+  assert.strictEqual(E.splitExposure(l, 1, null), null, "key start is not a hold");
+});
+
+test("rippleExposure grows and shrinks later keys", () => {
+  const p = E.newProject(); const l = p.layers[0];
+  l.frames = { 1: E.newFrame(), 3: E.newFrame(), 5: E.newFrame() };
+  l.frames[1].exposure = 2; l.frames[3].exposure = 2; l.frames[5].exposure = 3;
+  E.rippleExposure(l, 1, 3);
+  assert.deepStrictEqual(E.layerKeys(l), [1, 4, 6]);
+  assert.strictEqual(E.layerEnd(l), 8);
+  E.rippleExposure(l, 1, 2);
+  assert.deepStrictEqual(E.layerKeys(l), [1, 3, 5]);
+  assert.strictEqual(E.layerEnd(l), 7);
+});
+
+test("trimExposureStart redistributes without moving later keys", () => {
+  const p = E.newProject(); const l = p.layers[0];
+  l.frames = { 1: E.newFrame(), 3: E.newFrame(), 5: E.newFrame() };
+  l.frames[1].exposure = 2; l.frames[3].exposure = 2; l.frames[5].exposure = 3;
+  assert.strictEqual(E.trimExposureStart(l, 3, 4), true);
+  assert.deepStrictEqual(E.layerKeys(l), [1, 4, 5]);
+  assert.strictEqual(l.frames[1].exposure, 3);
+  assert.strictEqual(l.frames[4].exposure, 1);
+  assert.strictEqual(l.frames[5].exposure, 3);
+  assert.strictEqual(E.layerEnd(l), 7);
+  // Dragging back left grows this instance and shortens the left neighbour.
+  E.trimExposureStart(l, 4, 2);
+  assert.deepStrictEqual(E.layerKeys(l), [1, 2, 5]);
+  assert.strictEqual(l.frames[1].exposure, 1);
+  assert.strictEqual(l.frames[2].exposure, 3);
+  assert.strictEqual(E.trimExposureStart(l, 2, 1), false, "previous key is the floor");
+});
+
+test("slideLayer shifts the whole layer; syncProjectOut follows a fitted clip", () => {
+  const p = E.newProject(); const l = p.layers[0];
+  p.outFrame = 7;
+  l.frames = { 1: E.newFrame(), 3: E.newFrame(), 5: E.newFrame() };
+  l.frames[1].exposure = 2; l.frames[3].exposure = 2; l.frames[5].exposure = 3;
+  const oldMax = E.projectMaxEnd(p), oldOut = p.outFrame;
+  assert.strictEqual(E.slideLayer(l, 1), 1);
+  E.syncProjectOut(p, oldMax, oldOut);
+  assert.deepStrictEqual(E.layerKeys(l), [2, 4, 6]);
+  assert.strictEqual(p.outFrame, 8, "fitted clip follows the layer end");
+  assert.strictEqual(E.slideLayer(l, -9), -1, "cannot slide before frame 1");
+  assert.deepStrictEqual(E.layerKeys(l), [1, 3, 5]);
+});
+
+test("per-layer auto break/create flags default on and survive serialization", () => {
+  const p = E.newProject();
+  assert.strictEqual(p.layers[0].autoBreak, true);
+  assert.strictEqual(p.layers[0].autoCreate, true);
+  const round = E.deserializeProject(E.serializeProject(p), { surfaceFromDataURL: () => null });
+  assert.strictEqual(round.layers[0].autoBreak, true);
+  assert.strictEqual(round.layers[0].autoCreate, true);
 });
 
 test("deleteFrameColumn compacts every layer and holds", () => {
@@ -312,15 +430,28 @@ test("deleteFrameColumn compacts every layer and holds", () => {
   assert.strictEqual(p.outFrame, 23);
 });
 
-test("setExposureValue clamps to the next key; removeExposures resets", () => {
+test("setExposureValue ripples; removeExposures closes gaps", () => {
   const p = E.newProject(); const l = p.layers[0];
   l.frames = { 1: E.newFrame(), 5: E.newFrame() };
   E.setExposureValue(l, 1, 9);
-  assert.strictEqual(l.frames[1].exposure, 4, "cannot overlap the next drawing");
+  assert.strictEqual(l.frames[1].exposure, 9, "set value ripples the next image");
+  assert.deepStrictEqual(E.layerKeys(l), [1, 13]);
   E.setExposureValue(l, 1, 2);
   assert.strictEqual(l.frames[1].exposure, 2);
-  E.removeExposures(l, 1);
-  assert.strictEqual(l.frames[1].exposure, 1);
+  assert.deepStrictEqual(E.layerKeys(l), [1, 6]);
+  l.frames = { 1: E.newFrame(), 5: E.newFrame() };
+  l.frames[1].exposure = 2; l.frames[5].exposure = 3; l.emptyEnd = 0;
+  assert.strictEqual(E.layerHasGaps(l), true);
+  assert.strictEqual(E.removeExposures(l, 1), true);
+  assert.deepStrictEqual(E.layerKeys(l), [1, 3], "empty exposures are closed");
+  assert.strictEqual(l.frames[1].exposure, 2);
+  assert.strictEqual(l.frames[3].exposure, 3);
+  assert.strictEqual(E.layerHasGaps(l), false);
+  const t = E.newProject().layers[0];
+  t.frames = { 1: E.newFrame() }; t.emptyEnd = 6;
+  assert.strictEqual(E.layerHasGaps(t), true);
+  E.removeExposures(t, 1);
+  assert.strictEqual(t.emptyEnd, 0, "a trailing empty range is removed too");
 });
 
 test("repeatImages duplicates the marked range", () => {

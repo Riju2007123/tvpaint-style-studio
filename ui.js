@@ -51,13 +51,17 @@ function surfaceFromDataURL(url, w, h) {
 }
 const restoreFns = {
   restoreFrame(layer, frameNum, payload) {
-    layer.frames[frameNum] = { exposure: payload ? payload.exposure : 1,
-      canvas: surfaceFromDataURL(payload && payload.data) };
+    const fr = layer.frames[frameNum] || E.newFrame();
+    fr.exposure = payload ? payload.exposure : 1;
+    fr.canvas = surfaceFromDataURL(payload && payload.data);
+    layer.frames[frameNum] = fr;
     renderAll();
   },
   rebuildModel(map) {
     proj.layers.forEach(l => Object.keys(l.frames).forEach(k => {
-      if (map[l.id + ":" + k]) l.frames[k].canvas = map[l.id + ":" + k];
+      const fr = l.frames[k];
+      const cv = (fr.id && map["id:" + fr.id]) || map[l.id + ":" + k];
+      if (cv) fr.canvas = cv;
     }));
     renderAll();
   },
@@ -81,6 +85,37 @@ function fitView() {
 function currentKeyOf(layer) {
   const k = E.effectiveFrameKey(layer, proj.currentFrame);
   return k === null ? proj.currentFrame : k;
+}
+// Auto Break Instance / Auto Create Frame, observed in the live layer row.
+// This runs before a drawing edit and records the structural change as its own
+// undo step, so undo once removes the stroke and undo again removes the break /
+// the newly created frame (exactly the live two-step undo).
+function prepareEditKey(layer) {
+  if (!layer) return null;
+  if (layer.locked) { toast("layer is locked"); return null; }
+  const f = proj.currentFrame;
+  const k = E.effectiveFrameKey(layer, f);
+  if (k == null) {
+    if (layer.autoCreate === false) { toast("empty cell — Auto Create Frame is off"); return null; }
+    const oldMax = E.projectMaxEnd(proj), oldOut = proj.outFrame;
+    hist.pushModel(proj);
+    layer.frames[f] = E.newFrame();
+    E.syncProjectOut(proj, oldMax, oldOut);
+    hist.sealModel(proj);
+    renderTimeline();
+    return f;
+  }
+  const exp = layer.frames[k].exposure || 1;
+  if (f > k && f < k + exp && layer.autoBreak !== false) {
+    const oldMax = E.projectMaxEnd(proj), oldOut = proj.outFrame;
+    hist.pushModel(proj);
+    E.splitExposure(layer, f, tvCloneSurface);
+    E.syncProjectOut(proj, oldMax, oldOut);
+    hist.sealModel(proj);
+    renderTimeline();
+    return f;
+  }
+  return k;
 }
 // Per-layer playback behaviour when the playhead passes the layer's last image
 // (REA: the small control beside the layer — None / Loop / Ping-Pong / Hold).
@@ -224,7 +259,7 @@ function renderAll() {
   resizeCanvases();
   renderArtOnly();
   renderOverlayOnly();
-  renderTimelineSoon();
+  renderTimeline();   // structural edits and frame changes must update immediately
   renderLayersPanel();
   renderTimelineStatus();
   updateZoomLbl();
@@ -371,7 +406,8 @@ const SHAPE_INFO = {
 function commitShapePts(color, info) {
   const layer = proj.layers[proj.currentLayer];
   if (layer.locked) return toast("layer is locked");
-  const key = currentKeyOf(layer);
+  const key = prepareEditKey(layer);
+  if (key == null) return;
   hist.pushFrame(proj, layer, key);
   const surf = E.frameSurface(proj, layer, key, true);
   const c = surf.getContext("2d");
@@ -422,7 +458,8 @@ function stampCutBrush(p) {
 function doFill(p, color, tol) {
   const layer = proj.layers[proj.currentLayer];
   if (layer.locked) return toast("layer is locked");
-  const key = currentKeyOf(layer);
+  const key = prepareEditKey(layer);
+  if (key == null) return;
   hist.pushFrame(proj, layer, key);
   const n = E.floodFill(proj, layer, key, p, color, tol);
   if (n === 0) { hist.undo(proj, restoreFns); toast("nothing to fill"); }
@@ -1015,6 +1052,7 @@ window.gotoBookmark = (dir) => {
 window.mergeLayerDown = () => {
   if (proj.currentLayer === 0) { toast("no layer below to merge into"); return; }
   const top = proj.layers[proj.currentLayer], below = proj.layers[proj.currentLayer - 1];
+  const oldMax = E.projectMaxEnd(proj), oldOut = proj.outFrame;
   hist.pushModel(proj);
   const frames = [...new Set([...Object.keys(top.frames).map(Number), ...Object.keys(below.frames).map(Number)])];
   frames.forEach(f => {
@@ -1029,6 +1067,7 @@ window.mergeLayerDown = () => {
   });
   proj.layers.splice(proj.currentLayer, 1);
   proj.currentLayer--;
+  E.syncProjectOut(proj, oldMax, oldOut);
   hist.sealModel(proj);
   renderAll(); toast("merged layer down");
 };
@@ -1108,6 +1147,7 @@ function dlgNewProject(modify) {
       return;
     }
     proj = E.newProject(w, h, fps);
+    hist.clear();
     proj.name = "Untitled_(1)";
     proj.layers.forEach((l, i) => { l.name = "Anim_0" + (i + 1); });
     if (camTab) {
@@ -1181,10 +1221,12 @@ function dlgLayerLength(prefill, dir) {
     const rm = rsel ? rsel.value : "Loop";
     const addInst = document.getElementById("llEmptyInstances").checked;
     const addExp = document.getElementById("llEmptyExposures").checked;
+    const oldMax = E.projectMaxEnd(proj), oldOut = proj.outFrame;
     hist.pushModel(proj);
     E.layerLengthOp(proj, layer, op, n, rm);
     if (addInst) E.layerLengthOp(proj, layer, "instances", 1);
     if (addExp) E.layerLengthOp(proj, layer, "exposures", 1);
+    E.syncProjectOut(proj, oldMax, oldOut);
     hist.sealModel(proj); renderAll();
     toast((inc ? "+" : "-") + n + " frames (" + op + (op === "repeat" ? " " + rm : "") +
       (addInst ? " + empty instances" : "") + (addExp ? " + empty exposures" : "") + ")");
@@ -1228,6 +1270,64 @@ function frameIsEmpty(fr) {
   for (let i = 0; i < d.length; i += 4)
     if (d[i + 3] > 8 && (d[i] < 248 || d[i + 1] < 248 || d[i + 2] < 248)) return false;
   return true;
+}
+let tlSuppressClickUntil = 0, tlSlide = null;
+// Horizontal drag on any cell/spine slides the whole layer. Live: dragging key
+// 2 from frame 3 to 4 moved every key +1 and grew Project/Clip; dragging back
+// restored it. Modifiers did not change the gesture.
+function beginCellSlide(e, cell) {
+  if (e.button !== 0 || e.pointerType === "touch") return;
+  if (e.target.closest("button, .hstart, .hend, .expHandle, .plus")) return;
+  const li = +cell.dataset.l;
+  if (!(li >= 0)) return;
+  const l = proj.layers[li];
+  if (!l) return;
+  const f = +cell.dataset.f;
+  const k = E.effectiveFrameKey(l, f);
+  if (k == null) return;                 // empty cell: click just moves the playhead
+  const strip = cell.closest(".strip");
+  if (!strip) return;
+  tlSlide = { l, strip, f, k, startX: e.clientX, delta: 0, moved: false,
+    oldMax: E.projectMaxEnd(proj), oldOut: proj.outFrame };
+  window.addEventListener("pointermove", cellSlideMove, { passive: false });
+  window.addEventListener("pointerup", cellSlideUp, { once: true });
+  window.addEventListener("pointercancel", cellSlideUp, { once: true });
+}
+function cellSlideMove(ev) {
+  const s = tlSlide;
+  if (!s) return;
+  const dx = ev.clientX - s.startX;
+  if (!s.moved && Math.abs(dx) < 4) return;
+  s.moved = true;
+  const ks = E.layerKeys(s.l);
+  if (!ks.length) return;
+  let delta = Math.round(dx / CW);
+  delta = Math.max(1 - ks[0], delta);
+  if (delta !== s.delta) {
+    s.delta = delta;
+    s.strip.style.transform = `translateX(${delta * CW}px)`;
+    s.strip.classList.add("sliding");
+  }
+  ev.preventDefault();
+}
+function cellSlideUp() {
+  window.removeEventListener("pointermove", cellSlideMove);
+  window.removeEventListener("pointercancel", cellSlideUp);
+  const s = tlSlide;
+  tlSlide = null;
+  if (!s) return;
+  s.strip.style.transform = "";
+  s.strip.classList.remove("sliding");
+  if (!s.moved) return;
+  tlSuppressClickUntil = performance.now() + 350;
+  if (!s.delta) return;
+  hist.pushModel(proj);
+  const actual = E.slideLayer(s.l, s.delta);
+  proj.currentFrame = Math.max(1, s.f + actual);
+  E.syncProjectOut(proj, s.oldMax, s.oldOut);
+  hist.sealModel(proj);
+  renderAll();
+  toast("layer shifted " + (actual > 0 ? "+" : "") + actual);
 }
 function renderTimeline() {
   const left = $("tlLeft"), track = $("tlTrack");
@@ -1287,6 +1387,8 @@ function renderTimeline() {
           <button title="previous instance" onclick="event.stopPropagation();layerInst(${i},-1)"><img src="icons/Remote-Goto-PreviousInstance-x20.png"></button>
           <button title="next instance" onclick="event.stopPropagation();layerInst(${i},1)"><img src="icons/Remote-Goto-NextInstance-x20.png"></button>
           <button class="looppb" data-pb="${i}" title="Loop Mode" onclick="event.stopPropagation();openLayerPlayback(${i},this)"><img src="icons/${({ None: "LayerLoopNone", Loop: "LayerLoopRepeatAfter", "Ping-Pong": "LayerLoopPingPong", Hold: "LayerLoopHoldAfter" })[l.playback || "None"]}-x20.png"></button>
+          <button class="abt" title="Toggle auto break instance." onclick="event.stopPropagation();toggleAuto(${i},'autoBreak')"><img src="icons/LayerAutoBreak${l.autoBreak !== false ? "On" : "Off"}-x20.png"></button>
+          <button class="abt" title="Toggle auto create frame." onclick="event.stopPropagation();toggleAuto(${i},'autoCreate')"><img src="icons/LayerAutoCreate${l.autoCreate !== false ? "On" : "Off"}-x20.png"></button>
         </div>
         <div class="lcolor" title="Group selection — click here to select layer's group" onclick="event.stopPropagation();groupMenu(${i},this)">Color</div>
       </div>
@@ -1352,8 +1454,7 @@ function renderTimeline() {
     };
   });
   // track: top ruler + one 64 px row per layer + flexible filler + bottom ruler
-  const lastUsed = Math.max(1, ...proj.layers.map(l =>
-    Math.max(0, ...Object.keys(l.frames).map(Number).map(k => k + (l.frames[k].exposure || 1) - 1))));
+  const lastUsed = Math.max(1, ...proj.layers.map(l => E.layerEnd(l)));
   const inF = proj.inFrame, outF = Math.max(proj.outFrame, inF);
   // one tick per frame (40 px); numbers on odd frames like TVPaint; current frame = blue tick
   let ticks = "";
@@ -1370,7 +1471,7 @@ function renderTimeline() {
     const cl = proj.layers[proj.currentLayer];
     const ckeys = Object.keys(cl.frames).map(Number);
     const fK = ckeys.length ? Math.min(...ckeys) : 1;
-    const lEnd = ckeys.length ? Math.max(...ckeys.map(k => k + (cl.frames[k].exposure || 1) - 1)) : 1;
+    const lEnd = Math.max(fK, E.layerEnd(cl));
     const o = Math.max(proj.outFrame, proj.currentFrame);
     info.innerHTML =
       `<span>Project: ${proj.name} [1 , ${o} (${o})]</span>` +
@@ -1397,37 +1498,51 @@ function renderTimeline() {
     const sel = li === proj.currentLayer;
     const keys = Object.keys(l.frames).map(Number).filter(k => k >= 1 && k <= maxF).sort((a, b) => a - b);
     const emptyByKey = new Map(keys.map(k => [k, frameIsEmpty(l.frames[k])]));
-    const lastEnd = keys.length ? Math.max(...keys.map(k => k + (l.frames[k].exposure || 1) - 1)) : 0;
-    const firstEmpty = keys.length ? lastEnd + 1 : 1;
+    const lastEnd = E.layerEnd(l);
+    const firstGap = (() => {
+      for (let ff = 1; ff <= Math.min(maxF, lastEnd); ff++) if (playbackKey(l, ff) == null) return ff;
+      return null;
+    })();
     let cells = "";
     for (let f = 1; f <= maxF; f++) {
       const k = playbackKey(l, f);
       const isKey = k === f;
-      const cls = k !== null ? (isKey ? "keyw" : "hold") + (emptyByKey.get(k) ? " empty" : "") : "";
+      const inSel = !!(proj.imageSel && proj.imageSel.layerId === l.id && k != null &&
+        proj.imageSel.keys.includes(k));
+      const cls = k !== null ? (isKey ? "keyw" : "hold") + (emptyByKey.get(k) ? " empty" : "") + (inSel ? " insel" : "") : "";
       let inner = "";
       const fr = isKey ? l.frames[k] : null;
       const role = fr && fr.role ? E.IMAGE_ROLES.find(r => r.id === fr.role) : null;
       if (isKey) {
         inner += `<div class="cellimg${emptyByKey.get(k) ? " empty" : ""}"></div>`;
-        inner += `<span class="knum">${keys.indexOf(k) + 1}.</span>`;
-        inner += `<span class="dh l" data-k="${k}" data-l="${li}"></span><span class="dh r" data-k="${k}" data-l="${li}"></span>`;
+        inner += `<span class="knum">${fr && fr.name ? fr.name : (keys.indexOf(k) + 1) + "."}</span>`;
         if (role && proj.showRoles && (!proj.roleLayerOnly || li === proj.currentLayer))
           inner += `<i class="rolemark" style="color:${role.color}" title="${role.label}"></i>`;
         if (l.marks && l.marks[k] && proj.showMarks !== false) inner += `<i class="imgmark" title="image mark"></i>`;
-      } else if (k === null && f === firstEmpty) {
+      } else if (k === null && f === firstGap) {
         inner += `<span class="empin">⊘</span>`;
       }
       inner += `<button class="plus" title="add drawing here" data-plus="${f}" data-pl="${li}">+</button>`;
       cells += `<div class="cell ${cls}" data-f="${f}" data-l="${li}">${inner}</div>`;
     }
-    // exposure line + seam knobs + right-edge length handle
+    // Per-instance exposure overlay. Live geometry: a small square sits at the
+    // top-left of each start, a square at the bottom-right of each hold end, and
+    // the exposure count sits just before the end square. The vertical bar past
+    // the last hold is the separate layer-end control.
     let overlay = "";
     if (keys.length) {
-      const lineW = Math.max(CW, (lastEnd - keys[0] + 1) * CW);
-      let knobs = "";
-      keys.forEach(k => { knobs += `<i class="knob" style="left:${(k - keys[0]) * CW}px"></i>`; });
-      overlay = `<div class="expLine" data-first="${keys[0]}" style="left:${(keys[0] - 1) * CW}px;width:${lineW}px">${knobs}</div>` +
-        `<i class="expHandle" style="left:${(lastEnd - 1) * CW + CW - 5}px" data-k="${keys[keys.length - 1]}" data-l="${li}" title="drag right: increase length"></i>`;
+      const first = keys[0];
+      const lineW = Math.max(CW, (lastEnd - first + 1) * CW);
+      overlay = `<div class="expLine" data-first="${first}" style="left:${(first - 1) * CW}px;width:${lineW}px"></div>`;
+      keys.forEach((k, idx) => {
+        const fr2 = l.frames[k], exp = fr2.exposure || 1;
+        overlay += `<div class="expb" data-k="${k}" data-l="${li}" style="left:${(k - 1) * CW}px;width:${exp * CW}px">
+          ${idx > 0 ? `<i class="hstart" data-k="${k}" data-l="${li}" title="drag to trim the start of this instance"></i>` : ""}
+          <span class="expbadge">${exp}</span>
+          <i class="hend" data-k="${k}" data-l="${li}" title="drag to change the exposure and ripple later images"></i>
+        </div>`;
+      });
+      overlay += `<i class="expHandle" style="left:${lastEnd * CW - 4}px" data-k="${keys[keys.length - 1]}" data-l="${li}" title="layer end — drag right: increase length"></i>`;
     }
     th += `<div class="strip${sel ? " sel" : ""}${l.collapsed ? " collapsed" : ""}" data-layer="${li}"${l.collapsed ? ' style="height:24px"' : ""}><div class="cells">${cells}</div>${overlay}</div>`;
   });
@@ -1444,7 +1559,12 @@ function renderTimeline() {
     }
   }
   track.querySelectorAll(".cell[data-f]").forEach(c => {
-    c.onclick = () => gotoFrame(+c.dataset.f, c.dataset.l === "cam" ? proj.currentLayer : +c.dataset.l);
+    c.onclick = (ev) => {
+      if (performance.now() < tlSuppressClickUntil) return;
+      if (!ev.ctrlKey && !ev.shiftKey && proj.imageSel) proj.imageSel = null;
+      gotoFrame(+c.dataset.f, c.dataset.l === "cam" ? proj.currentLayer : +c.dataset.l);
+    };
+    if (c.dataset.l !== "cam") c.onpointerdown = (e) => beginCellSlide(e, c);
   });
   // ruler numbers are clickable in TVPaint: click a number to jump to that frame
   track.querySelectorAll(".ruler .tick").forEach(tk => {
@@ -1454,10 +1574,11 @@ function renderTimeline() {
     tk.onclick = () => gotoFrame(f, proj.currentLayer);
   });
   track.querySelectorAll(".plus[data-plus]").forEach(b => {
-    b.onclick = (e) => { e.stopPropagation(); gotoFrame(+b.dataset.plus, +b.dataset.pl);
-      hist.pushModel(proj);
-      E.xsheetOp(proj, proj.layers[+b.dataset.pl], "add", +b.dataset.plus, null);
-      hist.sealModel(proj); renderAll(); };
+    b.onclick = (e) => { e.stopPropagation();
+      const pl = +b.dataset.pl, pf = +b.dataset.plus;
+      proj.currentLayer = pl; proj.currentFrame = pf;
+      tvCommit(() => E.xsheetOp(proj, proj.layers[pl], "add", pf, null));
+    };
   });
   track.querySelectorAll(".plus[data-camf]").forEach(b => {
     b.onclick = (e) => { e.stopPropagation();
@@ -1467,7 +1588,7 @@ function renderTimeline() {
       else gotoFrame(f, proj.currentLayer);
       renderAll(); };
   });
-  // exposure end handles: drag the square at the exposure end to change the layer length
+  // layer-end control (separate from the last exposure's stretch square)
   track.querySelectorAll(".expHandle").forEach(h => {
     const strip = h.closest(".strip");
     h.onpointerdown = (e) => {
@@ -1508,59 +1629,90 @@ function renderTimeline() {
       h.addEventListener("pointerup", up);
     };
   });
-  // timing handles on key cells: right corner lengthens the exposure,
-  // left corner moves the drawing earlier/later (TVPaint cell timing drag)
-  track.querySelectorAll(".cell.keyw .dh").forEach(h => {
-    const isR = h.classList.contains("r");
-    const k = +h.dataset.k, li = +h.dataset.l, l = proj.layers[li];
-    const strip = h.closest(".strip");
+  // Per-instance end square: live-observed to change that exposure and ripple
+  // every later instance by the same number of frames.
+  track.querySelectorAll(".hend").forEach(h => {
+    const li = +h.dataset.l, k = +h.dataset.k, l = proj.layers[li];
+    const box = h.closest(".expb"), badge = box && box.querySelector(".expbadge");
     h.onpointerdown = (e) => {
       e.stopPropagation(); e.preventDefault();
-      const sr = strip.getBoundingClientRect();
-      h.classList.add("grab");
-      try { h.setPointerCapture(e.pointerId); } catch (err) {}
       const startExp = l.frames[k].exposure || 1;
-      const line = strip.querySelector(".expLine");
-      const first = line ? +line.dataset.first : 1;
-      let exp = startExp, startK = k, moved = false;
-      h.dataset.expBound = String(startExp);
-      h.dataset.kBound = String(k);
+      const startX = e.clientX;
+      const oldMax = E.projectMaxEnd(proj), oldOut = proj.outFrame;
+      let exp = startExp, moved = false;
+      try { h.setPointerCapture(e.pointerId); } catch (err) {}
       const mv = (ev) => {
-        const pos = Math.round((ev.clientX - sr.left) / CW) + 1;
-        if (isR) {
-          exp = Math.max(1, Math.min(pos - k + 1, maxF - k + 1));
-          if (exp === +h.dataset.expBound) return;
-          moved = true;
-          if (line) line.style.width = ((k + exp - first) * CW) + "px";
-          h.dataset.expBound = String(exp);
-        } else {
-          const newK = Math.max(1, Math.min(pos, k + startExp - 1));
-          if (newK === +h.dataset.kBound) return;
-          moved = true;
-          if (line) line.style.left = ((newK - 1) * CW) + "px";
-          h.dataset.kBound = String(newK);
-        }
+        const ne = Math.max(1, startExp + Math.round((ev.clientX - startX) / CW));
+        if (ne === exp) return;
+        exp = ne; moved = true;
+        h.classList.add("grab");
+        if (box) box.style.width = (exp * CW) + "px";
+        if (badge) badge.textContent = exp;
       };
       const up = () => {
-        h.classList.remove("grab");
         try { h.releasePointerCapture(e.pointerId); } catch (err) {}
         h.removeEventListener("pointermove", mv);
         h.removeEventListener("pointerup", up);
-        const curExp = isR ? exp : startExp;
-        const curK = isR ? k : +h.dataset.kBound;
-        h.dataset.expBound = ""; h.dataset.kBound = "";
-        if (!moved || (curExp === startExp && curK === startK)) { renderAll(); return; }
+        h.classList.remove("grab");
+        if (!moved || exp === startExp) { renderAll(); return; }
         hist.pushModel(proj);
-        if (isR) { l.frames[k].exposure = curExp; toast("exposure " + curExp); }
-        else {
-          const f = l.frames[startK];
-          delete l.frames[startK];
-          f.exposure = startExp;
-          l.frames[curK] = f;
-          toast("moved to " + curK);
-        }
+        E.rippleExposure(l, k, exp);
+        E.syncProjectOut(proj, oldMax, oldOut);
         hist.sealModel(proj);
         renderAll();
+        toast("exposure " + exp);
+      };
+      h.addEventListener("pointermove", mv);
+      h.addEventListener("pointerup", up);
+    };
+  });
+  // Per-instance start square: live-observed to move the boundary between this
+  // instance and its left neighbour, redistributing exposure without moving any
+  // later key or changing the layer length.
+  track.querySelectorAll(".hstart").forEach(h => {
+    const li = +h.dataset.l, k = +h.dataset.k, l = proj.layers[li];
+    const ks = E.layerKeys(l), idx = ks.indexOf(k);
+    if (idx <= 0) return;
+    const prev = ks[idx - 1];
+    const box = h.closest(".expb"), badge = box && box.querySelector(".expbadge");
+    const prevBox = track.querySelector(`.strip[data-layer="${li}"] .expb[data-k="${prev}"]`);
+    const prevBadge = prevBox && prevBox.querySelector(".expbadge");
+    h.onpointerdown = (e) => {
+      e.stopPropagation(); e.preventDefault();
+      const startExp = l.frames[k].exposure || 1;
+      const end = k + startExp - 1;
+      const startX = e.clientX;
+      let ns = k, moved = false;
+      const strip = h.closest(".strip");
+      const ghost = document.createElement("i");
+      ghost.className = "trimghost";
+      ghost.style.left = ((k - 1) * CW) + "px";
+      strip.appendChild(ghost);
+      try { h.setPointerCapture(e.pointerId); } catch (err) {}
+      const mv = (ev) => {
+        const next = Math.max(prev + 1, Math.min(end, k + Math.round((ev.clientX - startX) / CW)));
+        if (next === ns) return;
+        ns = next; moved = true;
+        h.classList.add("grab");
+        ghost.style.left = ((ns - 1) * CW) + "px";
+        if (box) { box.style.left = ((ns - 1) * CW) + "px"; box.style.width = ((end - ns + 1) * CW) + "px"; }
+        if (badge) badge.textContent = end - ns + 1;
+        if (prevBox) prevBox.style.width = ((ns - prev) * CW) + "px";
+        if (prevBadge) prevBadge.textContent = ns - prev;
+      };
+      const up = () => {
+        try { h.releasePointerCapture(e.pointerId); } catch (err) {}
+        h.removeEventListener("pointermove", mv);
+        h.removeEventListener("pointerup", up);
+        h.classList.remove("grab");
+        ghost.remove();
+        if (!moved || ns === k) { renderAll(); return; }
+        hist.pushModel(proj);
+        const ok = E.trimExposureStart(l, k, ns);
+        if (ok) proj.currentFrame = ns;
+        hist.sealModel(proj);
+        renderAll();
+        if (ok) toast("start " + ns);
       };
       h.addEventListener("pointermove", mv);
       h.addEventListener("pointerup", up);
@@ -1676,7 +1828,7 @@ function renderTimelineSoon() {
   const l = proj.layers[proj.currentLayer];
   const keys = Object.keys(l.frames).map(Number);
   const fK = keys.length ? Math.min(...keys) : 1;
-  const lEnd = keys.length ? Math.max(...keys.map(k => k + (l.frames[k].exposure || 1) - 1)) : 1;
+  const lEnd = Math.max(fK, E.layerEnd(l));
   const camOn = !!(proj.cameraKeys && proj.cameraKeys.length);
   const o = Math.max(proj.outFrame, proj.currentFrame);
   $("projTab").innerHTML = `${proj.name.startsWith("*") ? "" : "*"}${proj.name}
@@ -1707,7 +1859,8 @@ function regionCanvas(surf, rectOrPoly, regionW, regionH, isPoly, offset = { x: 
 function applySelection() {
   if (!sel) return;
   const layer = proj.layers[proj.currentLayer];
-  const key = currentKeyOf(layer);
+  const key = prepareEditKey(layer);
+  if (key == null) return;
   hist.pushFrame(proj, layer, key);
   E.frameSurface(proj, layer, key, true)
     .getContext("2d").drawImage(sel.img, sel.x + sel.dx, sel.y + sel.dy);
@@ -1715,7 +1868,8 @@ function applySelection() {
 }
 function createSelectionRect(x, y, w, h) {
   const layer = proj.layers[proj.currentLayer];
-  const key = currentKeyOf(layer);
+  const key = prepareEditKey(layer);
+  if (key == null) return;
   const surf = E.frameSurface(proj, layer, key, true);
   hist.pushFrame(proj, layer, key);
   const img = regionCanvas(surf, { x, y, w, h }, w, h, false);
@@ -1727,7 +1881,8 @@ function createSelectionRect(x, y, w, h) {
 function createSelectionPoly(poly) {
   if (poly.length < 3) { preview = null; return; }
   const layer = proj.layers[proj.currentLayer];
-  const key = currentKeyOf(layer);
+  const key = prepareEditKey(layer);
+  if (key == null) return;
   const surf = E.frameSurface(proj, layer, key, true);
   const xs = poly.map(p => p.x), ys = poly.map(p => p.y);
   const x = Math.min(...xs), y = Math.min(...ys);
@@ -1745,7 +1900,8 @@ function createSelectionPoly(poly) {
 }
 function captureBrushRect(x, y, w, h) {
   const layer = proj.layers[proj.currentLayer];
-  const key = currentKeyOf(layer);
+  const key = prepareEditKey(layer);
+  if (key == null) return;
   const surf = E.frameSurface(proj, layer, key, true);
   if (!surf) return;
   hist.pushFrame(proj, layer, key);
@@ -1759,7 +1915,8 @@ function captureBrushRect(x, y, w, h) {
 function captureLassoBrush(poly) {
   if (poly.length < 3) { preview = null; return; }
   const layer = proj.layers[proj.currentLayer];
-  const key = currentKeyOf(layer);
+  const key = prepareEditKey(layer);
+  if (key == null) return;
   const surf = E.frameSurface(proj, layer, key, true);
   if (!surf) return;
   const xs = poly.map(p => p.x), ys = poly.map(p => p.y);
@@ -1861,17 +2018,31 @@ function startTlScroll(e) {
 window.toggleLayerFlagAt = (i, flag, v) => {
   const l = proj.layers[i]; l[flag] = v === undefined ? !l[flag] : v; renderAll();
 };
+// Live layer-row toggles. TVPaint tooltips:
+//   Toggle auto break instance.   /   Toggle auto create frame.
+window.toggleAuto = (i, flag) => {
+  const l = proj.layers[i];
+  if (!l) return;
+  const on = l[flag] !== false;
+  l[flag] = !on;
+  renderAll();
+  toast((flag === "autoBreak" ? "auto break instance" : "auto create frame") + ": " + (!on ? "on" : "off"));
+};
 window.layerAdd = () => {
+  const oldMax = E.projectMaxEnd(proj), oldOut = proj.outFrame;
   hist.pushModel(proj);
   proj.layers.push(E.newLayer("Anim_0" + (proj.layers.length + 1)));
   proj.currentLayer = proj.layers.length - 1;
+  E.syncProjectOut(proj, oldMax, oldOut);
   hist.sealModel(proj); renderAll();
 };
 window.layerDel = () => {
   if (proj.layers.length <= 1) { toast("cannot delete last layer"); return; }
+  const oldMax = E.projectMaxEnd(proj), oldOut = proj.outFrame;
   hist.pushModel(proj);
   proj.layers.splice(proj.currentLayer, 1);
   proj.currentLayer = Math.min(proj.currentLayer, proj.layers.length - 1);
+  E.syncProjectOut(proj, oldMax, oldOut);
   hist.sealModel(proj); renderAll();
 };
 window.layerDup = () => {
@@ -1880,15 +2051,16 @@ window.layerDup = () => {
   copy.id = Math.random().toString(36).slice(2, 10);
   copy.name = src.name + " copy"; copy.frames = {};
   Object.keys(src.frames).forEach(kk => {
-    copy.frames[kk] = { exposure: src.frames[kk].exposure, id: Math.random().toString(36).slice(2, 10), canvas: null };
-    if (src.frames[kk].canvas && src.frames[kk].canvas.getContext) {
-      const cc = E.makeSurface(proj.width, proj.height);
-      cc.getContext("2d").drawImage(src.frames[kk].canvas, 0, 0);
-      copy.frames[kk].canvas = cc;
-    }
+    const fr = src.frames[kk];
+    copy.frames[kk] = { exposure: fr.exposure || 1, role: fr.role || null, name: fr.name || null,
+      id: Math.random().toString(36).slice(2, 10), canvas: tvCloneSurface(fr.canvas) };
   });
+  const oldMax = E.projectMaxEnd(proj), oldOut = proj.outFrame;
+  hist.pushModel(proj);
   proj.layers.splice(proj.currentLayer + 1, 0, copy);
-  proj.currentLayer++; renderAll();
+  proj.currentLayer++;
+  E.syncProjectOut(proj, oldMax, oldOut);
+  hist.sealModel(proj); renderAll();
 };
 // ================= TVPaint timeline command layer =================
 // All labels/order below were captured live from the real TVPaint 12 Pro demo
@@ -1920,10 +2092,13 @@ function buildTvMenu(items) {
       const s = document.createElement("div"); s.className = "tvmi sep"; m.appendChild(s); return;
     }
     const d = document.createElement("div");
-    d.className = "tvmi" + (it.disabled ? " dis" : "") + (it.danger ? " danger" : "");
-    d.innerHTML = `<span class="chk">${it.checked ? "✓" : ""}</span>` +
+    d.className = "tvmi" + (it.disabled ? " dis" : "") + (it.danger ? " danger" : "") +
+      (it.arrows ? " modes" + (it.active ? " act" : "") : "");
+    const lead = it.arrows ? it.arrows[0] : (it.checked ? "✓" : "");
+    d.innerHTML = `<span class="chk">${lead}</span>` +
       (it.sw ? `<span class="sw" style="background:${it.sw}"></span>` : "") +
       `<span class="lbl">${it.label}</span>` +
+      (it.arrows ? `<span class="arr">${it.arrows[1]}</span>` : "") +
       (it.shortcut ? `<span class="sc">${it.shortcut}</span>` : "") +
       (it.submenu ? `<span class="arrow">›</span>` : "");
     if (it.submenu && !it.disabled) {
@@ -1969,7 +2144,15 @@ document.addEventListener("pointerdown", e => {
 }, true);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeTvMenus(); });
 
-function tvCommit(fn) { hist.pushModel(proj); fn(); hist.sealModel(proj); renderAll(); }
+function tvCommit(fn) {
+  hist.pushModel(proj);
+  const oldMax = E.projectMaxEnd(proj), oldOut = proj.outFrame;
+  const r = fn();
+  E.syncProjectOut(proj, oldMax, oldOut);
+  hist.sealModel(proj);
+  renderAll();
+  return r;
+}
 function tvCloneSurface(src) {
   if (!src || !src.getContext) return null;
   const s = E.makeSurface(src.width || proj.width, src.height || proj.height);
@@ -1984,7 +2167,7 @@ function tvCloneLayer(src, name) {
   });
   Object.keys(src.frames).forEach(k => {
     const fr = src.frames[k];
-    c.frames[k] = { exposure: fr.exposure || 1, role: fr.role || null,
+    c.frames[k] = { exposure: fr.exposure || 1, role: fr.role || null, name: fr.name || null,
       id: Math.random().toString(36).slice(2, 10), canvas: tvCloneSurface(fr.canvas) };
   });
   return c;
@@ -2164,18 +2347,30 @@ function splitLayerAt(i) {
   const right = tvCloneLayer(l, l.name + "_2");
   right.frames = {};
   const keys = E.layerKeys(l);
+  const leftFrames = {};
   keys.forEach(k => {
     const fr = l.frames[k], exp = fr.exposure || 1, end = k + exp - 1;
     if (k >= f) {
-      right.frames[k] = { exposure: exp, role: fr.role || null, id: Math.random().toString(36).slice(2, 10), canvas: fr.canvas };
-      delete l.frames[k];
+      // Move the whole image (and its id) to the right half.
+      right.frames[k] = { exposure: exp, role: fr.role || null, name: fr.name || null,
+        id: fr.id, canvas: fr.canvas };
     } else if (end >= f) {
-      fr.exposure = f - k;
-      right.frames[f] = { exposure: end - f + 1, role: fr.role || null, id: Math.random().toString(36).slice(2, 10), canvas: tvCloneSurface(fr.canvas) };
+      // Split a held exposure: left keeps the first part, right gets a copy.
+      leftFrames[k] = { exposure: f - k, role: fr.role || null, name: fr.name || null,
+        id: fr.id, canvas: fr.canvas };
+      right.frames[f] = { exposure: end - f + 1, role: fr.role || null, name: fr.name || null,
+        id: Math.random().toString(36).slice(2, 10), canvas: tvCloneSurface(fr.canvas) };
+    } else {
+      leftFrames[k] = fr;
     }
   });
   if (!E.layerKeys(right).length) { toast("nothing to split at this frame"); return; }
-  tvCommit(() => { proj.layers.splice(i, 0, right); proj.currentLayer = i; });
+  // Snapshot before the original layer is changed, so Undo restores both halves.
+  tvCommit(() => {
+    l.frames = leftFrames;
+    proj.layers.splice(i, 0, right);
+    proj.currentLayer = i;
+  });
   toast("layer split");
 }
 function mergeLayers(which) {
@@ -2302,40 +2497,72 @@ function numDialog(title, label, val, cb, min = 1, max = 9999) {
     }, true]]);
   setTimeout(() => { const el = b.querySelector("#ndVal"); if (el) { el.focus(); el.select(); } }, 40);
 }
+function textDialog(title, label, val, cb) {
+  const b = openModal(title, `<label style="display:flex;gap:10px;align-items:center">${label}
+      <input id="tdVal" type="text" value="${(val || "").replace(/"/g, "&quot;")}" style="width:190px"></label>`,
+    [["Cancel", () => {}], ["Apply", () => {
+      cb(b.querySelector("#tdVal").value.trim());
+    }, true]]);
+  setTimeout(() => { const el = b.querySelector("#tdVal"); if (el) { el.focus(); el.select(); } }, 40);
+}
+function dlgRenameInstance(li, f) {
+  const { k, fr } = cellFrame(li, f);
+  if (k == null || !fr) { toast("empty cell"); return; }
+  // Live dialog: title "Instance Name", empty field for an unnamed image.
+  textDialog("Instance Name", "", fr.name || "", v => {
+    tvCommit(() => { fr.name = v || null; });
+    toast(v ? "instance renamed: " + v : "instance name cleared");
+  });
+}
 function cellFrame(li, f) {
   const l = proj.layers[li];
   const k = E.effectiveFrameKey(l, f);
   return { l, k, fr: k != null ? l.frames[k] : null };
 }
-function cellOp(op, li, f) {
+function hasImageSelection(l) {
+  return !!(proj.imageSel && proj.imageSel.layerId === l.id &&
+    Array.isArray(proj.imageSel.keys) && proj.imageSel.keys.length);
+}
+function cellOp(op, li, f, arg) {
   const { l } = cellFrame(li, f);
   if (!l) return;
   if (op === "break") {
     const ok = (() => { let r = false; tvCommit(() => { r = E.breakExposure(proj, l, f); }); return r; })();
     toast(ok ? "instance broken" : "cannot break this exposure");
   } else if (op === "unexpose") {
-    tvCommit(() => E.removeExposures(l, f)); toast("exposure removed");
+    let ok = false;
+    tvCommit(() => { ok = E.removeExposures(l, f); });
+    toast(ok ? "empty exposures removed" : "no empty exposures");
   } else if (op === "exposure") {
     dlgExposure(li, f);
   } else if (op === "delete-layer") {
-    tvCommit(() => E.deleteImageAt(l, f)); toast("image deleted from layer");
+    const mode = arg || l.deleteMode || "stay";
+    l.deleteMode = mode;
+    tvCommit(() => E.deleteImageAt(l, f, mode));
+    toast("image deleted from layer (" + mode + ")");
   } else if (op === "delete-project") {
     tvCommit(() => E.deleteFrameColumn(proj, f)); toast("frame deleted from project");
   } else if (op === "repeat") {
     const added = (() => { let n = 0; tvCommit(() => { n = E.repeatImages(proj, l, l.repeatValue || 2, l.repeatMode || "Loop"); }); return n; })();
     toast(added ? `repeated ${l.repeatMode} (${l.repeatValue})` : "nothing to repeat");
   } else if (op === "reverse") {
-    tvCommit(() => E.xsheetOp(proj, l, "reverse", f)); toast("images reversed");
+    const ks = hasImageSelection(l) ? proj.imageSel.keys.slice().sort((a, b) => a - b) : [f];
+    const a = ks[0] != null ? ks[0] : f;
+    const b = ks[ks.length - 1] != null ? ks[ks.length - 1] : f;
+    tvCommit(() => E.xsheetOp(proj, l, "reverse", a, b));
+    toast("selected images reversed");
   } else if (op === "copy") {
     const { k, fr } = cellFrame(li, f);
     if (k == null) { toast("empty cell"); return; }
-    imageClip = { exposure: fr.exposure || 1, role: fr.role || null, canvas: tvCloneSurface(fr.canvas) };
+    imageClip = { exposure: fr.exposure || 1, role: fr.role || null, name: fr.name || null,
+      canvas: tvCloneSurface(fr.canvas) };
     toast("image copied");
   } else if (op === "cut") {
     const { k, fr } = cellFrame(li, f);
     if (k == null) { toast("empty cell"); return; }
-    imageClip = { exposure: fr.exposure || 1, role: fr.role || null, canvas: tvCloneSurface(fr.canvas) };
-    tvCommit(() => E.deleteImageAt(l, f));
+    imageClip = { exposure: fr.exposure || 1, role: fr.role || null, name: fr.name || null,
+      canvas: tvCloneSurface(fr.canvas) };
+    tvCommit(() => E.deleteImageAt(l, f, l.deleteMode || "stay"));
     toast("image cut");
   }
 }
@@ -2364,24 +2591,32 @@ function setImageRole(li, f, roleId) {
 window.cellMenu = function (li, f, mx, my) {
   const { l, k, fr } = cellFrame(li, f);
   const markKey = k != null ? k : f;
+  const empty = k == null;
+  const delMode = l.deleteMode || "stay";
+  const sel = hasImageSelection(l);
   openTvMenu([
     { label: "Exposure", submenu: [
-      { label: "Break Instance", action: () => cellOp("break", li, f) },
-      { label: "Remove exposures", action: () => cellOp("unexpose", li, f) },
+      { label: "Break Instance", disabled: empty || f === k, action: () => cellOp("break", li, f) },
+      { label: "Remove exposures", disabled: !E.layerHasGaps(l), action: () => cellOp("unexpose", li, f) },
       { sep: true },
-      { label: "Set Exposure Value…", action: () => dlgExposure(li, Math.max(f, k != null ? k : f)) }
+      { label: "Set Exposure Value...", disabled: empty, action: () => dlgExposure(li, markKey) }
     ] },
     { label: "Insert Images", submenu: [
-      { label: "Insert Images (after)…", action: () => dlgInsert(li, f, "after") },
-      { label: "Insert Images (before)…", action: () => dlgInsert(li, f, "before") },
-      { label: "Duplicate Images…", action: () => dlgDuplicate(li, f) }
+      { label: "Insert Images (after)", action: () => dlgInsert(li, markKey, "after") },
+      { label: "Insert Images (before)", action: () => dlgInsert(li, markKey, "before") },
+      { label: "Duplicate Images...", action: () => dlgDuplicate(li, markKey) }
     ] },
     { sep: true },
-    { label: "Delete from Layer", action: () => cellOp("delete-layer", li, f) },
+    { label: "Delete from Layer", submenu: [
+      { label: "Stay put", arrows: [">", "<"], active: delMode === "stay", action: () => cellOp("delete-layer", li, f, "stay") },
+      { label: "Keep empty", arrows: ["<", ">"], active: delMode === "keep", action: () => cellOp("delete-layer", li, f, "keep") },
+      { label: "Fill gap from left", arrows: [">", ">"], active: delMode === "fill-left", action: () => cellOp("delete-layer", li, f, "fill-left") },
+      { label: "Fill gap from right", arrows: ["<", "<"], active: delMode === "fill-right", action: () => cellOp("delete-layer", li, f, "fill-right") }
+    ] },
     { label: "Delete from Project", shortcut: "Shift F5", danger: true, action: () => cellOp("delete-project", li, f) },
     { sep: true },
     { label: "Repeat Images", submenu: [
-      { label: "Set the Repeat Images Value…", action: () => dlgRepeatValue(l) },
+      { label: "Set the Repeat Images Value...", action: () => dlgRepeatValue(l) },
       { label: "Reset", action: () => { l.repeatValue = 2; toast("repeat value reset to 2"); } },
       { sep: true },
       ...["Loop", "Ping-Pong", "Random"].map(m => ({
@@ -2390,7 +2625,10 @@ window.cellMenu = function (li, f, mx, my) {
       }))
     ] },
     { sep: true },
-    { label: "Rename", action: () => startLayerRename(li) },
+    { label: "Rename", submenu: [
+      { label: "Rename Layer...", action: () => startLayerRename(li) },
+      { label: "Rename Instance...", disabled: empty, action: () => dlgRenameInstance(li, markKey) }
+    ] },
     { label: "Image Marks", submenu: [
       { label: "Set Mark", action: () => { tvCommit(() => E.setImageMark(l, markKey, true)); } },
       { label: "Clear Mark", disabled: !(l.marks && l.marks[markKey]), action: () => { tvCommit(() => E.setImageMark(l, markKey, false)); } },
@@ -2401,18 +2639,17 @@ window.cellMenu = function (li, f, mx, my) {
     ] },
     { sep: true },
     { label: "Select All", shortcut: "Ctrl A", action: () => {
-      proj.inFrame = 1;
-      proj.outFrame = Math.max(proj.outFrame, ...proj.layers.map(x => E.layerEnd(x) || 1));
+      proj.imageSel = { layerId: l.id, keys: E.layerKeys(l) };
       renderAll(); toast("all images selected");
     } },
-    { label: "Select Image from Key", disabled: true },
+    { label: "Select Image from Key", shortcut: "/", disabled: empty || f === k, action: () => gotoFrame(markKey, li) },
     { sep: true },
-    { label: "Split", action: () => cellOp("break", li, f) },
+    { label: "Split", disabled: empty, action: () => { proj.currentLayer = li; proj.currentFrame = f; splitLayerAt(li); } },
     { sep: true },
-    { label: "Cut Image", shortcut: "Ctrl X", action: () => cellOp("cut", li, f) },
-    { label: "Copy Image", shortcut: "Ctrl C", action: () => cellOp("copy", li, f) },
+    { label: "Cut Image", shortcut: "Ctrl X", disabled: !sel, action: () => cellOp("cut", li, f) },
+    { label: "Copy Image", shortcut: "Ctrl C", disabled: !sel, action: () => cellOp("copy", li, f) },
     { sep: true },
-    { label: "Reverse Selected Images", action: () => cellOp("reverse", li, f) },
+    { label: "Reverse Selected Images", disabled: !sel, action: () => cellOp("reverse", li, f) },
     { sep: true },
     { label: "Role", submenu: [
       ...E.IMAGE_ROLES.map(r => ({
@@ -2422,7 +2659,8 @@ window.cellMenu = function (li, f, mx, my) {
       { sep: true },
       { label: "None", checked: !(fr && fr.role), action: () => setImageRole(li, f, null) }
     ] },
-    { label: "Define Loop Limits", action: () => dlgLoopLimits() }
+    { sep: true },
+    { label: "Define Loop Limits", disabled: !sel, action: () => dlgLoopLimits() }
   ], mx, my);
 };
 function pasteImageClip() {
@@ -2431,7 +2669,7 @@ function pasteImageClip() {
   let at = proj.currentFrame;
   if (E.effectiveFrameKey(l, at) != null) at = E.layerEnd(l) + 1;
   tvCommit(() => {
-    l.frames[at] = { exposure: imageClip.exposure, role: imageClip.role,
+    l.frames[at] = { exposure: imageClip.exposure, role: imageClip.role, name: imageClip.name || null,
       canvas: tvCloneSurface(imageClip.canvas), id: Math.random().toString(36).slice(2, 10) };
   });
   toast("image pasted @ " + at);
@@ -2659,10 +2897,9 @@ function markIn() { proj.inFrame = proj.currentFrame; proj.outFrame = Math.max(p
 function markOut() { proj.outFrame = proj.currentFrame; proj.inFrame = Math.min(proj.inFrame, proj.outFrame); renderAll(); }
 window.xop = (op) => {
   const layer = proj.layers[proj.currentLayer];
-  hist.pushModel(proj);
   const arg = op === "insert" ? 3 : (op === "hold" ? 2 : null);
-  E.xsheetOp(proj, layer, op, proj.currentFrame, arg);
-  hist.sealModel(proj); renderAll(); toast("xsheet: " + op);
+  tvCommit(() => E.xsheetOp(proj, layer, op, proj.currentFrame, arg));
+  toast("xsheet: " + op);
 };
 let loop = true, playing = null, soundOn = true;
 window.remote = (cmd) => {
@@ -2789,11 +3026,12 @@ ovl.addEventListener("pointerdown", (e) => {
   // drag sets the gradient vector, release fills APen→BPen ramp inside it
   if (GRAD_MODES[tool]) {
     if (layer.locked) { toast("layer is locked"); activePtr = null; return; }
-    const key = currentKeyOf(layer);
     const scratch = E.makeSurface(proj.width, proj.height);
     const shim = { frames: { 0: { exposure: 1, canvas: scratch } } };
     const n = E.floodFill(proj, shim, 0, p, "#010203", proj.brush.tolerance);
     if (!n) { toast("nothing to fill"); activePtr = null; return; }
+    const key = prepareEditKey(layer);
+    if (key == null) { activePtr = null; return; }
     hist.pushFrame(proj, layer, key);
     conducting = { mode: "fgrad", scratch, seed: p, v: p, key };
     preview = { pts: [p, p], kind: "line" };
@@ -2804,7 +3042,8 @@ ovl.addEventListener("pointerdown", (e) => {
     const txt = prompt("Text:");
     if (!txt) return;
     if (layer.locked) { toast("layer is locked"); activePtr = null; return; }
-    const key = currentKeyOf(layer);
+    const key = prepareEditKey(layer);
+    if (key == null) { activePtr = null; return; }
     hist.pushFrame(proj, layer, key);
     const c = E.frameSurface(proj, layer, key, true).getContext("2d");
     c.fillStyle = color;
@@ -2835,7 +3074,8 @@ ovl.addEventListener("pointerdown", (e) => {
   }
   if (tool === "dot" || tool === "dotsingle") {
     if (layer.locked) { toast("layer is locked"); activePtr = null; return; }
-    const key = currentKeyOf(layer);
+    const key = prepareEditKey(layer);
+    if (key == null) { activePtr = null; return; }
     hist.pushFrame(proj, layer, key);
     stampDotNow(p, color);
     conducting = { mode: "dots", color, last: p };
@@ -2863,7 +3103,8 @@ ovl.addEventListener("pointerdown", (e) => {
   }
   // brushes
   if (layer.locked) { toast("layer is locked"); activePtr = null; return; }
-  const key = currentKeyOf(layer);
+  const key = prepareEditKey(layer);
+  if (key == null) { activePtr = null; return; }
   hist.pushFrame(proj, layer, key);
   conducting = { mode: "stroke", color, freehand: false };
   E.strokeBegin(drawState, proj, layer, key, p, pressureOf(e), color);
@@ -3075,6 +3316,7 @@ window.uiOpen = function () {
 function openProjectData(json) {
   sel = null;
   proj = E.deserializeProject(json, restoreFns);
+  hist.clear();
   ghostTmp = E.makeSurface(proj.width, proj.height);
   fitView(); syncToolPanel(); renderAll();
 }
@@ -3088,6 +3330,7 @@ window.uiOpenRecent = (name) => {
 window.uiNew = function () {
   if (!confirm("Discard current project and start a new one?")) return;
   proj = E.newProject(512, 512, 24);
+  hist.clear();
   ghostTmp = E.makeSurface(proj.width, proj.height);
   sel = null; fitView(); syncToolPanel(); renderAll();
   toast("new project");

@@ -21,7 +21,7 @@ const XSHEET_OPS = ["add", "duplicate", "remove", "insert", "hold", "unhold",
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
 // ---------- model ----------
-function newFrame() { return { exposure: 1, canvas: null, id: uid() }; }
+function newFrame() { return { exposure: 1, canvas: null, id: uid(), name: null, role: null }; }
 
 function newLayer(name) {
   return {
@@ -38,6 +38,12 @@ function newLayer(name) {
     marks: {},                         // image marks (REA 28471..28484)
     repeatMode: "Loop",                // Repeat Images submenu (REA 28670..)
     repeatValue: 2,
+    // live TVPaint layer toggles (tooltips: "Toggle auto break instance." /
+    // "Toggle auto create frame."); both are ON by default in the demo.
+    autoBreak: true,
+    autoCreate: true,
+    deleteMode: "stay",                 // Delete from Layer submenu mark
+    emptyEnd: 0,                       // keep-empty delete can preserve a trailing gap
     collapsed: false,
     type: "anim",                      // anim | background | ctg | folder | puppet
     frames: { 1: newFrame() }
@@ -600,13 +606,17 @@ function makeHistory(depth) {
       if (rec) rec.after = snapshotFrame(proj, layer.frames[frameNum]);
     },
     pushModel(proj) {
-      undoStack.push({ type: "model", before: modelSnapshot(proj), after: null });
+      undoStack.push({ type: "model", before: modelSnapshot(proj),
+        beforeCanvases: collectCanvases(proj), after: null, afterCanvases: null });
       if (undoStack.length > (depth || 40)) undoStack.shift();
       redoStack.length = 0;
     },
     sealModel(proj) {
       const rec = undoStack[undoStack.length - 1];
-      if (rec && rec.type === "model") rec.after = modelSnapshot(proj);
+      if (rec && rec.type === "model") {
+        rec.after = modelSnapshot(proj);
+        rec.afterCanvases = collectCanvases(proj);
+      }
     },
     undo(proj, restoreFns) {
       const rec = undoStack.pop();
@@ -621,6 +631,21 @@ function makeHistory(depth) {
       undoStack.push(rec);
       applyRecord(proj, rec, "after", restoreFns);
       return true;
+    },
+    clear() { undoStack.length = 0; redoStack.length = 0; },
+    debug() {
+      const snap = s => {
+        const o = JSON.parse(s);
+        return o.layers.map(l => ({
+          name: l.name,
+          keys: Object.keys(l.frames).map(Number).sort((a, b) => a - b),
+          exps: Object.fromEntries(Object.entries(l.frames).map(([k, f]) => [k, f.exposure]))
+        }));
+      };
+      const sum = r => r.type === "frame"
+        ? { type: "frame", layerId: r.layerId, frame: r.frame, before: !!r.before, after: !!r.after }
+        : { type: "model", before: snap(r.before), after: r.after ? snap(r.after) : null };
+      return { undo: undoStack.map(sum), redo: redoStack.map(sum) };
     }
   };
 }
@@ -639,9 +664,9 @@ function applyRecord(proj, rec, which, restoreFns) {
   const payload = rec[which];
   if (rec.type === "model") {
     const o = JSON.parse(payload);
-    const curFrames = collectCanvases(proj);
+    const frames = rec[which + "Canvases"] || collectCanvases(proj);
     Object.assign(proj, o);
-    restoreFns.rebuildModel(curFrames);
+    restoreFns.rebuildModel(frames);
   } else {
     const layer = proj.layers.find(l => l.id === rec.layerId);
     if (!layer) return;
@@ -651,7 +676,10 @@ function applyRecord(proj, rec, which, restoreFns) {
 function collectCanvases(proj) {
   const map = {};
   proj.layers.forEach(l => Object.keys(l.frames).forEach(k => {
-    if (l.frames[k].canvas) map[l.id + ":" + k] = l.frames[k].canvas;
+    const fr = l.frames[k];
+    if (!fr.canvas) return;
+    map[l.id + ":" + k] = fr.canvas;
+    if (fr.id) map["id:" + fr.id] = fr.canvas;   // survives slides / re-keying
   }));
   return map;
 }
@@ -763,29 +791,70 @@ function recomputeExposure(proj, layer, frame, count, value) {
 // The split (FUN_1404a5e60) finds the exposure at the target frame, gets the
 // next exposure, copies its data into the current one, and marks the current
 // as deleted — effectively splitting one exposure into two.
+// Split a held exposure at frame f into two independent instances. Live
+// observation: auto-break at the last frame of a hold works too, later
+// instances keep their image numbers, and drawing on the new instance does
+// not change the earlier frames. `copyCanvas` gives the new instance its own
+// bitmap (the browser passes tvCloneSurface).
+function splitExposure(layer, f, copyCanvas) {
+  f = Math.round(f);
+  if (!layer || !layer.frames) return null;
+  const k = effectiveFrameKey(layer, f);
+  if (k == null || k === f) return null;                 // empty cell / key start
+  const fr = layer.frames[k];
+  const exp = fr.exposure || 1;
+  if (f <= k || f >= k + exp) return null;               // outside the hold
+  const splitPoint = f - k;
+  const nf = Object.assign({}, fr, {
+    exposure: exp - splitPoint,
+    id: uid(),
+    name: null,             // the new instance gets a fresh number
+    canvas: copyCanvas ? copyCanvas(fr.canvas) : fr.canvas
+  });
+  fr.exposure = splitPoint;
+  layer.frames[f] = nf;
+  return nf;
+}
 function breakExposure(proj, layer, frame) {
-  const f = Math.round(frame);
-  if (!layer || !layer.frames) return false;
-  const keys = Object.keys(layer.frames).map(Number).sort((a, b) => a - b);
-  if (!keys.length) return false;
-  const firstFrame = keys[0];
-  const lastKey = keys[keys.length - 1];
-  const lastFrame = lastKey + (layer.frames[lastKey].exposure || 1) - 1;
-  if (f <= firstFrame || f >= lastFrame) return false;
-  // Find the exposure containing frame f
-  const targetKey = effectiveFrameKey(layer, f);
-  if (targetKey === null) return false;
-  if (targetKey === f) return false; // already a key frame
-  // Split: the exposure at targetKey now ends at f-1, new exposure starts at f
-  const exp = layer.frames[targetKey];
-  const oldExp = exp.exposure || 1;
-  const splitPoint = f - targetKey;
-  if (splitPoint <= 0 || splitPoint >= oldExp) return false;
-  exp.exposure = splitPoint;
-  layer.frames[f] = { exposure: oldExp - splitPoint, canvas: exp.canvas, id: uid() };
+  return !!splitExposure(layer, frame, cloneSurface);
+}
+// End-handle drag: change one exposure and ripple every later instance by the
+// same delta. Live: extending key 1 pushed keys 2/3 right and grew the clip;
+// shrinking pulled them left and shrank it.
+function rippleExposure(layer, k, newExp) {
+  k = Math.round(k);
+  newExp = Math.max(1, Math.round(newExp || 1));
+  const ks = layerKeys(layer);
+  const i = ks.indexOf(k);
+  if (i < 0) return 0;
+  const oldExp = layer.frames[k].exposure || 1;
+  const delta = newExp - oldExp;
+  if (!delta) return 0;
+  const later = ks.slice(i + 1);
+  if (delta > 0) later.slice().reverse().forEach(x => { layer.frames[x + delta] = layer.frames[x]; delete layer.frames[x]; });
+  else later.forEach(x => { layer.frames[x + delta] = layer.frames[x]; delete layer.frames[x]; });
+  layer.frames[k].exposure = newExp;
+  return delta;
+}
+// Start-handle drag: move the boundary between this instance and the previous
+// one. Live: dragging key 2's start +1 frame made key 1 a 3-frame hold and key 2
+// a 1-frame hold; total layer length and later keys did not move.
+function trimExposureStart(layer, k, newStart) {
+  k = Math.round(k); newStart = Math.round(newStart);
+  const ks = layerKeys(layer);
+  const i = ks.indexOf(k);
+  if (i <= 0) return false;                              // first instance has no left neighbour
+  const prev = ks[i - 1];
+  const end = k + (layer.frames[k].exposure || 1) - 1;
+  newStart = Math.max(prev + 1, Math.min(newStart, end));
+  if (newStart === k) return false;
+  layer.frames[prev].exposure = newStart - prev;
+  const fr = layer.frames[k];
+  delete layer.frames[k];
+  fr.exposure = end - newStart + 1;
+  layer.frames[newStart] = fr;
   return true;
 }
-
 // ---------- timeline cell commands (live-observed cell menu, loc 254xx/286xx) ----------
 const IMAGE_ROLES = [
   { id: "key",            label: "Keyframe",                       color: "#d05a5a" },
@@ -803,17 +872,45 @@ function frameEndOf(k, fr) { return k + ((fr && fr.exposure) || 1) - 1; }
 function layerKeys(layer) { return Object.keys(layer.frames).map(Number).sort((a, b) => a - b); }
 function layerEnd(layer) {
   const ks = layerKeys(layer);
-  if (!ks.length) return 0;
-  const k = ks[ks.length - 1];
-  return frameEndOf(k, layer.frames[k]);
+  const keyEnd = ks.length ? frameEndOf(ks[ks.length - 1], layer.frames[ks[ks.length - 1]]) : 0;
+  // "Delete Image (Keep empty)" leaves a trailing gap; emptyEnd remembers it
+  return Math.max(keyEnd, layer.emptyEnd || 0);
+}
+// Deep-enough surface copy for the browser and the Node test stub.
+function cloneSurface(src) {
+  if (!src) return null;
+  if (typeof document !== "undefined" && src.getContext) {
+    const c = makeSurface(src.width, src.height);
+    c.getContext("2d").drawImage(src, 0, 0);
+    return c;
+  }
+  return Object.assign({}, src);   // node stub
 }
 function shiftKeys(layer, from, delta, includeFrom) {
   const ks = layerKeys(layer).filter(k => includeFrom ? k >= from : k > from);
   if (delta >= 0) ks.slice().reverse().forEach(k => { layer.frames[k + delta] = layer.frames[k]; delete layer.frames[k]; });
   else ks.forEach(k => { layer.frames[k + delta] = layer.frames[k]; delete layer.frames[k]; });
+  if (layer.emptyEnd) layer.emptyEnd = Math.max(0, layer.emptyEnd + delta);
 }
 function blankFrame() { return newFrame(); }
-function copyFrameObj(src) { return { exposure: src.exposure || 1, canvas: src.canvas, id: uid(), role: src.role || null }; }
+function copyFrameObj(src) {
+  return { exposure: src.exposure || 1, canvas: src.canvas, id: uid(),
+    role: src.role || null, name: src.name || null };
+}
+// Project length observed live: stretching the long layer grew Project/Clip,
+// shrinking it pulled both back. A project longer than every layer (an empty
+// tail) is preserved; only a fitted out-point follows the layers.
+function projectMaxEnd(proj) {
+  return Math.max(1, ...proj.layers.map(layerEnd));
+}
+function syncProjectOut(proj, oldMax, oldOut) {
+  const nm = projectMaxEnd(proj);
+  if (nm > proj.outFrame) proj.outFrame = nm;
+  else if (oldOut != null && oldMax != null && oldOut === oldMax) proj.outFrame = nm;
+  proj.outFrame = Math.max(proj.outFrame, proj.inFrame || 1, 1);
+  proj.currentFrame = Math.max(1, Math.min(proj.currentFrame, proj.outFrame));
+  return nm;
+}
 
 // Insert / duplicate images (cell menu ▸ Insert Images).
 // mode: "after" (blank), "before" (blank) or "duplicate" (copy the image at frame f).
@@ -834,7 +931,8 @@ function insertImages(layer, f, n, mode, copyCanvas) {
       const src = layer.frames[srcKey];
       let cv = src.canvas;
       if (copyCanvas && cv) cv = copyCanvas(cv);
-      layer.frames[at] = { exposure: src.exposure || 1, canvas: cv, id: uid(), role: src.role || null };
+      layer.frames[at] = { exposure: src.exposure || 1, canvas: cv, id: uid(),
+        role: src.role || null, name: src.name || null };
     } else {
       layer.frames[at] = blankFrame();
     }
@@ -844,14 +942,38 @@ function insertImages(layer, f, n, mode, copyCanvas) {
 function duplicateImages(layer, f, n, copyCanvas) {
   return insertImages(layer, f, n, "duplicate", copyCanvas);
 }
-// Delete from Layer: remove the whole drawing under f and close the gap.
-function deleteImageAt(layer, f) {
+// Delete from Layer (cell menu ▸ Delete from Layer). Live submenu:
+//   > Stay put <   < Keep empty >   > Fill gap from left >   < Fill gap from right <
+// "Keep empty" was observed live: key 2 disappeared, its 2 cells stayed empty,
+// key 3 stayed at frame 5 and the layer/Project length stayed 7.
+function deleteImageAt(layer, f, mode) {
+  mode = mode || layer.deleteMode || "stay";
   const k = effectiveFrameKey(layer, f);
   if (k == null) return false;
+  const ks = layerKeys(layer);
+  const i = ks.indexOf(k);
   const span = layer.frames[k].exposure || 1;
+  const end = k + span - 1;
+  const prev = i > 0 ? ks[i - 1] : null;
+  const next = i >= 0 ? ks[i + 1] : null;
   delete layer.frames[k];
-  shiftKeys(layer, k, -span, false);
-  if (!layerKeys(layer).length) layer.frames[1] = blankFrame();
+  if (mode === "fill-left" && prev != null) {
+    layer.frames[prev].exposure = (layer.frames[prev].exposure || 1) + span;
+  } else if (mode === "fill-right" && next != null) {
+    const nf = layer.frames[next];
+    delete layer.frames[next];
+    nf.exposure = (nf.exposure || 1) + span;   // image reaches back over the gap
+    layer.frames[k] = nf;
+  } else if (mode === "keep") {
+    // Keep the old end when the last image was removed; the cells stay empty.
+    if (next == null) layer.emptyEnd = Math.max(layer.emptyEnd || 0, end);
+  } else if (mode === "stay") {
+    // Stay put: remove the image; a trailing gap is not preserved.
+    if (next == null) layer.emptyEnd = 0;
+  }
+  // Only Keep empty preserves a trailing gap. Fill modes and Stay put close it.
+  if (next == null && mode !== "keep") layer.emptyEnd = 0;
+  if (!layerKeys(layer).length && !(layer.emptyEnd > 0)) layer.frames[1] = blankFrame();
   return true;
 }
 // Delete from Project: remove one frame column across every layer.
@@ -885,18 +1007,42 @@ function deleteFrameColumn(proj, f) {
 function setExposureValue(layer, f, n) {
   const k = effectiveFrameKey(layer, f);
   if (k == null) return false;
-  const ks = layerKeys(layer);
-  const next = ks.find(x => x > k);
   n = Math.max(1, Math.round(n || 1));
-  if (next) n = Math.min(n, next - k);
-  layer.frames[k].exposure = n;
+  rippleExposure(layer, k, n);   // same ripple as dragging the exposure end
   return true;
 }
+// Remove empty exposures (the gaps between held images) from the layer.
+// Live menu evidence: the item is grayed on a layer whose images fill 1..7
+// with no gaps (keys at 1/3/5, exposures 2/2/3).
+function layerHasGaps(layer) {
+  const ks = layerKeys(layer);
+  for (let i = 1; i < ks.length; i++) {
+    const prevEnd = frameEndOf(ks[i - 1], layer.frames[ks[i - 1]]);
+    if (ks[i] > prevEnd + 1) return true;
+  }
+  const last = ks[ks.length - 1];
+  const lastEnd = last != null ? frameEndOf(last, layer.frames[last]) : 0;
+  return !!(layer.emptyEnd && layer.emptyEnd > lastEnd);
+}
 function removeExposures(layer, f) {
-  const k = effectiveFrameKey(layer, f);
-  if (k == null) return false;
-  layer.frames[k].exposure = 1;
-  return true;
+  const ks = layerKeys(layer);
+  let changed = false;
+  for (let i = ks.length - 1; i > 0; i--) {
+    const prevEnd = frameEndOf(ks[i - 1], layer.frames[ks[i - 1]]);
+    const gap = ks[i] - prevEnd - 1;
+    if (gap > 0) {
+      shiftKeys(layer, ks[i], -gap, true);
+      changed = true;
+    }
+  }
+  const rest = layerKeys(layer);
+  const last = rest[rest.length - 1];
+  const lastEnd = last != null ? frameEndOf(last, layer.frames[last]) : 0;
+  if (layer.emptyEnd && layer.emptyEnd > lastEnd) {
+    layer.emptyEnd = 0;
+    changed = true;
+  }
+  return changed;
 }
 // Repeat Images: repeat the layer's drawings (or the marked range) count times.
 function repeatImages(proj, layer, n, mode) {
@@ -920,20 +1066,24 @@ function repeatImages(proj, layer, n, mode) {
       for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
     }
     order.forEach(it => {
-      layer.frames[x] = { exposure: it.exp, canvas: it.src.canvas, id: uid(), role: it.src.role || null };
+      layer.frames[x] = { exposure: it.exp, canvas: it.src.canvas, id: uid(),
+        role: it.src.role || null, name: it.src.name || null };
       x += it.exp;
     });
   }
   return added;
 }
+// Drag any cell/spine horizontally: the whole layer's exposure block slides.
+// Live: one frame right moved every key and grew Project/Clip to the new end;
+// dragging back restored the old range. The layer can never start before 1.
 function slideLayer(layer, delta) {
   delta = Math.round(delta || 0);
-  if (!delta) return false;
   const ks = layerKeys(layer);
-  if (!ks.length) return false;
-  if (ks[0] + delta < 1) delta = 1 - ks[0];
+  if (!ks.length) return 0;
+  delta = Math.max(1 - ks[0], delta);
+  if (!delta) return 0;
   shiftKeys(layer, 0, delta, true);
-  return true;
+  return delta;
 }
 function alignLayer(proj, layer, edge) {
   const ks = layerKeys(layer);
@@ -1017,10 +1167,11 @@ if (typeof module !== "undefined" && module.exports) {
     brushStamp, strokeBegin, strokeMove, strokeEnd,
     floodFill, pickColor, xsheetOp, makeHistory, effectiveFrameKey,
     serializeProject, deserializeProject, George, colorWithAlpha,
-    recomputeExposure, breakExposure,
+    recomputeExposure, breakExposure, splitExposure, rippleExposure,
+    trimExposureStart, cloneSurface, projectMaxEnd, syncProjectOut,
     IMAGE_ROLES, BLEND_MODES, frameEndOf, layerKeys, layerEnd, shiftKeys,
     insertImages, duplicateImages, deleteImageAt, deleteFrameColumn,
-    setExposureValue, removeExposures, repeatImages, slideLayer, alignLayer,
+    setExposureValue, removeExposures, layerHasGaps, repeatImages, slideLayer, alignLayer,
     setImageMark, nextImageMark
   };
 }

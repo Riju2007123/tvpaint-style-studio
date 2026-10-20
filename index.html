@@ -197,6 +197,9 @@
   .llayer .lplay img { width: 16px; height: 16px; display: block; filter: invert(.75); }
   .llayer .lplay .looppb { margin-left: 3px; }
   .llayer .lplay .looppb img { width: 15px; height: 15px; filter: invert(.45); }
+  .llayer .lplay .abt { width: 15px; height: 15px; margin-left: 2px; align-items: center; justify-content: center; }
+  .llayer .lplay .abt img { width: 15px; height: 15px; filter: invert(.45); }
+  .llayer .lplay .abt:hover img { filter: invert(.2); }
   .llayer .lcolor { font-size: 10px; color: #8f8f95; padding-left: 0; }
   .llayer .lflags { grid-column: 3; grid-row: 1; display: flex; align-items: flex-end; gap: 5px; height: 22px; }
   .llayer .lflags .flag { background: none; border: 0; padding: 0; cursor: pointer; display: flex; }
@@ -248,21 +251,30 @@
   .cell .cellimg canvas { display: block; width: 40px; height: 22px; }
   .cell.hold::after { content: ""; position: absolute; left: 50%; top: 20px; width: 16px; height: 2px;
     transform: translate(-50%, -50%); background: #6a6a70; z-index: 1; }
+  .cell.insel { box-shadow: inset 0 0 0 1px #6f8fe8; }
   .cell .knum { position: absolute; left: 2px; top: 40px; font-size: 10px; color: #b0b0b6; z-index: 3; }
   .cell .empin { position: absolute; left: 50%; top: 20px; transform: translate(-50%, -50%);
     color: #8a8a90; font-size: 15px; z-index: 2; }
   .cell .plus { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); width: 16px; height: 14px;
     z-index: 5; color: #a7d3a7; background: none; border: 0; font-size: 12px; cursor: pointer; display: none; }
   .strip:hover .cell .plus { display: block; }
-  .cell .dh { position: absolute; top: 1px; width: 7px; height: 7px; background: #6a6a70;
-    z-index: 4; cursor: ew-resize; touch-action: none; }
-  .cell .dh.l { left: 1px; }
-  .cell .dh.r { right: 1px; }
-  .cell .dh.grab { background: #5A66CC; }
   .expLine { position: absolute; top: 1px; height: 1px; background: #9a9aa0; z-index: 3; pointer-events: none; }
-  .expLine .knob { position: absolute; top: -3px; width: 7px; height: 7px; background: #6a6a70; }
-  .expHandle { position: absolute; top: 0; width: 9px; height: 40px; cursor: ew-resize; z-index: 6; touch-action: none; }
-  .expHandle::after { content: ""; position: absolute; left: 1px; top: 1px; width: 7px; height: 7px; background: #6a6a70; }
+  /* per-instance exposure handles: start = top-left, end = bottom-right (live geometry) */
+  .expb { position: absolute; top: 0; height: 40px; z-index: 4; pointer-events: none; }
+  .expb .hstart, .expb .hend { position: absolute; width: 7px; height: 7px; background: #6a6a70;
+    border-radius: 1px; pointer-events: auto; cursor: ew-resize; touch-action: none; }
+  .expb .hstart { left: 1px; top: 1px; }
+  .expb .hend { right: 1px; bottom: 1px; }
+  .expb .hstart:hover, .expb .hend:hover, .expb .hstart.grab, .expb .hend.grab { background: #8e97e8; }
+  .expb .expbadge { position: absolute; right: 10px; bottom: 0; font-size: 9px; line-height: 1;
+    color: #a9a9b0; pointer-events: none; }
+  .trimghost { position: absolute; top: 0; width: 2px; height: 40px; background: #ffd24a;
+    box-shadow: 0 0 4px #ffd24a; z-index: 7; pointer-events: none; }
+  .strip.sliding { cursor: grabbing; }
+  .expHandle { position: absolute; top: 0; width: 9px; height: 40px; cursor: ew-resize; z-index: 6;
+    touch-action: none; }
+  .expHandle::after { content: ""; position: absolute; left: 1px; top: 1px; width: 3px; height: 38px;
+    background: #6a6a70; border-radius: 1px; box-shadow: inset 1px 0 #8a8a90; }
   .blkExp, .blkFrame { display: none; }
   /* red current-image bounds, full track height (verified #CB0B0C in the real app) */
   #curCol { position: absolute; top: 29px; bottom: 0; width: 40px; z-index: 5; pointer-events: none;
@@ -386,6 +398,10 @@
     box-shadow: 0 0 0 1px #1c1c20; }
   .tvmi .sc { margin-left: auto; color: #8a8a90; padding-left: 24px; }
   .tvmi .arrow { position: absolute; right: 6px; color: #b9b9c0; }
+  .tvmi.modes, .tvmi.modes .lbl, .tvmi.modes .chk, .tvmi.modes .arr { color: #8a8a90; }
+  .tvmi.modes.act, .tvmi.modes.act .lbl, .tvmi.modes.act .chk, .tvmi.modes.act .arr { color: #fff; }
+  .tvmi.modes:hover, .tvmi.modes:hover .lbl, .tvmi.modes:hover .chk, .tvmi.modes:hover .arr { color: #fff; }
+  .tvmi.modes .arr { position: absolute; right: 8px; font-size: 11px; }
   .tvmi.sep { height: 1px; padding: 0; margin: 3px 7px; background: #4a4a51; pointer-events: none; }
   .lnm-input { background: #1f1f23; color: #e4e4e8; border: 1px solid #6a8fae; border-radius: 2px;
     font: 11px system-ui, sans-serif; width: 112px; padding: 1px 3px; }
@@ -482,9 +498,11 @@
   newProject, newLayer, newFrame, frameSurface, makeSurface, brushStamp,
   strokeBegin, strokeMove, strokeEnd, floodFill, pickColor, xsheetOp, makeHistory,
   serializeProject, deserializeProject, George, colorWithAlpha, effectiveFrameKey,
-  recomputeExposure, breakExposure, IMAGE_ROLES, BLEND_MODES, frameEndOf, layerKeys, layerEnd,
+  recomputeExposure, breakExposure, splitExposure, rippleExposure,
+  trimExposureStart, cloneSurface, projectMaxEnd, syncProjectOut,
+  IMAGE_ROLES, BLEND_MODES, frameEndOf, layerKeys, layerEnd,
   shiftKeys, insertImages, duplicateImages, deleteImageAt, deleteFrameColumn,
-  setExposureValue, removeExposures, repeatImages, slideLayer, alignLayer,
+  setExposureValue, removeExposures, layerHasGaps, repeatImages, slideLayer, alignLayer,
   setImageMark, nextImageMark };</script>
 <script src="ui.js"></script>
 </body>
