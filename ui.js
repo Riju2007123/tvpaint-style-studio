@@ -1235,7 +1235,7 @@ function renderTimeline() {
         title="Light table"><img src="icons/${l.lighttable ? "LayerLighttableOn" : "LayerLighttableOff"}-x20.png"></button>
       <button class="sf ${l.locked ? "on" : ""}" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'locked')"
         title="Lock Layer"><img src="icons/${l.locked ? "ReqLockOn" : "ReqLockOff"}-x20.png"></button>
-      <button class="pbBtn" data-pb="${i}" title="Playback at layer end"
+      <button class="pbBtn" data-pb="${i}" title="Loop Mode"
         onclick="event.stopPropagation();openLayerPlayback(${i},this)">${l.playback || "None"} ▾</button>
     </div>
     <div class="lblock">
