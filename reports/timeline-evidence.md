@@ -1241,6 +1241,43 @@ the tab switching the content), the chevron collapsing the body, the float and
 maximize buttons on a floating window, a draggable title bar, the drop-on-the-
 tab-bar docking, and a working colour wheel.
 
+### v33 pass - the panels were really moved, and the colour wheel was read
+
+The live program was used again: the `Main Panel` was dragged out of the dock,
+the floating panel was dragged back, the wheel was clicked and the tool tips
+were read.
+
+**The left dock is a TAB BAR, not a stack.**  Dragging the `Main Panel` tab out
+of the dock turned the panel into a **floating window** over the project window
+and the tab bar lost it (`Color Panel | Light Table` were left).  Dragging that
+floating window back onto the tab bar made it a tab again
+(`Main Panel | Light Table`).  So:
+
+- the dock's first row is a **tab bar**; the tabs are panels,
+- **dragging a tab out floats its panel as a window**,
+- **dropping a floating window on the tab bar docks it as a tab**,
+- a floating panel is dragged by its title bar (*"Title bar / Contains the menu
+  title. / Click and drag on this bar to move the menu."*), it has its own
+  title bar and a fixed size (dragging a corner does not resize it).
+
+**The Chromatic Wheel** is described by TVPaint itself: *"Chromatic Wheel.
+Right-click to access additional colors. **The inner ring is saturated, and the
+outside ring handles luminosity.**"*
+
+Measured on the live wheel: the ring is the **hue**, fully saturated on its
+inside and falling off to almost black at the rim (the luminosity); inside it
+sits a **triangle of the current hue** - the top vertex is the pure hue, the
+bottom left corner is black and the bottom right corner is white - and **two
+black round markers** show the current position (one on the ring for the hue,
+one in the triangle for the saturation and the value).  The `R:000 G:000 B:000`
+line under the wheel follows the pick.
+
+The prototype now has the real wheel (the hue ring with the luminosity
+falloff, the barycentric triangle of the current hue, the two markers, the
+right click) and the real dock (tab bar, drag a tab out to float it, drop a
+floating panel on the tab bar to dock it, the title bar of a floating panel is
+its drag handle and the docked tab bar carries the title).
+
 ### Still not captured
 - Exact Role submenu appearance/order. The labels are known from the loc's role
   assignment commands: `Keyframe`, `Breakdown`, `Inbetween (To Do)`,

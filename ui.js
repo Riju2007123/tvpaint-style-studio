@@ -1080,10 +1080,8 @@ function tvTogglePanel(key) {
 }
 // where the panel of a key lives in the prototype
 function tvPanelElement(key) {
-  if (key === "main") return panelEls[0];
-  if (key === "tool") return panelEls[1];
   if (key === "timeline") return $("tlpanel");
-  return document.getElementById("tvpanel-" + key);
+  return document.querySelector("[data-panel-key=\"" + key + "\"]");
 }
 function tvPanelOpen(key) { return !!tvPanelState[key]; }
 function syncToolbarState() {
@@ -1288,12 +1286,39 @@ function renderTabBar() {
      <button class="pw" title="panel options">•</button>
      <button class="pw" title="collapse">▾</button>
      <button class="pw" title="close">✕</button>`;
-  bar.querySelectorAll(".ptab").forEach(t => t.onclick = () => {
-    const k = t.dataset.tab;
-    if (k === "main") { panelEls[0].style.display = ""; }
-    else { const p = tvPanelElement(k); if (p) p.style.display = ""; }
-    dockTabs.forEach(x => { if (x !== k) { const q = tvPanelElement(x); if (q) q.style.display = "none"; } });
-    bar.querySelectorAll(".ptab").forEach(o => o.classList.toggle("on", o.dataset.tab === k));
+  bar.querySelectorAll(".ptab").forEach(t => {
+    t.onclick = () => selectDockTab(t.dataset.tab);
+    // dragging a TAB out of the dock floats that panel as a window
+    t.addEventListener("pointerdown", (e) => {
+      if (e.target.tagName === "BUTTON") return;
+      const key = t.dataset.tab;
+      const sx = e.clientX, sy = e.clientY;
+      let floated = false;
+      const barBox = bar.getBoundingClientRect();
+      const mv = (ev) => {
+        if (floated) return;
+        // leaving the tab bar floats the panel
+        if (ev.clientY < barBox.top - 4 || ev.clientY > barBox.bottom + 4) {
+          floated = true;
+          const p = tvPanelElement(key);
+          if (p) {
+            const r = p.getBoundingClientRect();
+            floatPanel(p, r.left, r.top);
+            const after = p.getBoundingClientRect();
+            p.style.left = (after.left + ev.clientX - sx) + "px";
+            p.style.top = (after.top + ev.clientY - sy) + "px";
+          }
+          window.removeEventListener("pointermove", mv);
+          window.removeEventListener("pointerup", up);
+        }
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", mv);
+        window.removeEventListener("pointerup", up);
+      };
+      window.addEventListener("pointermove", mv);
+      window.addEventListener("pointerup", up);
+    });
   });
   const mainHead = panelEls[0] && panelEls[0].querySelector(".phead");
   const mainBody = panelEls[0] && panelEls[0].querySelector(".pbody");
@@ -1316,6 +1341,15 @@ function renderTabBar() {
     if (k && dockTabs.indexOf(k) < 0) { dockTabs.push(k); renderTabBar(); }
   });
 }
+// shows one panel in the dock (the tab bar switches the content)
+function selectDockTab(key) {
+  dockTabs.forEach(x => {
+    const q = tvPanelElement(x);
+    if (q) q.style.display = (x === key) ? "" : "none";
+  });
+  const bar = ensureTabBar();
+  bar.querySelectorAll(".ptab").forEach(o => o.classList.toggle("on", o.dataset.tab === key));
+}
 // floats a docked panel over the project window
 function floatPanel(panel, x, y) {
   if (!panel) return;
@@ -1323,6 +1357,10 @@ function floatPanel(panel, x, y) {
   if (panel.dataset.floating === "1") return;
   panel.dataset.floating = "1";
   panel.classList.add("floatpanel");
+  // a floating panel shows its own title bar (the dock hides it, the tab bar
+  // carries the title instead)
+  const head0 = panel.querySelector(".phead");
+  if (head0) head0.style.display = "";
   panel.style.left = (x === undefined ? 320 : x) + "px";
   panel.style.top = (y === undefined ? 120 : y) + "px";
   floatLayer.appendChild(panel);
@@ -1343,8 +1381,9 @@ function dockPanel(panel) {
   const cols = $("panels");
   if (cols) cols.appendChild(panel);
   const head = panel.querySelector(".phead");
-  const btn = head.querySelector("[title=collapse]");
-  if (btn) btn.title = "collapse";
+  // docked as a tab -> the tab bar carries the title
+  if (head && dockTabs.indexOf(panel.dataset.panelKey) >= 0) head.style.display = "none";
+  else if (head) head.style.display = "";
   const extra = head.querySelector(".pwin");
   if (extra) extra.style.display = "none";
 }
@@ -1375,12 +1414,12 @@ function makePanelDraggable(panel, head) {
       window.removeEventListener("pointerup", up);
       ensureTabBar().classList.remove("over");
       if (overTab) {
+        // dropped on the tab bar of the left dock -> the panel becomes a tab
         const key = panel.dataset.panelKey;
-        if (key && dockTabs.indexOf(key) < 0) { dockTabs.push(key); }
         dockPanel(panel);
+        if (key && dockTabs.indexOf(key) < 0) dockTabs.push(key);
         renderTabBar();
-        const t = ensureTabBar().querySelector(`[data-tab="${key}"]`);
-        if (t) t.click();
+        if (key) selectDockTab(key);
       }
     };
     window.addEventListener("pointermove", mv);
@@ -1481,63 +1520,157 @@ function buildPanels() {
   $("cpPickA").onclick = () => { const c = prompt("APen colour (#hex):", proj.apen); if (c) setApen(c); };
   $("cpPickB").onclick = () => { const c = prompt("BPen colour (#hex):", proj.bpen); if (c) setBpen(c); };
   $("cpSwap").onclick = () => { const a = proj.apen; setApen(proj.bpen); setBpen(a); };
-  // ---- Chromatic Wheel panel (the big wheel of the live app) ----
-  const cw = mkPanel("Chromatic Wheel");
+  // ---- Chromatic Wheel panel (the wheel of the live app) ----
+  // TVPaint's own tool tip: "Chromatic Wheel. Right-click to access additional
+  // colors. The inner ring is saturated, and the outside ring handles
+  // luminosity."  So the ring is the HUE (saturated on the inside, mixed with
+  // white towards the outside) and the triangle inside it is the saturation /
+  // value plane of the current hue (the top vertex = the pure hue, the bottom
+  // left = black, the bottom right = white).
+  const cw = mkPanel("Chromatic Wheel", "wheel");
   cw.innerHTML = `<canvas id="wheelCv" width="196" height="196"
-      style="display:block;margin:0 auto;background:#000"></canvas>
+      style="display:block;margin:0 auto;background:#0d0d0d"></canvas>
     <div style="text-align:center;color:#b9bfc6;padding:4px 0" id="wheelRGB">R:000 G:000 B:000</div>`;
-  const drawWheel = () => {
+  const wheelState = { h: 0, s: 1, v: 1 };
+  function hsv2rgb(h, s, v) {
+    const i = Math.floor(h * 6), f = h * 6 - i;
+    const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+    let r, g, b;
+    switch (i % 6) {
+      case 0: r = v; g = t; b = p; break; case 1: r = q; g = v; b = p; break;
+      case 2: r = p; g = v; b = t; break; case 3: r = p; g = q; b = v; break;
+      case 4: r = t; g = p; b = v; break; default: r = v; g = p; b = q;
+    }
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  }
+  function rgb2hsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0;
+    if (d) {
+      if (mx === r) h = ((g - b) / d) % 6;
+      else if (mx === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6; if (h < 0) h += 1;
+    }
+    return { h, s: mx ? d / mx : 0, v: mx };
+  }
+  const wheelGeom = () => {
+    const cv = $("wheelCv");
+    const R = cv.width / 2;
+    return { R, rIn: R * 0.60, rOut: R - 3 };
+  };
+  function drawWheel() {
     const cv = $("wheelCv");
     if (!cv) return;
     const g = cv.getContext("2d");
-    const R = cv.width / 2, r = R - 2;
-    const img = g.createImageData(cv.width, cv.height);
-    for (let y = 0; y < cv.height; y++) {
-      for (let x = 0; x < cv.width; x++) {
-        const dx = x - R + 0.5, dy = y - R + 0.5;
+    const W = cv.width, H = cv.height;
+    const G = wheelGeom();
+    const vx = G.R, vy = G.R - G.rIn;
+    const lx = G.R - G.rIn * 0.87, ly = G.R + G.rIn * 0.5;
+    const rx = G.R + G.rIn * 0.87, ry = ly;
+    // one pass: the hue ring (the luminosity falls off towards the rim) and
+    // the triangle of the current hue
+    const img = g.createImageData(W, H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        const px = x + 0.5, py = y + 0.5;
+        const dx = px - G.R, dy = py - G.R;
         const d = Math.hypot(dx, dy);
-        const i = (y * cv.width + x) * 4;
-        if (d > r || d < r * 0.16) { img.data[i + 3] = 0; continue; }
-        const h = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
-        const s = d / r, v = 1 - s * s;
-        const c = v * 255, hh = h / 60, X = c * (1 - Math.abs(hh % 2 - 1));
-        let rr = 0, gg = 0, bb = 0;
-        if (hh < 1) { rr = c; gg = X; } else if (hh < 2) { rr = X; gg = c; }
-        else if (hh < 3) { gg = c; bb = X; } else if (hh < 4) { gg = X; bb = c; }
-        else if (hh < 5) { rr = X; bb = c; } else { rr = c; bb = X; }
-        const m = (1 - s) * 255;
-        img.data[i] = rr + m; img.data[i + 1] = gg + m; img.data[i + 2] = bb + m; img.data[i + 3] = 255;
+        if (d >= G.rIn && d <= G.rOut) {
+          const a = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
+          const h = a / 360;
+          // the inner ring is saturated, the outside ring fades to black
+          const t = (d - G.rIn) / (G.rOut - G.rIn);
+          const v = 1 - t * 0.88;
+          const [r, gg, b] = hsv2rgb(h, 1, v);
+          img.data[i] = r; img.data[i + 1] = gg; img.data[i + 2] = b; img.data[i + 3] = 255;
+          continue;
+        }
+        const p = pointInTri(px, py, vx, vy, lx, ly, rx, ry);
+        if (p) {
+          const hc = hsv2rgb(wheelState.h, 1, 1);
+          img.data[i] = hc[0] * p.wv + 255 * p.wr;
+          img.data[i + 1] = hc[1] * p.wv + 255 * p.wr;
+          img.data[i + 2] = hc[2] * p.wv + 255 * p.wr;
+          img.data[i + 3] = 255;
+        }
       }
     }
     g.putImageData(img, 0, 0);
-    // the value triangle of the wheel
-    g.fillStyle = "#000"; g.globalAlpha = 0.85;
-    g.beginPath();
-    g.moveTo(R, R - r * 0.55); g.lineTo(R - r * 0.5, R + r * 0.3); g.lineTo(R + r * 0.5, R + r * 0.3);
-    g.closePath(); g.fill(); g.globalAlpha = 1;
-    g.strokeStyle = "#d8d8dc"; g.lineWidth = 1; g.stroke();
-  };
-  drawWheel();
-  // clicking the wheel sets the APen colour (live behaviour)
-  $("wheelCv").addEventListener("pointerdown", (e) => {
+    // the two black markers of the live app
+    g.fillStyle = "#000";
+    const mark = (x, y) => {
+      g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = "#6a6a6a"; g.lineWidth = 1; g.stroke();
+    };
+    // the marker on the ring (the hue, its radius = the luminosity)
+    const ang = (wheelState.h * 360 - 90) * Math.PI / 180;
+    const rr = G.rIn + (1 - wheelState.v) / 0.88 * (G.rOut - G.rIn);
+    mark(G.R + Math.cos(ang) * rr, G.R + Math.sin(ang) * rr);
+    // the marker in the triangle (the saturation and the value)
+    const wl = 1 - wheelState.v, wv = wheelState.s * wheelState.v, wr = wheelState.v * (1 - wheelState.s);
+    mark(wl * lx + wr * rx + wv * vx, wl * ly + wr * ry + wv * vy);
+  }
+  // the barycentric weights of a point in the triangle V (the hue corner),
+  // L (the black corner) and R (the white corner)
+  function pointInTri(x, y, vx, vy, lx, ly, rx, ry) {
+    const d = (ly - ry) * (vx - rx) + (rx - lx) * (vy - ry);
+    if (Math.abs(d) < 1e-6) return null;
+    const wv = ((ly - ry) * (x - rx) + (rx - lx) * (y - ry)) / d;
+    const wl = ((ry - vy) * (x - rx) + (vx - rx) * (y - ry)) / d;
+    const wr = 1 - wv - wl;
+    if (wv < -0.001 || wl < -0.001 || wr < -0.001) return null;
+    return { wv: Math.max(0, wv), wl: Math.max(0, wl), wr: Math.max(0, wr) };
+  }
+  function wheelPick(e) {
     const cv = $("wheelCv");
     const r = cv.getBoundingClientRect();
-    const x = (e.clientX - r.left) * cv.width / r.width - cv.width / 2;
-    const y = (e.clientY - r.top) * cv.height / r.height - cv.height / 2;
-    const d = Math.hypot(x, y), R = cv.width / 2 - 2;
-    if (d > R) return;
-    const h = (Math.atan2(y, x) * 180 / Math.PI + 90 + 360) % 360;
-    const s = d / R, v = 1 - s * s;
-    const c = v * 255, hh = h / 60, X = c * (1 - Math.abs(hh % 2 - 1));
-    let rr = 0, gg = 0, bb = 0;
-    if (hh < 1) { rr = c; gg = X; } else if (hh < 2) { rr = X; gg = c; }
-    else if (hh < 3) { gg = c; bb = X; } else if (hh < 4) { gg = X; bb = c; }
-    else if (hh < 5) { rr = X; bb = c; } else { rr = c; bb = X; }
-    const m = (1 - s) * 255;
-    const hex = "#" + [rr + m, gg + m, bb + m].map(n =>
-      Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0")).join("");
+    const x = (e.clientX - r.left) * cv.width / r.width;
+    const y = (e.clientY - r.top) * cv.height / r.height;
+    const G = wheelGeom();
+    const dx = x - G.R, dy = y - G.R;
+    const d = Math.hypot(dx, dy);
+    if (d >= G.rIn && d <= G.rOut) {
+      // the ring: the angle is the hue, the radius is the luminosity
+      const a = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
+      wheelState.h = a / 360;
+      const t = (d - G.rIn) / (G.rOut - G.rIn);
+      wheelState.v = Math.max(0.02, 1 - t * 0.88);
+      wheelState.s = 1;
+    } else {
+      const p = pointInTri(x, y, G.R, G.R - G.rIn, G.R - G.rIn * 0.87, G.R + G.rIn * 0.5,
+        G.R + G.rIn * 0.87, G.R + G.rIn * 0.5);
+      if (p) {
+        // the triangle: the hue corner, the black corner and the white corner
+        wheelState.v = Math.max(0, Math.min(1, p.wv + p.wr));
+        const den = p.wv + p.wr;
+        wheelState.s = den > 0.0001 ? Math.max(0, Math.min(1, p.wv / den)) : 0;
+      }
+    }
+    const [cr, cg, cb] = hsv2rgb(wheelState.h, wheelState.s, wheelState.v);
+    const hex = "#" + [cr, cg, cb].map(n => n.toString(16).padStart(2, "0")).join("");
     setApen(hex);
-    toast("APen: " + hex.toUpperCase());
+    const rgb = $("wheelRGB");
+    if (rgb) rgb.textContent = "R:" + String(cr).padStart(3, "0") + " G:" + String(cg).padStart(3, "0") + " B:" + String(cb).padStart(3, "0");
+    drawWheel();
+  }
+  drawWheel();
+  $("wheelCv").addEventListener("pointerdown", (e) => {
+    if (e.button === 2) { toast("additional colours — not in this prototype"); return; }
+    wheelPick(e);
+    const mv = (ev) => wheelPick(ev);
+    const up = () => {
+      window.removeEventListener("pointermove", mv);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", mv);
+    window.addEventListener("pointerup", up);
+  });
+  $("wheelCv").addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    toast("additional colours — not in this prototype");
   });
   // Light Table: the light table of every layer (TVPaint dims the other layers)
   const lt = mkTVPanel("lt");
@@ -1638,7 +1771,7 @@ function buildPanels() {
   const lb = mkTVPanel("library");
   lb.innerHTML = `<div id="lbList" style="max-height:220px;overflow:auto"></div>`;
   // ---- Tool : <name> Panel ----
-  const tp = mkPanel("Tool : Pen Brush");
+  const tp = mkPanel("Tool : Pen Brush", "tool");
   panelEls[1].id = "toolPanel";
   tp.innerHTML = `
     <div class="toolgrid g6" id="toolGrid"></div>
@@ -1834,7 +1967,7 @@ let camFrame = true;         // the camera frame overlay drawn on the canvas
 let camLocks = { x: false, y: false, rotation: false, zoom: false };
 let camLocksAll = false;      // "Lock All": no camera parameter can be changed
 function buildCameraPanel() {
-  const body = mkThirdPanel("Camera[Proj]");
+  const body = mkThirdPanel("Camera[Proj]", "camera");
   body.innerHTML = `
     ${mrow("Command", `<select id="camCmd" style="flex:1">
         <option value="">Command</option>
@@ -2006,20 +2139,34 @@ function buildCameraPanel() {
   body._syncCamera = sync;   // renderAll hooks this
   return body;
 }
-function mkThirdPanel(title) {
+function mkThirdPanel(title, key) {
   const wrap = $("panels");
   const p = document.createElement("div");
   p.className = "panel";
+  if (key) p.dataset.panelKey = key;
   p.innerHTML = `<div class="phead"><span class="pt">${title}</span>
-    <button class="pw" title="collapse">▼</button>
+    <button class="pw" title="panel options">•</button>
+    <button class="pw" title="collapse">▾</button>
     <button class="pw" title="close">✕</button>
-    <button class="pw" title="lock">⚿</button></div><div class="pbody"></div>`;
+    <span class="pwin"><button class="pw" title="float">▶</button>
+      <button class="pw" title="maximize">▬</button></span></div><div class="pbody"></div>`;
   wrap.appendChild(p);
   const head = p.querySelector(".phead"), body = p.querySelector(".pbody");
+  head.querySelector("button[title='panel options']").onclick =
+    (e) => { e.stopPropagation(); toast(title + " — the panel options of the live app"); };
   head.querySelector("button[title=collapse]").onclick =
     (e) => { e.stopPropagation(); body.style.display = body.style.display === "none" ? "" : "none"; };
   head.querySelector("button[title=close]").onclick =
     (e) => { e.stopPropagation(); p.style.display = "none"; };
+  head.querySelector("button[title=float]").onclick =
+    (e) => { e.stopPropagation(); floatPanel(p); };
+  head.querySelector("button[title=maximize]").onclick = (e) => {
+    e.stopPropagation();
+    const big = p.dataset.max === "1";
+    p.dataset.max = big ? "0" : "1";
+    p.style.width = big ? "" : "420px";
+    p.style.height = big ? "" : "320px";
+  };
   panelEls.push(p);
   return body;
 }
