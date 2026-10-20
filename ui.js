@@ -1561,7 +1561,8 @@ function renderTimeline() {
   // even frame count so the 2-frame ruler ticks fill the track without overflow
   const maxF = Math.ceil(Math.max(proj.outFrame + 4, proj.currentFrame + 4, visFrames) / 2) * 2;
   // left column — 355 px layer panel + 40 px separator column (⊘), row-for-row with the track
-  const camOn = !!(proj.cameraKeys && proj.cameraKeys.length);
+  // TVPaint always shows the camera layer as the first row of the timeline.
+  const camOn = true;
   const cl0 = proj.layers[proj.currentLayer] || {};
   const flagBtn = (flag, on, iconOn, iconOff, title) =>
     `<button class="flag${on ? "" : " off"}" title="${title}" onclick="event.stopPropagation();toggleLayerFlagAt(${proj.currentLayer},'${flag}')">
@@ -1681,10 +1682,16 @@ function renderTimeline() {
       }
       return;
     }
+    const f = +c.dataset.f;
+    if (c.dataset.l === "cam") {          // camera layer row: keyframe menu
+      e.preventDefault();
+      proj.currentFrame = f;
+      cameraKeyMenu(f, e.clientX, e.clientY);
+      return;
+    }
     const li = +c.dataset.l;
     if (isNaN(li)) return;
     e.preventDefault();
-    const f = +c.dataset.f;
     proj.currentLayer = li; proj.currentFrame = f;
     renderAll();
     cellMenu(li, f, e.clientX, e.clientY);
@@ -1731,8 +1738,8 @@ function renderTimeline() {
   const topPad = camOn ? 46 : 29;
   let th = `<div class="ttopspacer" style="height:${topPad}px"></div><div class="ruler" id="rulerRow">${ticks}${mkBands}</div>`;
   // camera-layer strip: the "+" marks ARE the camera key frames (user-verified)
-  if (proj.cameraKeys && proj.cameraKeys.length) {
-    const camKeyFrames = new Set(proj.cameraKeys.map(k => Math.round(k.frame)));
+  if (camOn) {
+    const camKeyFrames = new Set((proj.cameraKeys || []).map(k => Math.round(k.frame)));
     let camCells = "";
     for (let f = 1; f <= maxF; f++) {
       const plus = (camKeyFrames.has(f) || f % 4 === 1)
@@ -2925,6 +2932,80 @@ function flipCurrentImage(mode) {
   c.drawImage(s, 0, 0);
   tvCommit(() => { fr.canvas = out; });
   toast("image flipped");
+}
+// ---- camera keyframe menu (captured live in TVPaint 12) ----
+let cameraKeyClip = null;
+function camKeyPart(f, part, create) {
+  if (create) {
+    const cur = E.cameraEvaluate(proj, f);
+    const k = E.setCameraKey(proj, f, {});
+    if (part === "All" || part === "Position") { k.x = cur.x; k.y = cur.y; }
+    if (part === "All" || part === "Rotation") k.rotation = cur.rotation;
+    if (part === "All" || part === "Zoom") k.zoom = cur.zoom;
+    if (part === "All" || part === "Movement Type") k.interp = cur.interp || "smooth";
+    toast("camera keyframe created");
+  } else {
+    const k = E.cameraKeyAt(proj, f);
+    if (!k) { toast("no camera keyframe at this frame"); return; }
+    if (part === "All") {
+      proj.cameraKeys = proj.cameraKeys.filter(x => x.frame !== f);
+      toast("camera keyframe deleted");
+    } else {
+      if (part === "Position") { k.x = 0; k.y = 0; }
+      if (part === "Rotation") k.rotation = 0;
+      if (part === "Zoom") k.zoom = 1;
+      if (part === "Movement Type") k.interp = "smooth";
+      toast("camera keyframe part removed");
+    }
+  }
+  renderAll();
+}
+// loc 009582200: "Invert: invert the path of the camera"
+function invertCameraPath() {
+  const ks = (proj.cameraKeys || []).slice().sort((a, b) => a.frame - b.frame);
+  if (ks.length < 2) { toast("at least two camera keyframes are needed"); return; }
+  const vals = ks.map(k => ({ x: k.x, y: k.y, rotation: k.rotation, zoom: k.zoom }));
+  ks.forEach((k, i) => {
+    const v = vals[vals.length - 1 - i];
+    k.x = v.x; k.y = v.y; k.rotation = v.rotation; k.zoom = v.zoom;
+  });
+  renderAll();
+  toast("camera path inverted");
+}
+function cameraKeyMenu(f, mx, my) {
+  const key = E.cameraKeyAt(proj, f);
+  const sub = (create) => ([
+    { label: "All", action: () => camKeyPart(f, "All", create) },
+    { sep: true },
+    { label: "Position", action: () => camKeyPart(f, "Position", create) },
+    { label: "Rotation", action: () => camKeyPart(f, "Rotation", create) },
+    { label: "Zoom", action: () => camKeyPart(f, "Zoom", create) },
+    { label: "Camera size", action: () => camKeyPart(f, "Camera size", create) },
+    { label: "Movement Type", action: () => camKeyPart(f, "Movement Type", create) }
+  ]);
+  openTvMenu([
+    { label: "Create keyframe", submenu: sub(true) },
+    { label: "Delete keyframe", submenu: sub(false) },
+    { sep: true },
+    { label: "Adjust the layer to the animation", action: () => toast("the layers follow the camera movement (not in this prototype)") },
+    { sep: true },
+    { label: "Cut keyframe", disabled: !key, action: () => {
+      cameraKeyClip = Object.assign({}, key);
+      camKeyPart(f, "All", false);
+      toast("camera keyframe cut");
+    } },
+    { label: "Copy keyframe", disabled: !key, action: () => {
+      cameraKeyClip = Object.assign({}, key);
+      toast("camera keyframe copied");
+    } },
+    { label: "Paste keyframe", disabled: !cameraKeyClip, action: () => {
+      E.setCameraKey(proj, f, cameraKeyClip);
+      renderAll();
+      toast("camera keyframe pasted");
+    } },
+    { sep: true },
+    { label: "Invert all keys", action: () => invertCameraPath() }
+  ], mx, my);
 }
 function cellOp(op, li, f, arg) {
   const { l } = cellFrame(li, f);

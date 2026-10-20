@@ -75,6 +75,12 @@ Works from `file://` too — just open `index.html`.
   drawing of the current frame using the layer's delete mode. Both are also in
   the Image menu (`Add Exposure`, `Delete Image`, `Delete Selection from
   Layer`, `Delete Selection from all Layers`).
+- Camera layer: the camera row is always the first row of the timeline (as in
+  TVPaint) and right clicking it opens the captured keyframe menu -
+  `Create keyframe` / `Delete keyframe` (each with `All`, `Position`,
+  `Rotation`, `Zoom`, `Camera size`, `Movement Type`), `Adjust the layer to the
+  animation`, `Cut keyframe` / `Copy keyframe` / `Paste keyframe` and
+  `Invert all keys` (inverts the camera path).
 - Layer order: the layer rows can be dragged onto each other to reorder them
   (with `Move Selected Layers` armed, the whole selection travels as a block),
   and the layer menu's `Move` submenu now carries the exact TVPaint 12 entries
