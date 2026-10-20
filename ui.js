@@ -71,6 +71,31 @@ function currentKeyOf(layer) {
   const k = E.effectiveFrameKey(layer, proj.currentFrame);
   return k === null ? proj.currentFrame : k;
 }
+// Per-layer playback behaviour when the playhead passes the layer's last image
+// (REA: the small control beside the layer — None / Loop / Ping-Pong / Hold).
+function playbackKey(layer, f) {
+  const k = E.effectiveFrameKey(layer, f);
+  if (k !== null) return k;
+  const keys = Object.keys(layer.frames).map(Number).sort((a, b) => a - b);
+  if (!keys.length) return null;
+  const last = keys[keys.length - 1];
+  const lastEnd = last + (layer.frames[last].exposure || 1) - 1;
+  if (f <= lastEnd) return k;
+  const mode = layer.playback || "None";
+  if (mode === "None") return null;
+  const timeline = [];
+  for (let i = 1; i <= lastEnd; i++) timeline.push(E.effectiveFrameKey(layer, i));
+  const len = timeline.length;
+  if (!len) return null;
+  const idx = f - 1;
+  if (mode === "Hold") return timeline[len - 1];
+  if (mode === "Loop") return timeline[idx % len];
+  if (mode === "Ping-Pong") {
+    const cyc = idx % (2 * len);
+    return timeline[cyc < len ? cyc : 2 * len - 1 - cyc];
+  }
+  return null;
+}
 function renderArtOnly() {
   actx.setTransform(1, 0, 0, 1, 0, 0);
   actx.fillStyle = "#313136";
@@ -1046,16 +1071,18 @@ function dlgNewProject(modify) {
 // ---------- Increase Layer Length dialog (REA screenshot: Stretch / Interpolate
 // (disabled) / Repeat-mode dropdown "Hold" / Add Empty Instances / Add Empty
 // Exposures / Apply / Cancel) ----------
-function dlgLayerLength() {
+function dlgLayerLength(prefill) {
   const layer = proj.layers[proj.currentLayer];
   const keys = Object.keys(layer.frames).map(Number).sort((a, b) => a - b);
   const last = keys[keys.length - 1] || 1;
   const total = last + (layer.frames[last] ? (layer.frames[last].exposure || 1) : 1) - 1;
+  const count = Math.max(1, Math.round(prefill || proj.outFrame - total || 1));
   const m = openModal("Increase Layer Length", `
     <button class="revbtn" style="width:100%;margin:2px 0" id="llStretch">Stretch</button>
     <div class="orow" style="justify-content:center;margin:2px 0"><button class="revbtn" disabled>Interpolate</button></div>
+    <button class="revbtn" style="width:100%;margin:2px 0" id="llRepeat">Repeat</button>
     ${mrow("Mode", `<select id="llMode" style="flex:1;display:inline-block"><option>Hold</option><option>Repeat</option></select>
-      <input type="number" id="llCount" value="${Math.max(1, proj.outFrame - total || 1)}" min="1" style="width:70px"> frames`)}
+      <input type="number" id="llCount" value="${count}" min="1" style="width:70px"> frames`)}
     <button class="revbtn" style="width:100%;margin:2px 0" id="llInstances">Add Empty Instances</button>
     <button class="revbtn" style="width:100%;margin:2px 0;background:#3d5666" id="llExposures">Add Empty Exposures</button>
     <div style="color:#898989;font-size:11px;margin-top:6px">Layer length now: ${total} frames</div>
@@ -1074,6 +1101,7 @@ function dlgLayerLength() {
     toast("layer: " + op + " " + n);
   };
   act("#llStretch", "stretch");
+  act("#llRepeat", "repeat");
   act("#llInstances", "instances");
   act("#llExposures", "exposures");
 }
@@ -1165,6 +1193,10 @@ function renderTimeline() {
         title="Light table"><img src="icons/${l.lighttable ? "LayerLighttableOn" : "LayerLighttableOff"}-x20.png"></button>
       <button class="sf ${l.locked ? "on" : ""}" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'locked')"
         title="Lock Layer"><img src="icons/${l.locked ? "ReqLockOn" : "ReqLockOff"}-x20.png"></button>
+      <select class="pbSel" data-pb="${i}" title="playback at layer end"
+        onclick="event.stopPropagation()" style="background:#2D2D32;color:#B6B6B6;border:1px solid #2B2B30;border-radius:3px;font-size:9px;padding:0 1px">
+        ${["None","Loop","Ping-Pong","Hold"].map(m => `<option ${((l.playback||"None")===m)?"selected":""}>${m}</option>`).join("")}
+      </select>
     </div>
     <div class="lblock">
       <canvas class="lthumb" data-layer="${i}" width="34" height="20"></canvas>
@@ -1193,6 +1225,13 @@ function renderTimeline() {
       proj.layers[+r.dataset.lop].opacity = +e.target.value / 100;
       const row = r.closest(".oprow"); row.querySelector(".lval").textContent = e.target.value + "%";
       fastRenderAll();
+    };
+  });
+  left.querySelectorAll("[data-pb]").forEach(s => {
+    s.onchange = (e) => {
+      proj.layers[+s.dataset.pb].playback = e.target.value;
+      toast("playback: " + e.target.value);
+      renderAll();
     };
   });
   // track: top ruler + strips + bottom ruler (TVPaint mirrors the ruler)
@@ -1256,7 +1295,7 @@ function renderTimeline() {
         `<i class="expHandle" data-k="${lastKey}" data-l="${li}" title="drag right: increase length"></i></div>`;
     }
     for (let f = 1; f <= maxF; f++) {
-      const k = E.effectiveFrameKey(l, f);
+      const k = playbackKey(l, f);
       const cls = k !== null ? (k === f ? "keyw" : "hold") : "";
       const cur = (f === proj.currentFrame && li === proj.currentLayer) ? " curf" : "";
       // cell label = the DRAWING number (1., 2., 3. ...), shown below the strip
@@ -1329,12 +1368,21 @@ function renderTimeline() {
         h.removeEventListener("pointerup", up);
         h.dataset.expBound = "";
         if (moved && exp !== startExp) {
-          hist.pushModel(proj);
-          l.frames[k].exposure = exp;
-          hist.sealModel(proj);
-          toast("exposure " + exp);
+          const added = exp - startExp;
+          renderAll();   // reset the drag preview
+          if (added > 0) {
+            // TVPaint: dragging the layer's right-edge handle extends it, then the
+            // Increase Layer Length dialog decides how the added time is handled.
+            dlgLayerLength(added);
+          } else {
+            hist.pushModel(proj);
+            l.frames[k].exposure = exp;
+            hist.sealModel(proj);
+            toast("exposure " + exp);
+            renderAll();
+          }
         }
-        renderAll();
+        else renderAll();
       };
       h.addEventListener("pointermove", mv);
       h.addEventListener("pointerup", up);
