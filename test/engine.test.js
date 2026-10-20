@@ -522,5 +522,41 @@ test("cutting several images from the right keeps earlier keys addressable", () 
   assert.deepStrictEqual(E.layerKeys(l), [1], "the empty layer recovers one blank drawing");
 });
 
+test("addExposureAt: new cell on an empty frame, split inside a hold", () => {
+  const l = E.newProject().layers[0];
+  l.frames = { 1: E.newFrame(), 5: E.newFrame() };
+  l.frames[1].exposure = 3;      // 1..3
+  l.frames[5].exposure = 4;      // 5..8
+  assert.strictEqual(E.addExposureAt(l, 7), true, "a new instance is created inside the hold");
+  assert.deepStrictEqual(E.layerKeys(l), [1, 5, 7]);
+  assert.strictEqual(l.frames[5].exposure, 2, "the hold keeps the frames before the new instance");
+  assert.strictEqual(l.frames[7].exposure, 2, "the new instance takes the remaining frames");
+  assert.strictEqual(l.frames[7].canvas, null, "the new instance is empty");
+  assert.strictEqual(E.addExposureAt(l, 7), false, "a frame that already starts an instance is left alone");
+  assert.strictEqual(E.addExposureAt(l, 10), true, "an empty frame gets a one frame instance");
+  assert.strictEqual(l.frames[10].exposure, 1);
+  assert.strictEqual(E.layerEnd(l), 10, "the layer grows to the new cell");
+});
+
+test("layer order: move up/down, bring together, reverse", () => {
+  const p = E.newProject();
+  p.layers = [E.newLayer("A"), E.newLayer("B"), E.newLayer("C"), E.newLayer("D")];
+  p.currentLayer = 1;
+  p.selectedLayers = [0, 2];
+  assert.strictEqual(E.moveLayerBy(p, 1, -1), true);
+  assert.deepStrictEqual(p.layers.map(l => l.name), ["B", "A", "C", "D"]);
+  assert.strictEqual(p.currentLayer, 0, "the current layer follows the moved layer");
+  assert.strictEqual(E.moveLayerBy(p, 0, 1), true);
+  assert.deepStrictEqual(p.layers.map(l => l.name), ["A", "B", "C", "D"]);
+  assert.strictEqual(E.moveLayerBy(p, 0, -1), false, "the top layer cannot move further up");
+  assert.strictEqual(E.bringLayersTogether(p, [0, 2]), true);
+  assert.deepStrictEqual(p.layers.map(l => l.name), ["A", "C", "B", "D"], "selected layers are gathered");
+  assert.strictEqual(E.reverseLayerOrder(p, []), true);
+  assert.deepStrictEqual(p.layers.map(l => l.name), ["D", "B", "C", "A"]);
+  p.layers = [E.newLayer("A"), E.newLayer("B"), E.newLayer("C")];
+  assert.strictEqual(E.reverseLayerOrder(p, [0, 2]), true);
+  assert.deepStrictEqual(p.layers.map(l => l.name), ["C", "B", "A"], "only the selected layers are reversed");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

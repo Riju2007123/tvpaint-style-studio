@@ -588,6 +588,101 @@ function xsheetOp(proj, layer, op, frameNum, arg) {
   return true;
 }
 
+// Add Exposure (loc 28620, George tv_exposureadd). Verified live: pressing
+// Backspace on an empty cell creates a new empty animation cell there and the
+// layer grows to include it; pressing it on a frame that is already the start
+// of an instance does nothing; pressing it inside a hold splits that hold, the
+// earlier part keeps the drawing and the new instance takes the remaining
+// frames (the new instance is empty, not a copy).
+function addExposureAt(layer, frame) {
+  if (!layer) return false;
+  const f = Math.max(1, Math.round(frame));
+  const k = effectiveFrameKey(layer, f);
+  if (k != null && k === f) return false;          // an instance already starts here
+  if (k == null) {                                  // empty cell -> new 1 frame instance
+    const fr = newFrame();
+    fr.exposure = 1;
+    layer.frames[f] = fr;
+    return true;
+  }
+  const exp = layer.frames[k].exposure || 1;        // inside a hold -> split it
+  const before = f - k;
+  const after = exp - before;
+  if (after < 1) return false;
+  layer.frames[k].exposure = before;
+  const fr = newFrame();
+  fr.exposure = after;
+  layer.frames[f] = fr;
+  return true;
+}
+
+// ---- layer order ----
+// "Layer: Move Layer Up" / "Move Layer Down" (loc 20180/20181). The decompiled
+// handler (FUN_1407aaa60) swaps the layer with its neighbour in the layer list
+// and then fixes the current-layer pointer. moveLayerTo does the same for a
+// drag and drop onto another layer row.
+function remapLayerIndex(i, from, to) {
+  if (i === from) return to;
+  if (i === to) return from;
+  if (from < to) return (i > from && i < to) ? i - 1 : i;
+  return (i > to && i < from) ? i + 1 : i;
+}
+function moveLayerTo(proj, from, to) {
+  const n = proj.layers.length;
+  if (from < 0 || from >= n) return false;
+  to = Math.max(0, Math.min(n - 1, to));
+  if (from === to) return false;
+  const [l] = proj.layers.splice(from, 1);
+  proj.layers.splice(to, 0, l);
+  if (typeof proj.currentLayer === "number") {
+    proj.currentLayer = remapLayerIndex(proj.currentLayer, from, to);
+  }
+  if (Array.isArray(proj.selectedLayers)) {
+    proj.selectedLayers = proj.selectedLayers.map(i => remapLayerIndex(i, from, to));
+  }
+  return true;
+}
+function moveLayerBy(proj, index, delta) {
+  return moveLayerTo(proj, index, index + delta);
+}
+// "Bring Selected Layers Together" (loc 011025182): the selected layers are
+// gathered under the topmost selected one, keeping their relative order.
+function bringLayersTogether(proj, indices) {
+  const sel = (indices || []).filter(i => i >= 0 && i < proj.layers.length).sort((a, b) => a - b);
+  if (sel.length < 2) return false;
+  const at = sel[0];
+  const moved = sel.map(i => proj.layers[i]);
+  const keep = proj.layers.filter((_, i) => !sel.includes(i));
+  const next = keep.slice(0, at).concat(moved, keep.slice(at));
+  const keepPos = (i) => i - sel.filter(s => s < i).length;
+  const map = (i) => {
+    if (sel.includes(i)) return at + sel.indexOf(i);
+    const p = keepPos(i);
+    return p >= at ? p + sel.length : p;
+  };
+  proj.layers = next;
+  if (typeof proj.currentLayer === "number") proj.currentLayer = map(proj.currentLayer);
+  if (Array.isArray(proj.selectedLayers)) proj.selectedLayers = proj.selectedLayers.map(map);
+  return true;
+}
+// "Reverse All Layer Order" / "Reverse Selected Layer Order" (loc 011025183/184)
+function reverseLayerOrder(proj, indices) {
+  const n = proj.layers.length;
+  if (!indices || !indices.length) {
+    proj.layers.reverse();
+    if (typeof proj.currentLayer === "number") proj.currentLayer = n - 1 - proj.currentLayer;
+    if (Array.isArray(proj.selectedLayers)) {
+      proj.selectedLayers = proj.selectedLayers.map(i => n - 1 - i);
+    }
+    return true;
+  }
+  const sel = indices.filter(i => i >= 0 && i < n).sort((a, b) => a - b);
+  if (sel.length < 2) return false;
+  const picked = sel.map(i => proj.layers[i]).reverse();
+  sel.forEach((idx, i) => { proj.layers[idx] = picked[i]; });
+  return true;
+}
+
 // Reverse exactly the selected drawings (Ctrl/Shift-click selection), leaving
 // every unselected key in place. Frame objects move, so exposures, roles and
 // names travel with their drawings. Returns the number of drawings reversed.
@@ -1184,6 +1279,8 @@ if (typeof module !== "undefined" && module.exports) {
     IMAGE_ROLES, BLEND_MODES, frameEndOf, layerKeys, layerEnd, shiftKeys,
     insertImages, duplicateImages, deleteImageAt, deleteFrameColumn,
     setExposureValue, removeExposures, layerHasGaps, repeatImages, slideLayer, alignLayer,
+    reverseSelectedImages, addExposureAt, moveLayerTo, moveLayerBy,
+    bringLayersTogether, reverseLayerOrder,
     setImageMark, nextImageMark
   };
 }

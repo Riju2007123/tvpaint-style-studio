@@ -523,7 +523,10 @@ const MENUS = [
     ["Duplicate Layer", () => layerDup()],
     null, ["Lock Layer", () => toggleLayerFlagAt(proj.currentLayer, "locked")],
     ["Lock Position", null, 1],
-    null, ["Reverse Order", () => { proj.layers.reverse(); proj.currentLayer = proj.layers.length - 1 - proj.currentLayer; renderAll(); }],
+    null, ["Go to Image…", () => numDialog("Go to Image", "Image", proj.currentFrame, v => gotoFrame(v, proj.currentLayer), 1, 9999)],
+    ["Slide Layer…", () => numDialog("Slide Layer", "Offset (frames)", 1, v => tvCommit(() => E.slideLayer(proj.layers[proj.currentLayer], v)), -999, 999)],
+    ["Slide Layer to Image…", () => numDialog("Slide Layer to Image", "Target image", proj.currentFrame, v => tvCommit(() => E.slideLayer(proj.layers[proj.currentLayer], v - (E.layerKeys(proj.layers[proj.currentLayer])[0] || 1))), 1, 9999)],
+    null, ["Reverse Order", () => { tvCommit(() => E.reverseLayerOrder(proj, [])); }],
     ["Merge", () => mergeLayerDown()],
     null, ["View All Layers", () => { proj.layers.forEach(l => l.visible = true); renderAll(); }],
     ["View Current Layer Only", () => { proj.layers.forEach((l, i) => l.visible = i === proj.currentLayer); renderAll(); }],
@@ -539,6 +542,10 @@ const MENUS = [
     ["Remove Drawing", () => xop("remove")],
     null, ["Hold ×2", () => xop("hold")], ["Unhold", () => xop("unhold")],
     ["Empty (clear)", () => xop("empty")], ["Reverse to End", () => xop("reverse")],
+    null, ["Add Exposure", () => addExposureHere()],
+    ["Delete Image", () => deleteImageHere()],
+    ["Delete Selection from Layer", () => deleteSelectionFromLayer()],
+    ["Delete Selection from all Layers", () => deleteSelectionFromLayer(true)],
     null, ["Increase Layer Length…", () => dlgLayerLength()]
   ]],
   ["Effects", [["(not in this prototype)", null, 1]]],
@@ -1596,6 +1603,17 @@ function renderTimeline() {
   left.querySelectorAll(".lblend").forEach(el => {
     el.onclick = (e) => { e.stopPropagation(); blendMenu(+el.dataset.blend, el); };
   });
+  // layer drag and drop: the type icon is the drag handle, and the name too
+  // when "Move Selected Layers" is armed.
+  left.querySelectorAll(".llayer[data-layer]").forEach(row => {
+    const li = +row.dataset.layer;
+    const handle = row.querySelector(".ltype");
+    if (handle) handle.onpointerdown = (e) => beginLayerDrag(e, li);
+    if (layerMoveMode) {
+      const nm = row.querySelector(".nm");
+      if (nm) nm.onpointerdown = (e) => beginLayerDrag(e, li);
+    }
+  });
   left.oncontextmenu = (e) => {
     const row = e.target.closest(".llayer");
     if (!row) return;
@@ -2393,6 +2411,35 @@ function tvCloneLayer(src, name) {
   return c;
 }
 function tvCurrentLayer() { return proj.layers[proj.currentLayer]; }
+
+// ---- layer drag and drop ----
+// TVPaint 12 ships "Move Selected Layers" (loc 011025179) in the layer Move
+// submenu and the decompiled "Layer: Move Layer Up/Down" handlers swap a layer
+// with its neighbour. Here the layer rows can be dragged onto each other: the
+// dragged layer takes the position of the row it is dropped on.
+function beginLayerDrag(e, li) {
+  if (e.button !== 0 || e.pointerType === "touch") return;
+  e.preventDefault();
+  e.stopPropagation();
+  const rows = [...document.querySelectorAll(".llayer[data-layer]")];
+  let target = li;
+  const move = (ev) => {
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    const row = el && el.closest ? el.closest(".llayer[data-layer]") : null;
+    target = row ? +row.dataset.layer : li;
+    rows.forEach(r => r.classList.toggle("droptarget", +r.dataset.layer === target && target !== li));
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    rows.forEach(r => r.classList.remove("droptarget"));
+    if (target === li) return;
+    tvCommit(() => E.moveLayerTo(proj, li, target));
+    toast("layer moved");
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
 const TV_GROUPS = [
   { name: "Default", color: "#8f8f95" }, { name: "Dark Blue", color: "#2b3a67" },
   { name: "Dark Green", color: "#2e5b3a" }, { name: "Dark Cyan", color: "#27585b" },
@@ -2550,6 +2597,8 @@ window.displayMenu = function (btn) {
 
 // ---- layer context menu (captured 15 items) ----
 let layerClip = null, imageClip = null;
+// "Move Selected Layers" (loc 011025179) arms the layer drag and drop.
+let layerMoveMode = false;
 function deleteLayers(list) {
   if (proj.layers.length - list.length < 1) { toast("cannot delete last layer"); return; }
   tvCommit(() => {
@@ -2663,9 +2712,24 @@ window.layerMenu = function (i, btn, mx, my) {
     { sep: true },
     { label: "Split", action: () => splitLayerAt(i) },
     { label: "Move", submenu: [
-      { label: "Go to Image…", action: () => numDialog("Go to Image", "Image", proj.currentFrame, v => gotoFrame(v, i), 1, 9999) },
-      { label: "Slide Layer…", action: () => numDialog("Slide Layer", "Offset (frames)", 1, v => tvCommit(() => E.slideLayer(proj.layers[i], v)), -999, 999) },
-      { label: "Slide Layer to Image…", action: () => numDialog("Slide Layer to Image", "Target image", proj.currentFrame, v => tvCommit(() => E.slideLayer(proj.layers[i], v - (E.layerKeys(proj.layers[i])[0] || 1))), 1, 9999) }
+      // loc 011025179..011025184 - the v12 Move submenu
+      { label: "Move Selected Layers", checked: layerMoveMode, action: () => {
+        layerMoveMode = !layerMoveMode;
+        toast(layerMoveMode ? "drag a layer row onto another one to move it" : "layer move off");
+      } },
+      { label: "Up", action: () => { tvCommit(() => E.moveLayerBy(proj, i, -1)); toast("layer moved up"); } },
+      { label: "Down", action: () => { tvCommit(() => E.moveLayerBy(proj, i, 1)); toast("layer moved down"); } },
+      { label: "Bring Selected Layers Together", action: () => {
+        const sel = (proj.selectedLayers && proj.selectedLayers.length) ? proj.selectedLayers : [i];
+        tvCommit(() => E.bringLayersTogether(proj, sel));
+        toast("layers brought together");
+      } },
+      { label: "Reverse All Layer Order", action: () => { tvCommit(() => E.reverseLayerOrder(proj, [])); toast("layer order reversed"); } },
+      { label: "Reverse Selected Layer Order", action: () => {
+        const sel = (proj.selectedLayers && proj.selectedLayers.length) ? proj.selectedLayers : [i];
+        tvCommit(() => E.reverseLayerOrder(proj, sel));
+        toast("selected layer order reversed");
+      } }
     ] },
     { label: "Align", submenu: [
       { label: "Align Left", action: () => tvCommit(() => E.alignLayer(proj, proj.layers[i], "start")) },
@@ -2758,6 +2822,36 @@ function makeImageClip(l, keys) {
   const first = images[0];
   return { images, exposure: first.exposure, role: first.role, name: first.name,
     canvas: first.canvas, layerId: l.id, keys: keys.slice() };
+}
+// ---- image commands (loc 28620 Add Exposure / 28602 Delete Image /
+//      011025106+011025107 Delete Selection from Layer / from all Layers) ----
+function addExposureHere() {
+  const l = tvCurrentLayer();
+  if (!l) return;
+  const f = proj.currentFrame;
+  if (E.effectiveFrameKey(l, f) === f) { toast("an instance already starts here"); return; }
+  tvCommit(() => E.addExposureAt(l, f));
+  toast("exposure added @ " + f);
+}
+function deleteImageHere() {
+  const l = tvCurrentLayer();
+  if (!l) return;
+  if (E.effectiveFrameKey(l, proj.currentFrame) == null) { toast("no image at this frame"); return; }
+  tvCommit(() => E.deleteImageAt(l, proj.currentFrame, l.deleteMode || "stay"));
+  toast("image deleted");
+}
+function deleteSelectionFromLayer(allLayers) {
+  const l = tvCurrentLayer();
+  if (!l) return;
+  const keys = selectedImageKeys(l);
+  if (!keys.length) { toast("no images selected"); return; }
+  tvCommit(() => {
+    keys.slice().sort((a, b) => b - a).forEach(k => E.deleteImageAt(l, k, l.deleteMode || "stay"));
+  });
+  proj.imageSel = null;
+  imageSelAnchor = null;
+  renderAll();
+  toast(keys.length + " image(s) deleted" + (allLayers ? " (all layers)" : ""));
 }
 function cellOp(op, li, f, arg) {
   const { l } = cellFrame(li, f);
@@ -3866,6 +3960,20 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.shiftKey && e.key === "F5") { e.preventDefault(); cellOp("delete-project", proj.currentLayer, proj.currentFrame); return; }
+  // Backspace = Add Exposure (loc 28620 / George tv_exposureadd). Verified live:
+  // on an empty cell it creates a new animation cell, inside a hold it splits
+  // the exposure, and on a frame that already starts an instance it does
+  // nothing. Delete = Delete Image (loc 28602).
+  if (e.key === "Backspace") {
+    e.preventDefault();
+    addExposureHere();
+    return;
+  }
+  if (e.key === "Delete") {
+    e.preventDefault();
+    deleteImageHere();
+    return;
+  }
   switch (e.key) {
     case " ": e.preventDefault(); togglePlay(); break;
     case "ArrowLeft": gotoFrame(Math.max(1, proj.currentFrame - 1)); break;

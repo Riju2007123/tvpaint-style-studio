@@ -186,7 +186,9 @@
     grid-template-rows: 22px 19px; column-gap: 6px; align-items: start;
     padding: 0 8px 0 60px; position: relative; z-index: 1; }
   .llayer .ltype { position: absolute; left: 8px; top: 6px; width: 18px; height: 18px;
-    opacity: .95; z-index: 2; filter: invert(.8); }
+    opacity: .95; z-index: 2; filter: invert(.8); cursor: grab; }
+  .llayer.droptarget { outline: 1px solid #5A66CC; outline-offset: -1px; }
+  .llayer.droptarget .lrowbg { background: #3E476B; }
   .llayer .lthumb { grid-column: 1; grid-row: 1 / span 2; width: 52px; height: 26px; background: #fff;
     border: 1px solid #2B2B30; border-radius: 2px; margin-top: 0; }
   .llayer .lmid { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column;
@@ -510,7 +512,8 @@
   IMAGE_ROLES, BLEND_MODES, frameEndOf, layerKeys, layerEnd,
   shiftKeys, insertImages, duplicateImages, deleteImageAt, deleteFrameColumn,
   setExposureValue, removeExposures, layerHasGaps, repeatImages, slideLayer, alignLayer,
-  reverseSelectedImages,
+  reverseSelectedImages, addExposureAt, moveLayerTo, moveLayerBy,
+  bringLayersTogether, reverseLayerOrder,
   setImageMark, nextImageMark };</script>
 <script src="ui.js"></script>
 </body>

@@ -66,6 +66,19 @@ Works from `file://` too — just open `index.html`.
   of the selected layer (the rule TVPaint documents for the timeline area); a
   single click on a ruler number jumps straight to that frame. The transport
   bar under the canvas scrubs the whole clip.
+- Keyboard editing in the timeline: **Backspace** is *Add Exposure* (loc
+  28620 / George `tv_exposureadd`) - on an empty cell it creates a new empty
+  animation cell there and the layer grows to include it, inside a hold it
+  splits the exposure (the earlier part keeps the drawing, the new instance
+  takes the remaining frames) and on a frame that already starts an instance it
+  does nothing. **Delete** is *Delete Image* (loc 28602) and removes the
+  drawing of the current frame using the layer's delete mode. Both are also in
+  the Image menu (`Add Exposure`, `Delete Image`, `Delete Selection from
+  Layer`, `Delete Selection from all Layers`).
+- Layer order: the layer rows can be dragged onto each other to reorder them,
+  and the layer menu's `Move` submenu now carries the exact TVPaint 12 entries
+  (`Move Selected Layers`, `Up`, `Down`, `Bring Selected Layers Together`,
+  `Reverse All Layer Order`, `Reverse Selected Layer Order`).
 - Timeline zoom and fit: the timeline footer carries TVPaint's interactive
   zoom ratio (shipped `LayerZoomRatio` icon, drag left/right to change the frame
   width) and a `Fit` popup with the shipped loc entries `Fit to Clip`, `Fit to
@@ -95,8 +108,9 @@ Works from `file://` too — just open `index.html`.
   Color Group panes. Per-layer lock / light table / preserve-transparency /
   stencil dots, row collapse, global layer flags and image-mark ruler ticks.
 
-38 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
-modes, selected-image reversal, auto break/create flags and history (`npm test`).
+40 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
+modes, add-exposure, layer order, selected-image reversal, auto break/create
+flags and history (`npm test`).
 
 ## Tests
 
