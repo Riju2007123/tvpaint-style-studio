@@ -1315,6 +1315,32 @@ the camera panel never synced and its X / Y fields stayed empty.  The panels are
 now addressed by their key (`data-panel-key`) so the indexes can never drift
 again.
 
+### v35 pass - TVPaint's own resources put into the app
+
+Instead of approximating the TVPaint look, the app now **uses TVPaint's own
+resources**:
+
+- **The colour scheme.**  TVPaint ships `Resources/colorschemes/Night.ini`,
+  `Day.ini`, `Dusk.ini` and `Dawn.ini`; every colour of the interface comes
+  from there (`mdesktopbackground=49 49 54`, `mdocumentbackground=45 45 50`,
+  `mgadgetactionselected=62 71 107`, `mgadgettabstext=182 182 182`,
+  `mcameraprofile=128 128 255`, `miconset=light`, ...).  The four schemes are
+  now in `Resources/colorschemes/` and `scheme.js` parses the INI and turns
+  every entry into a CSS custom property, so the interface is painted with
+  exactly the colours of the live program (and can follow the scheme the user
+  picks).  The hard coded colours of the CSS were replaced by the variables.
+- **The custom panels.**  TVPaint's panels live in
+  `Resources/custompanels/*.bin` as a small text format (`[toolbox]`, then per
+  item `_cmd0.._cmd3`, `_text`, `_type`, ...).  The fifteen panels of the live
+  `Custom Panels` menu (Animator Panel, Chalks, Correction, Grab Tools Panel,
+  Howard Wimshurst Brushes, Nature, Paintbrushes, Paintbrushs, Pencils, Pens,
+  Shading, Sketch Panel, Smudge & Spread, Timesheet, Tool Presets Legacy) are
+  now read from those very files and shown as a grid of TVPaint's own brush
+  swatches; clicking a swatch applies its command (`Tool:tv_airbrush ...`,
+  `tv_paper ... Name "/cement_08"`, ...).
+- **The paper textures** (`Resources/papers`, 182 files) and the **light icon
+  set** (`Resources/icons/light`, 2194 files in five sizes) are in the app.
+
 ### Still not captured
 - Exact Role submenu appearance/order. The labels are known from the loc's role
   assignment commands: `Keyframe`, `Breakdown`, `Inbetween (To Do)`,

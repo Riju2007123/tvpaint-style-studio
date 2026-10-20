@@ -1,0 +1,31 @@
+﻿[ToolBox]
+0_collapsed=0
+2_type=1
+1_type=4
+2_text=Generate Tutorial
+0_type=1
+0_text=Record Tutorial
+0_count=1
+0_keyboardshortcut=5e7637b0-4834-4bfd-a290-451b2b1aafc4
+1_keyboardshortcut=d7f443a7-c089-4af8-8034-fdc232f33ba0
+_h=66
+_count=3
+1_count=0
+2_file=_5904d492-c8a0-4f5c-bc27-4ceb042df121.dip
+2_keyboardshortcut=4f961389-9f34-4d99-b3f7-ee07367aff69
+_w=185
+_x=1813
+_y=188
+_editable=1
+0_file=_3ea3b7f8-2e63-45b8-9e00-9dc67dc99ce8.dip
+_showtext=1
+2_count=1
+_name=Tutorial Recorder
+_id=10d42b89-fdae-47ec-8357-f10951e25c61
+_saveexporttvpx=0
+2_cmd0=Cmd:tv_magicnumber capture render
+2_collapsed=0
+0_cmd0=Cmd:tv_magicnumber capture start
+1_collapsed=0
+_open=0
+

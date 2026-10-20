@@ -687,31 +687,25 @@ const TV_MENUS = {
     { label: "Library", checked: () => tvPanelOpen("library"), action: () => tvTogglePanel("library") },
     { label: "Camera Panel", checked: () => { const q = document.querySelector("[data-panel-key=camera]"); return !!q && q.style.display !== "none"; }, action: () => { const q = document.querySelector("[data-panel-key=camera]"); if (q) q.style.display = q.style.display === "none" ? "" : "none"; } }
   ],
-  "Custom Panels": [
-    { label: "Animator Panel", checked: true, action: () => togglePane("animator") },
-    { label: "Chalks", checked: true, action: () => togglePane("chalks") },
-    { label: "Correction", action: () => togglePane("correction") },
-    { label: "Grab Tools Panel", action: () => togglePane("grab") },
-    { label: "Howard Wimshurst Brushes", checked: true, action: () => togglePane("howard") },
-    { label: "Nature", checked: true, action: () => togglePane("nature") },
-    { label: "Paintbrushes", checked: true, action: () => togglePane("paintbrushes") },
-    { label: "Paintbrushs", checked: true, action: () => togglePane("paintbrushs") },
-    { label: "Pencils", checked: true, action: () => togglePane("pencils") },
-    { label: "Pens", checked: true, action: () => togglePane("pens") },
-    { label: "Shading", checked: true, action: () => togglePane("shading") },
-    { label: "Sketch Panel", checked: true, action: () => togglePane("sketch") },
-    { label: "Smudge & Spread", checked: true, action: () => togglePane("smudge") },
-    { label: "Timesheet", action: () => togglePane("timesheet") },
-    { label: "Tool Presets Legacy", action: () => togglePane("toolpresets") },
-    { label: "Tutorial Recorder", action: () => togglePane("tutorial") },
+  "Custom Panels": TV_CUSTOM_PANELS.map(p => ({
+    label: p.name,
+    checked: () => {
+      const el = document.getElementById("custom-" + p.name.replace(/[^A-Za-z0-9]+/g, "-"));
+      return !!el && el.style.display !== "none";
+    },
+    action: () => openCustomPanel(p.name)
+  })).concat([
     { sep: true },
     { label: "New Custom Panel", action: () => toast("new custom panel — not in this prototype") },
     { label: "New Embedded Custom Panel", action: () => toast("new embedded custom panel — not in this prototype") },
     { label: "Load a Custom Panel...", action: () => toast("load a custom panel — not in this prototype") },
     { sep: true },
-    { label: "Open All", action: () => toast("all custom panels opened") },
-    { label: "Hide All", action: () => toast("all custom panels hidden") }
-  ]
+    { label: "Open All", action: () => TV_CUSTOM_PANELS.forEach(p => openCustomPanel(p.name)) },
+    { label: "Hide All", action: () => TV_CUSTOM_PANELS.forEach(p => {
+      const el = document.getElementById("custom-" + p.name.replace(/[^A-Za-z0-9]+/g, "-"));
+      if (el) el.style.display = "none";
+    }) }
+  ])
 };
 const MENUS = [
   ["File", [
@@ -5874,6 +5868,8 @@ function boot() {
   buildTransport();
   buildStatusbar();
   syncToolPanel();
+  // the colours come from TVPaint's own colour scheme
+  loadScheme("Night").then(() => { renderAll(); });
   fitView();
   toast("left = APen · right = BPen · touch pans, never paints · flip pen = eraser");
 }

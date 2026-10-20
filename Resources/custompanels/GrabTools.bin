@@ -1,0 +1,29 @@
+﻿[ToolBox]
+0_collapsed=0
+2_type=2
+1_type=1
+0_type=1
+1_text=Grab Tool with Colors
+0_text=Grab Tool only
+0_count=1
+0_keyboardshortcut=2c24d128-8952-b344-94b5-41dc34142a5c
+1_keyboardshortcut=1d1fe17a-9b8b-194f-9afe-2daf6c808f2a
+_h=88
+_count=3
+1_count=1
+2_keyboardshortcut=c220e1f3-7a3e-0c42-a7b8-b90f2dd9c9a5
+_w=191
+_x=876
+1_file=_5f54e955-f6f5-4f5c-8d5f-b3706f607097.dip
+_y=592
+_editable=0
+0_file=_ee5fda86-fd2d-4a7b-9a41-bdfcc4a3e592.dip
+_showtext=1
+2_count=0
+_name=Grab Tools Panel
+_id=fd6a7a08-e4a6-2e41-8e89-8a0c07b69bde
+1_cmd0=Grab:ABPen
+2_collapsed=0
+0_cmd0=Grab:
+1_collapsed=0
+

@@ -1,0 +1,44 @@
+﻿[ToolBox]
+0_collapsed=0
+2_type=1
+1_type=4
+2_text=Red Penbrush
+0_type=1
+0_text=Load
+0_count=2
+0_keyboardshortcut=fbb03361-fab7-734e-88c0-7ac0276e6a33
+4_count=1
+1_keyboardshortcut=d019072b-d94d-ec44-aaf8-f12cde6ddac5
+_h=93
+4_file=_3dccad8b-d786-4b78-8c19-56c089303e3f.dip
+_count=5
+1_count=0
+2_file=_1155e889-1dd8-46bd-86a9-08463da47c47.dip
+2_keyboardshortcut=2358c8da-f939-604b-a66f-f5043bdcaa3f
+_w=185
+_x=40
+_y=132
+_editable=1
+0_file=_655c01aa-723c-4a18-983e-95f4c6577506.dip
+3_keyboardshortcut=18ab1a5a-f913-734e-b274-ad19addee156
+_showtext=1
+2_count=4
+4_keyboardshortcut=8db7aaf1-31fe-e74f-b368-2f136189556e
+4_cmd0=EmbeddedGrg://get the path of the current project\xtv_ProjectInfo\xParse result pathfile tmp\x\x//check if there is an imported project\xif len( pathfile ) <= 1 \x    tv_warn "No imported project"\x    exit\xend\x\x//try to find the extension of the imported project\x//and store the index of the character before the '.'\xhas_extension = 0\xindex = 1\xfor i=len(pathfile) to 1 step -1\x    t = CHAR(pathfile, i)\x    if ( cmp( t, "." ) != 0 )\x        has_extension = 1\x        index = i-1\x        i = 0\x    end\x    if ( cmp( t, "/" ) != 0 || cmp( t, "\" ) != 0 )\x        has_extension = 0\x        index = i+1\x        i = 0\x    end\xend\x\x//check if there is a name before the extension\xt = CHAR( pathfile, index )\xif ( cmp( t, '/' ) != 0 || cmp( t, "\" ) != 0 )\x    tv_warn "File without name before its extension !!!"\x    exit\xend\x\x//remove the extension if there is one\xif has_extension == 1 \x    pathfile = cut( pathfile, 1, index )\xend\x\x//additional suffixe of the exported file\xnote = " (noted)"\x//final name of the exported file\xpathfile = pathfile""note\x\x////////////////////////////////////////////////////////////////////////////////\x\ximage = 1\xfor i=0 to 10000\x    tv_LayerGetID i\x    id = result\x\x    if cmp( id, "none" ) != 0\x        i = 10001\x    else\x        tv_LayerInfo id\x        Parse result display position opacity name type lstart lend more\x\x        count = lend - lstart + 1\x        if ( count > 1 )\x            image = 0\x            i = 10001\x        end\x    end\xend\x\x//set the parameters of the export\xif ( image == 1 )\x    tv_savemode jpg 80\xelse\x    tv_savemode avi mjpg 50\xend\x\x////////////////////////////////////////////////////////////////////////////////\x\x//display the exported file path and export the project to this file\xtv_warn "Export to: "pathfile\xtv_SaveSequence '"'pathfile'"'\x\x\x
+_name=Correction
+_id=b1f1ee37-6570-4e42-b020-8d90e44e7629
+2_cmd0=Tool:tv_penbrush mode "color" size 5.000000 power 100 opacity 100 dry 1 aaliasing 1 gradient 0 csize "10;2 0 1 0 0 1 1 " cpower "0;2 0 1 0 0 1 1 " 
+2_cmd1=ColorA: 255 0 0
+2_cmd2=ColorB: 1 255 227
+4_collapsed=0
+2_cmd3=cmd: tv_paper Active 0
+4_type=1
+3_collapsed=0
+2_collapsed=0
+3_type=4
+4_text=Export
+0_cmd0=Key:ImportProject
+0_cmd1=EmbeddedGrg:tv_undoOpenstack\x\xtv_LayerCreate "correction"\xid = result\x\xtv_LayerAnim id\xtv_LayerSet id\xtv_LayerMove 0\x\xtv_undoCloseStack "New Correction Layer"\x
+1_collapsed=0
+3_count=0
+

@@ -6,28 +6,80 @@
 <style>
   * { box-sizing: border-box; user-select: none; }
   html, body { margin: 0; height: 100vh; overflow: hidden;
-    font: 12px/1.35 "Segoe UI", sans-serif; background: #1e2023; color: #b9bfc6; }
+    font: 12px/1.35 "Segoe UI", sans-serif; background: #1e2023; color: var(--tv-text); }
   #app { display: grid; height: 100vh; grid-template-rows: 24px 32px 1fr 320px 26px; }
 
+  /* the colours of TVPaint's own Night scheme - scheme.js overwrites them with
+     the values read from Resources/colorschemes/Night.ini */
+  :root {
+    --tv-border: rgb(43,43,48);
+    --tv-camera: rgb(128,128,255);
+    --tv-desktop: rgb(49,49,54);
+    --tv-document: rgb(45,45,50);
+    --tv-action: rgb(70,70,77);
+    --tv-action-selected: rgb(62,71,107);
+    --tv-gadget-border: rgb(43,43,48);
+    --tv-gadget: rgb(49,49,54);
+    --tv-default: rgb(49,49,54);
+    --tv-default-invert: rgb(45,45,50);
+    --tv-default-selected: rgb(49,49,54);
+    --tv-dialog: rgb(70,70,77);
+    --tv-dialog-selected: rgb(62,71,107);
+    --tv-element-current: rgb(60,60,67);
+    --tv-element: rgb(49,49,54);
+    --tv-stat: rgb(70,70,77);
+    --tv-stat-selected: rgb(62,71,107);
+    --tv-tabs: rgb(70,70,77);
+    --tv-tabs-selected: rgb(62,71,107);
+    --tv-tabs-text: rgb(182,182,182);
+    --tv-text-bg: rgb(70,70,77);
+    --tv-text: rgb(182,182,182);
+    --tv-text-out: rgb(182,182,182);
+    --tv-toolbar: rgb(92,92,92);
+    --tv-toolbar-selected: rgb(115,115,115);
+    --tv-layer-empty: rgb(49,49,54);
+    --tv-layer-handle1: rgb(90,90,97);
+    --tv-layer-handle2: rgb(110,110,117);
+    --tv-layer-grabbed: rgb(90,102,204);
+    --tv-shortcut: rgb(112,121,157);
+    --tv-notes: rgb(80,80,87);
+    --tv-notification: rgb(137,143,166);
+    --tv-notification-text: rgb(10,10,10);
+    --tv-req-bg: rgb(49,49,54);
+    --tv-req-outline-dark: rgb(43,43,48);
+    --tv-req-outline-light: rgb(49,49,54);
+    --tv-req-outline: rgb(43,43,48);
+    --tv-req-selected: rgb(62,71,107);
+    --tv-req-system: rgb(49,49,54);
+    --tv-req-system-selected: rgb(62,71,107);
+    --tv-req-title: rgb(137,137,137);
+    --tv-key-found: rgb(129,170,201);
+    --tv-key-inuse: rgb(240,208,146);
+    --tv-key-text: rgb(182,182,182);
+    --tv-key-selected: rgb(62,71,107);
+    --tv-tooltip: rgb(137,143,166);
+    --tv-tooltip-text: rgb(10,10,10);
+  }
+
   /* ---- menu bar (TVPaint 12: y 31..47, background 45,45,50) ---- */
-  #menubar { background: #2d2d32; display: flex; align-items: center; padding: 0 8px;
+  #menubar { background: var(--tv-document); display: flex; align-items: center; padding: 0 8px;
     height: 18px; position: relative; }
   .menu-t { padding: 0 8px; cursor: default; position: relative; font-size: 12px;
-    line-height: 18px; color: #b9bfc6; }
-  .menu-t:hover, .menu-t.open { background: #3d5666; }
+    line-height: 18px; color: var(--tv-text); }
+  .menu-t:hover, .menu-t.open { background: var(--tv-action-selected); }
   .menu-dd { position: absolute; top: 100%; left: 0; min-width: 230px; z-index: 50;
-    background: #2f3237; border: 1px solid #2D2D32; border-radius: 4px;
+    background: #2f3237; border: 1px solid var(--tv-document); border-radius: 4px;
     box-shadow: 0 8px 24px #0009; padding: 3px; display: none; }
   .menu-t.open .menu-dd { display: block; }
   .menu-dd .mi { padding: 4px 16px; cursor: pointer; white-space: nowrap; }
-  .menu-dd .mi:hover { background: #3d5666; }
-  .menu-dd .msep { height: 1px; background: #2D2D32; margin: 3px 6px; }
+  .menu-dd .mi:hover { background: var(--tv-action-selected); }
+  .menu-dd .msep { height: 1px; background: var(--tv-document); margin: 3px 6px; }
   .menu-dd .mdis { color: #6E6E75; cursor: default; }
   .menu-dd .mdis:hover { background: none; }
 
   /* ---- tool toolbar row (TVPaint 12: y 48..80, background 49,49,54) ---- */
-  #toolbar { background: #313136; position: relative; height: 33px;
-    border-bottom: 1px solid #2B2B30; }
+  #toolbar { background: var(--tv-desktop); position: relative; height: 33px;
+    border-bottom: 1px solid var(--tv-gadget-border); }
   .sep { width: 1px; height: 20px; background: #43484e; margin: 0 5px; }
   .tib { position: absolute; top: 6px; width: auto; min-width: 16px; height: 22px;
     border: 0; background: none; border-radius: 2px; padding: 0; cursor: pointer;
@@ -36,33 +88,33 @@
   .tib.sel { top: 4px; height: 24px; }
   .tib.sel img { height: 20px; }
   .tbSel { position: absolute; top: 3px; width: 96px; height: 27px;
-    background: #3E476B; border-radius: 2px; }
+    background: var(--tv-action-selected); border-radius: 2px; }
   .tib:hover { background: #3d4249; }
-  .tib.on { background: #3d5666; }
-  #projTab { background: #40454c; color: #B6B6B6; border-radius: 3px; padding: 3px 26px 3px 10px;
+  .tib.on { background: var(--tv-action-selected); }
+  #projTab { background: #40454c; color: var(--tv-text); border-radius: 3px; padding: 3px 26px 3px 10px;
     position: absolute; left: 780px; top: 5px; font-size: 12px; }
   #projTab button { position: absolute; right: 4px; top: 3px; background: none; border: 0;
-    color: #898989; cursor: pointer; }
+    color: var(--tv-text-out); cursor: pointer; }
   #purchase { position: absolute; left: 620px; top: 7px; border: 1.5px solid #b7bec7;
-    color: #B6B6B6; font-weight: 700; background: #313136; border-radius: 3px;
+    color: var(--tv-text); font-weight: 700; background: var(--tv-desktop); border-radius: 3px;
     padding: 2px 12px; font-size: 13px; letter-spacing: .06em; cursor: pointer; }
 
   /* ---- work area (TVPaint 12: the left column is 215 px wide) ---- */
   #workarea { display: grid; grid-template-columns: 215px 1fr; min-height: 0; }
-  #panels { background: #313136; border-right: 1px solid #2B2B30; overflow-y: auto;
+  #panels { background: var(--tv-desktop); border-right: 1px solid var(--tv-gadget-border); overflow-y: auto;
     display: flex; flex-direction: column; }
-  #panels::-webkit-scrollbar { width: 9px; background: #2b2b30; }
-  #panels::-webkit-scrollbar-thumb { background: #4a4a51; border-radius: 4px; }
-  .panel { border-bottom: 1px solid #2B2B30; display: flex; flex-direction: column; }
+  #panels::-webkit-scrollbar { width: 9px; background: var(--tv-gadget-border); }
+  #panels::-webkit-scrollbar-thumb { background: var(--tv-stat); border-radius: 4px; }
+  .panel { border-bottom: 1px solid var(--tv-gadget-border); display: flex; flex-direction: column; }
   /* TVPaint 12 panel header: background 49,49,54, the title in the muted
      blue-grey 99,125,137, the dot / chevron / close / lock on the right */
-  .phead { background: #313136; display: flex; align-items: center; gap: 6px;
-    padding: 0 6px; height: 25px; border-bottom: 1px solid #2B2B30; }
+  .phead { background: var(--tv-desktop); display: flex; align-items: center; gap: 6px;
+    padding: 0 6px; height: 25px; border-bottom: 1px solid var(--tv-gadget-border); }
   .phead .pt { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    color: #637D89; font-size: 12px; }
-  .pw { background: none; border: 0; color: #898989; cursor: pointer; width: 16px;
+    color: var(--tv-req-title); font-size: 12px; }
+  .pw { background: none; border: 0; color: var(--tv-text-out); cursor: pointer; width: 16px;
     padding: 0; font-size: 10px; }
-  .pw:hover { color: #B6B6B6; }
+  .pw:hover { color: var(--tv-text); }
   .pbody { padding: 6px; overflow: hidden; }
   /* the Camera[Pro] rows are right aligned and fit the 215 px column */
   .camopts .orow { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
@@ -74,155 +126,155 @@
   /* the tab bar of the left dock (TVPaint: a floating panel dropped on it
      becomes a tab next to "Main Panel") */
   #tabbar { display: flex; align-items: center; gap: 2px; padding: 3px 4px;
-    background: #313136; border-bottom: 1px solid #2B2B30; min-height: 22px;
+    background: var(--tv-desktop); border-bottom: 1px solid var(--tv-gadget-border); min-height: 22px;
     flex-wrap: nowrap; overflow: hidden; }
-  #tabbar.over { background: #3E476B; }
-  #tabbar .ptab { padding: 2px 8px; color: #637D89; font-size: 12px; cursor: pointer;
+  #tabbar.over { background: var(--tv-action-selected); }
+  #tabbar .ptab { padding: 2px 8px; color: var(--tv-req-title); font-size: 12px; cursor: pointer;
     border-radius: 3px 3px 0 0; white-space: nowrap; flex: 0 0 auto; }
-  #tabbar .ptab.on { color: #c8d2da; background: #3a3a40; }
+  #tabbar .ptab.on { color: #c8d2da; background: var(--tv-gadget); }
   #tabbar .pw { flex: 0 0 auto; }
   .pwin { display: none; }
 
   /* ---- floating panels (TVPaint: the panel header's chevron floats the panel
          over the project window; clicking it again docks it back) ---- */
   #floatLayer { position: absolute; inset: 0; pointer-events: none; z-index: 60; }
-  .floatpanel { position: absolute; pointer-events: auto; background: #313136;
-    border: 1px solid #5a5a61; box-shadow: 0 10px 30px #000a; min-width: 150px;
+  .floatpanel { position: absolute; pointer-events: auto; background: var(--tv-desktop);
+    border: 1px solid var(--tv-stat); box-shadow: 0 10px 30px #000a; min-width: 150px;
     display: flex; flex-direction: column; }
-  .floatpanel .phead { background: #313136; cursor: move; }
+  .floatpanel .phead { background: var(--tv-desktop); cursor: move; }
   .floatpanel .pbody { padding: 8px; overflow: auto; }
-  .floatpanel .pt { color: #b9bfc6; }
+  .floatpanel .pt { color: var(--tv-text); }
 
   /* ---- the project window information bar (TVPaint 12, y 83..107) ---- */
-  #infobar { background: #313136; height: 25px; display: flex; align-items: center;
-    gap: 6px; padding: 0 8px; font-size: 12px; color: #637D89;
-    border-bottom: 1px solid #2B2B30; white-space: nowrap; overflow: hidden; }
+  #infobar { background: var(--tv-desktop); height: 25px; display: flex; align-items: center;
+    gap: 6px; padding: 0 8px; font-size: 12px; color: var(--tv-req-title);
+    border-bottom: 1px solid var(--tv-gadget-border); white-space: nowrap; overflow: hidden; }
   #infobar .ibk { color: #56707d; }
   #infobar .ibv { color: #7d94a2; }
 
   .toolgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
   .toolgrid.g6 { grid-template-columns: repeat(6, 1fr); }
-  .tbtn { background: #313136; border: 1px solid #2B2B30; border-radius: 3px; padding: 3px;
+  .tbtn { background: var(--tv-desktop); border: 1px solid var(--tv-gadget-border); border-radius: 3px; padding: 3px;
     cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .tbtn img { width: 20px; height: 20px; }
   .tbtn:hover { background: #3d4249; }
-  .tbtn.on { background: #3d5666; border-color: #6fa8c9; }
+  .tbtn.on { background: var(--tv-action-selected); border-color: #6fa8c9; }
   .tbtn.dis { opacity: .3; }
 
   .orow { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
   .orow label { flex: 0 0 112px; color: #aab1b8; }
   .orow input[type=number], .orow select, .orow input[type=text] {
-    background: #2D2D32; color: #B6B6B6; border: 1px solid #2B2B30; border-radius: 3px;
+    background: var(--tv-document); color: var(--tv-text); border: 1px solid var(--tv-gadget-border); border-radius: 3px;
     padding: 2px 4px; width: 86px; flex: none; }
-  .orow .badge { background: #3E476B; border-radius: 2px; padding: 0 3px; color: #9fe0ff;
+  .orow .badge { background: var(--tv-action-selected); border-radius: 2px; padding: 0 3px; color: #9fe0ff;
     font-size: 10px; }
   .orow input[type=checkbox] { margin-left: auto; }
-  .revbtn { background: #3E476B; border: 1px solid #2B2B30; border-radius: 3px;
-    color: #B6B6B6; padding: 3px 14px; cursor: pointer; }
+  .revbtn { background: var(--tv-action-selected); border: 1px solid var(--tv-gadget-border); border-radius: 3px;
+    color: var(--tv-text); padding: 3px 14px; cursor: pointer; }
   .revbtn:hover { background: #454b52; }
   /* per-layer playback control (REA: ✓ None / Loop / Ping-Pong / Hold) */
-  .pbBtn { background: #2D2D32; color: #B6B6B6; border: 1px solid #2B2B30; border-radius: 3px;
+  .pbBtn { background: var(--tv-document); color: var(--tv-text); border: 1px solid var(--tv-gadget-border); border-radius: 3px;
     font-size: 9px; line-height: 14px; padding: 0 3px; height: 16px; cursor: pointer; flex: none; }
-  .pbBtn:hover { background: #3E476B; }
-  .pbmenu { position: fixed; z-index: 400; background: #313136; border: 1px solid #5A5A61;
-    box-shadow: 0 3px 10px #000a; padding: 2px 0; min-width: 92px; color: #B6B6B6; font-size: 11px; }
-  .pbmenu .pbhead { padding: 3px 8px; color: #d0d0d4; font-weight: 600; font-size: 11px;
-    border-bottom: 1px solid #4a4a51; margin-bottom: 2px; }
+  .pbBtn:hover { background: var(--tv-action-selected); }
+  .pbmenu { position: fixed; z-index: 400; background: var(--tv-desktop); border: 1px solid var(--tv-stat);
+    box-shadow: 0 3px 10px #000a; padding: 2px 0; min-width: 92px; color: var(--tv-text); font-size: 11px; }
+  .pbmenu .pbhead { padding: 3px 8px; color: var(--tv-text); font-weight: 600; font-size: 11px;
+    border-bottom: 1px solid var(--tv-stat); margin-bottom: 2px; }
   .pbmenu .pbi { padding: 3px 8px; cursor: pointer; white-space: nowrap; display: flex; gap: 6px; }
-  .pbmenu .pbi:hover { background: #3E476B; }
+  .pbmenu .pbi:hover { background: var(--tv-action-selected); }
   .pbmenu .pbi .chk { width: 10px; display: inline-block; }
   /* Increase Layer Length dialog */
   .llmodes { display: flex; flex-direction: column; gap: 3px; margin: 2px 0 6px; }
-  .llmode { display: flex; align-items: center; gap: 6px; background: #3E476B; border: 1px solid #2B2B30;
+  .llmode { display: flex; align-items: center; gap: 6px; background: var(--tv-action-selected); border: 1px solid var(--tv-gadget-border);
     border-radius: 3px; padding: 3px 8px; cursor: pointer; }
   .llmode:hover { background: #454b52; }
   .llmode.dis { color: #6E6E75; background: #33333a; cursor: default; }
   .llopt { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
   .llopt input[type=checkbox] { margin: 0; }
   .tabs { display: flex; gap: 2px; margin: 4px 0; }
-  .tabs .tab { background: #313136; border: 1px solid #2B2B30; border-bottom: 0;
+  .tabs .tab { background: var(--tv-desktop); border: 1px solid var(--tv-gadget-border); border-bottom: 0;
     border-radius: 4px 4px 0 0; padding: 3px 14px; cursor: pointer; }
-  .tabs .tab.on { background: #3E476B; color: #B6B6B6; }
+  .tabs .tab.on { background: var(--tv-action-selected); color: var(--tv-text); }
 
   #cwrap { display: grid; grid-template-rows: 25px 1fr 22px; min-height: 0; min-width: 0; }
-  #viewport { position: relative; background: #313136; overflow: hidden; min-width: 0; }
+  #viewport { position: relative; background: var(--tv-desktop); overflow: hidden; min-width: 0; }
   #art, #ovl { position: absolute; left: 0; top: 0; }
   #ovl { touch-action: none; cursor: crosshair; }
-  #vbRow { background: #313136; border-top: 1px solid #2B2B30; display: flex;
+  #vbRow { background: var(--tv-desktop); border-top: 1px solid var(--tv-gadget-border); display: flex;
     align-items: center; gap: 8px; padding: 0 8px; overflow: hidden; }
   #canvasScroll { flex: 1; height: 6px; background: #232327; border-radius: 3px; position: relative;
     overflow: hidden; margin-right: 20px; }
-  #canvasScrollThumb { position: absolute; left: 0; top: 0; bottom: 0; width: 34%; background: #55555c;
+  #canvasScrollThumb { position: absolute; left: 0; top: 0; bottom: 0; width: 34%; background: var(--tv-stat);
     border-radius: 3px; }
-  #vbRight { display: flex; align-items: center; gap: 6px; color: #898989; font-size: 11px; }
-  #vbRight .vbrot { color: #8a8a90; font-size: 13px; }
+  #vbRight { display: flex; align-items: center; gap: 6px; color: var(--tv-text-out); font-size: 11px; }
+  #vbRight .vbrot { color: var(--tv-text-out); font-size: 13px; }
   #vbRight #zoomLbl { min-width: 44px; text-align: right; }
   #vbRow .tib { width: 24px; height: 22px; }
   #ovBar { height: 10px; background: #232327; border-radius: 5px; position: relative; overflow: hidden;
-    flex: 1 1 auto; min-width: 80px; margin: 0 6px; border: 1px solid #2B2B30; }
-  #ovFill { position: absolute; top: 0; bottom: 0; background: #3E476B; }
+    flex: 1 1 auto; min-width: 80px; margin: 0 6px; border: 1px solid var(--tv-gadget-border); }
+  #ovFill { position: absolute; top: 0; bottom: 0; background: var(--tv-action-selected); }
   #ovIn, #ovOut, #ovMark { position: absolute; top: 0; bottom: 0; width: 2px; }
   #ovIn { background: #3f7a3f; } #ovOut { background: #8a3f3f; } #ovMark { background: #F0D092; }
   #vbRow .tib { width: 24px; height: 22px; }
-  #dispSel { width: 84px; background: #2D2D32; color: #B6B6B6; border: 1px solid #2B2B30;
+  #dispSel { width: 84px; background: var(--tv-document); color: var(--tv-text); border: 1px solid var(--tv-gadget-border);
     border-radius: 3px; padding: 2px 4px; }
   #zoomIn, #zoomOut { width: 16px; height: 16px; }
   #zoomLbl { min-width: 44px; text-align: left; color: #aab1b8; }
 
   /* ---- timeline panel (verified pixel-by-pixel against TVPaint 12.1.0 Pro Demo) ---- */
-  #tlpanel { background: #313136; border-top: 1px solid #2B2B30; display: flex;
+  #tlpanel { background: var(--tv-desktop); border-top: 1px solid var(--tv-gadget-border); display: flex;
     flex-direction: column; min-height: 0; }
-  #tlTabsRow { display: flex; align-items: center; justify-content: center; background: #313136;
-    border-bottom: 1px solid #2B2B30; padding: 0 8px; height: 20px; flex: none; }
-  #tlInfoRow { text-align: center; color: #898989; font-size: 11px; margin: 0 auto;
+  #tlTabsRow { display: flex; align-items: center; justify-content: center; background: var(--tv-desktop);
+    border-bottom: 1px solid var(--tv-gadget-border); padding: 0 8px; height: 20px; flex: none; }
+  #tlInfoRow { text-align: center; color: var(--tv-text-out); font-size: 11px; margin: 0 auto;
     white-space: nowrap; overflow: hidden; padding: 0 2px; }
   #tlInfoRow span { margin: 0 13px; }
   /* 395 px left column = 355 px layer panel + 40 px separator column (⊘) */
   #tlBody { flex: 1; display: grid; grid-template-columns: 395px 1fr; min-height: 0; }
-  #tlLeft { overflow: hidden; padding: 0; position: relative; background: #313136; }
-  .lsep { position: absolute; right: 0; top: 0; bottom: 0; width: 50px; background: #2D2D32;
-    border-left: 1px solid #2B2B30; z-index: 1; }
+  #tlLeft { overflow: hidden; padding: 0; position: relative; background: var(--tv-desktop); }
+  .lsep { position: absolute; right: 0; top: 0; bottom: 0; width: 50px; background: var(--tv-document);
+    border-left: 1px solid var(--tv-gadget-border); z-index: 1; }
   .lsep::before { content: ""; position: absolute; left: 2px; top: 0; bottom: 0; width: 10px;
-    background: #3a3a41; border-left: 1px solid #4a4a51; border-right: 1px solid #26262b; }
+    background: var(--tv-gadget); border-left: 1px solid var(--tv-stat); border-right: 1px solid #26262b; }
   .lsep .pin { position: absolute; left: 26px; transform: translateX(-50%); top: 46px; height: 60px;
     display: flex; align-items: center; color: #7c8288; font-size: 15px; }
-  .lhead { height: 29px; width: 345px; box-sizing: border-box; border-bottom: 1px solid #2B2B30;
+  .lhead { height: 29px; width: 345px; box-sizing: border-box; border-bottom: 1px solid var(--tv-gadget-border);
     display: flex; flex-direction: row; align-items: center; gap: 5px; padding: 0 4px; overflow: hidden;
     position: relative; z-index: 2; }
   .lhead.withcam { height: 46px; }
   .ltabs { display: flex; align-items: center; gap: 2px; flex: none; }
-  .ltabs .tab { background: #46464D; border-radius: 4px; padding: 2px 9px; cursor: pointer;
+  .ltabs .tab { background: var(--tv-element); border-radius: 4px; padding: 2px 9px; cursor: pointer;
     color: #c6c6cc; font-size: 11px; white-space: nowrap; }
-  .ltabs .tab.on { background: #3E476B; color: #dcdce6; }
+  .ltabs .tab.on { background: var(--tv-action-selected); color: #dcdce6; }
   .lhiconsrow { height: 17px; width: 345px; box-sizing: border-box; display: flex; align-items: center;
-    border-bottom: 1px solid #2B2B30; position: relative; z-index: 2; overflow: hidden; }
+    border-bottom: 1px solid var(--tv-gadget-border); position: relative; z-index: 2; overflow: hidden; }
   .lhicons { display: flex; align-items: center; gap: 1px; height: 17px; flex: 1 1 auto;
     min-width: 0; padding: 0 3px; }
   .lhicons img.sq { width: 14px; height: 14px; display: block; filter: invert(.35); }
-  .lhicons .vsep { width: 1px; height: 12px; background: #4a4a51; margin: 0 2px; }
+  .lhicons .vsep { width: 1px; height: 12px; background: var(--tv-stat); margin: 0 2px; }
   .lhicons .hbtn { background: none; border: 0; padding: 0; cursor: pointer; display: flex; }
   .lhicons .hbtn img { width: 15px; height: 15px; display: block; filter: invert(.35); }
   .lhicons .hbtn img[src*="DeleteLayer"] { filter: none; }
   .minib.newbtn { margin-left: 5px; display: flex; align-items: center; gap: 5px;
-    background: #3a3a40; border: 1px solid #4a4a51; border-radius: 9px; color: #c8c8cc;
+    background: var(--tv-gadget); border: 1px solid var(--tv-stat); border-radius: 9px; color: var(--tv-text);
     font-size: 10px; padding: 0 4px 0 8px; cursor: pointer; height: 16px; }
   .minirow { display: flex; gap: 4px; padding: 2px 5px; }
-  .minirow .minib { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 3px;
-    color: #b6b6bc; font-size: 10px; height: 18px; padding: 0 7px; cursor: pointer; }
-  .minirow .minib:hover { background: #46464D; color: #dcdce6; }
-  .minib.newbtn .arrow { width: 12px; height: 12px; border-radius: 50%; background: #55555c;
-    color: #d0d0d4; font-size: 8px; display: flex; align-items: center; justify-content: center; }
+  .minirow .minib { background: var(--tv-gadget); border: 1px solid var(--tv-stat); border-radius: 3px;
+    color: var(--tv-text); font-size: 10px; height: 18px; padding: 0 7px; cursor: pointer; }
+  .minirow .minib:hover { background: var(--tv-element); color: #dcdce6; }
+  .minib.newbtn .arrow { width: 12px; height: 12px; border-radius: 50%; background: var(--tv-stat);
+    color: var(--tv-text); font-size: 8px; display: flex; align-items: center; justify-content: center; }
   .lhicons .hsp { flex: 1 1 auto; }
   .lhicons .flag { background: none; border: 0; padding: 0; cursor: pointer; display: flex; }
   .lhicons .flag img { width: 14px; height: 14px; filter: invert(.85); }
   .lhicons .flag.off img { opacity: .4; }
-  .llayer { height: 60px; width: 345px; box-sizing: border-box; border-bottom: 1px solid #2B2B30;
+  .llayer { height: 60px; width: 345px; box-sizing: border-box; border-bottom: 1px solid var(--tv-gadget-border);
     display: flex; flex-direction: column; position: relative; z-index: 2; cursor: pointer; }
-  .llayer .lrowbg { position: absolute; left: 27px; right: 0; top: 0; bottom: 0; background: #313136; z-index: 0; }
-  .llayer.cur .lrowbg { background: #3C3C43; }
+  .llayer .lrowbg { position: absolute; left: 27px; right: 0; top: 0; bottom: 0; background: var(--tv-desktop); z-index: 0; }
+  .llayer.cur .lrowbg { background: var(--tv-element); }
   .llayer .lname { height: 19px; display: flex; align-items: center; gap: 4px; padding: 0 3px 0 44px;
     position: relative; z-index: 1; }
-  .llayer .lminus { color: #9a9aa0; font-size: 11px; line-height: 1; }
+  .llayer .lminus { color: var(--tv-text-out); font-size: 11px; line-height: 1; }
   .llayer .lname .nm { flex: 1; font-size: 12px; color: #b8b8be; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; }
   .llayer .lname .lmore { opacity: .7; display: flex; cursor: pointer; }
@@ -233,13 +285,13 @@
   .llayer .ltype { position: absolute; left: 8px; top: 6px; width: 18px; height: 18px;
     opacity: .95; z-index: 2; filter: invert(.8); cursor: grab; }
   .llayer.droptarget { outline: 1px solid #5A66CC; outline-offset: -1px; }
-  .llayer.droptarget .lrowbg { background: #3E476B; }
+  .llayer.droptarget .lrowbg { background: var(--tv-action-selected); }
   .llayer .lthumb { grid-column: 1; grid-row: 1 / span 2; width: 52px; height: 26px; background: #fff;
-    border: 1px solid #2B2B30; border-radius: 2px; margin-top: 0; }
+    border: 1px solid var(--tv-gadget-border); border-radius: 2px; margin-top: 0; }
   .llayer .lmid { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column;
     gap: 0; min-width: 0; padding-left: 0; }
   .llayer .lplay { display: flex; align-items: center; gap: 1px; height: 18px; }
-  .llayer .lplay .dot { width: 5px; height: 5px; border-radius: 50%; background: #55555c; margin-right: 4px; }
+  .llayer .lplay .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--tv-stat); margin-right: 4px; }
   .llayer .lplay button { background: none; border: 0; padding: 0; cursor: pointer; opacity: .85; display: flex; }
   .llayer .lplay img { width: 16px; height: 16px; display: block; filter: invert(.75); }
   .llayer .lplay .looppb { margin-left: 3px; }
@@ -253,9 +305,9 @@
   .llayer .lflags img { width: 15px; height: 15px; filter: invert(.85); }
   .llayer .lflags .flag.off img { opacity: .4; }
   .llayer .dots { display: flex; gap: 6px; padding-bottom: 3px; }
-  .llayer .dots i { width: 5px; height: 5px; border-radius: 50%; background: #5a5a61; display: block; }
+  .llayer .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--tv-stat); display: block; }
   .llayer .lop { grid-column: 3; grid-row: 2; display: flex; align-items: center; gap: 3px; margin-top: 2px;
-    background: #2D2D32; border: 1px solid #2B2B30; border-radius: 3px; height: 16px; padding: 0 3px; }
+    background: var(--tv-document); border: 1px solid var(--tv-gadget-border); border-radius: 3px; height: 16px; padding: 0 3px; }
   .llayer .lop span { font-size: 10px; color: #9a9a9f; }
   .llayer .lop input[type=range] { flex: 1; height: 3px; min-width: 16px; -webkit-appearance: none;
     appearance: none; background: transparent; }
@@ -263,55 +315,55 @@
     border-radius: 2px; }
   .llayer .lop input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 8px;
     margin-top: -2.5px; border-radius: 50%; background: #cfcfd4; }
-  .llayer .lop .lval { font-size: 10px; color: #c8c8cc; }
+  .llayer .lop .lval { font-size: 10px; color: var(--tv-text); }
   .camrow { height: 17px; padding: 0 6px; gap: 3px; flex: none; display: flex; align-items: center;
-    background: #3C3C43; border-bottom: 1px solid #2B2B30; width: 345px; box-sizing: border-box; }
+    background: var(--tv-element); border-bottom: 1px solid var(--tv-gadget-border); width: 345px; box-sizing: border-box; }
   .camrow .nm { flex: 1; font-size: 11px; }
   .camrow .sq { width: 13px; height: 13px; opacity: .9; }
-  .camrow .lminus { color: #9a9aa0; font-size: 11px; line-height: 1; }
+  .camrow .lminus { color: var(--tv-text-out); font-size: 11px; line-height: 1; }
   .camrow .lmore { opacity: .75; font-size: 12px; cursor: pointer; }
-  .camrow .lmid-dot { width: 5px; height: 5px; border-radius: 50%; background: #55555c; }
+  .camrow .lmid-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--tv-stat); }
   .camrow.speed { background: #33333a; }
   .camrow.speed .nm { color: #a8a8ae; }
   /* camera key frames: green mark in the rulers and in the camera row */
   .tick .camkeymark { position: absolute; left: 0; bottom: 0; width: 100%; height: 2px; background: #4f9a5a; }
   /* live camera row: a thin "+" glyph per camera key, yellow on the current image */
   .cell.camcell .camplus { position: absolute; left: 50%; top: 10px; transform: translate(-50%, -50%);
-    font-size: 15px; line-height: 1; font-style: normal; color: #c9c9cf; z-index: 3; cursor: grab; }
-  .cell.camcell .camplus.cur { color: #e3d24a; }
+    font-size: 15px; line-height: 1; font-style: normal; color: var(--tv-text); z-index: 3; cursor: grab; }
+  .cell.camcell .camplus.cur { color: var(--tv-key-inuse); }
   .cell.camcell .camplus.drag { color: #9fd0ff; }
-  .cell.camcell .camplus.drop { color: #e3d24a; }
+  .cell.camcell .camplus.drop { color: var(--tv-key-inuse); }
   .strip.cam { height: 20px; }
   .strip.cam .cell { height: 20px; }
-  .strip.cam .cell .plus { color: #e3d24a; }
-  .strip.cam .camrange { position: absolute; top: 1px; bottom: 1px; border: 1px solid #5a5a61;
+  .strip.cam .cell .plus { color: var(--tv-key-inuse); }
+  .strip.cam .camrange { position: absolute; top: 1px; bottom: 1px; border: 1px solid var(--tv-stat);
     border-left-width: 0; border-right-width: 0; z-index: 1; pointer-events: none; }
   .cell.camcell.keyw::before { content: ""; position: absolute; left: 0; top: 0; width: var(--cw, 40px); height: 40px;
-    background: linear-gradient(#2B2B30, #3A3A3F 42%, #3A3A3F 58%, #2B2B30); z-index: 0; }
+    background: linear-gradient(var(--tv-gadget-border), var(--tv-gadget) 42%, var(--tv-gadget) 58%, var(--tv-gadget-border)); z-index: 0; }
   #tlTrack { overflow: auto; position: relative; display: flex; flex-direction: column;
     scrollbar-width: none; -ms-overflow-style: none; }
   #tlTrack::-webkit-scrollbar { width: 0; height: 0; }
-  .ruler { display: flex; height: 17px; flex: none; background: #2D2D32; position: sticky; top: 0;
-    z-index: 6; border-bottom: 1px solid #2B2B30; }
-  .ruler.bot { border-bottom: 0; border-top: 1px solid #2B2B30; position: sticky; bottom: 0;
+  .ruler { display: flex; height: 17px; flex: none; background: var(--tv-document); position: sticky; top: 0;
+    z-index: 6; border-bottom: 1px solid var(--tv-gadget-border); }
+  .ruler.bot { border-bottom: 0; border-top: 1px solid var(--tv-gadget-border); position: sticky; bottom: 0;
     top: auto; z-index: 6; }
   .ruler .tick { width: var(--cw, 40px); min-width: var(--cw, 40px); flex: none; font-size: 11px;
     color: #a4a4aa; position: relative; padding: 1px 0 0 4px; box-sizing: border-box; }
-  .ruler .tick.cur { background: #3E476B; color: #fff; }
+  .ruler .tick.cur { background: var(--tv-action-selected); color: #fff; }
   .ruler .tick.tc { font-size: 9px; padding-left: 2px; letter-spacing: -.2px; overflow: hidden; }
   .ruler .tick.in { color: #7fae7f; }
   .ruler .band { position: absolute; bottom: 0; height: 2px; background: #3d6fd9; pointer-events: none; }
   .ruler .band.green { background: #4f7a4a; }
   .ttopspacer { height: 29px; flex: none; }
   .tlspacer { flex: 1 0 auto; min-height: 0; }
-  .strip { height: 60px; flex: none; display: flex; position: relative; background: #313136;
-    border-bottom: 1px solid #2B2B30; box-sizing: border-box; }
-  .strip.sel { background: #3C3C43; }
+  .strip { height: 60px; flex: none; display: flex; position: relative; background: var(--tv-desktop);
+    border-bottom: 1px solid var(--tv-gadget-border); box-sizing: border-box; }
+  .strip.sel { background: var(--tv-element); }
   .strip .cells { display: flex; height: 40px; flex: none; }
   .cell { width: var(--cw, 40px); min-width: var(--cw, 40px); flex: none; height: 40px; position: relative;
     cursor: pointer; background: transparent; border: 0; }
   .cell.keyw::before { content: ""; position: absolute; left: 0; top: 0; width: var(--cw, 40px); height: 40px;
-    background: linear-gradient(#2B2B30, #3A3A3F 42%, #3A3A3F 58%, #2B2B30);
+    background: linear-gradient(var(--tv-gadget-border), var(--tv-gadget) 42%, var(--tv-gadget) 58%, var(--tv-gadget-border));
     box-shadow: inset 0 1px 0 #77777d; z-index: 0; }
   .cell .cellimg { position: absolute; left: 0; top: 9px; width: var(--cw, 40px); height: 22px;
     background: #fff; border-top: 1px solid #C9C9CE; border-bottom: 1px solid #C9C9CE;
@@ -319,19 +371,19 @@
   .cell .cellimg.empty { background: repeating-conic-gradient(#cfcfcf 0% 25%, #f2f2f2 0% 50%) 0 0 / 8px 8px; }
   .cell .cellimg canvas { display: block; width: var(--cw, 40px); height: 22px; }
   .cell.hold::after { content: ""; position: absolute; left: 50%; top: 20px; width: 40%; max-width: 16px;
-    height: 2px; transform: translate(-50%, -50%); background: #6a6a70; z-index: 1; }
+    height: 2px; transform: translate(-50%, -50%); background: var(--tv-text-out); z-index: 1; }
   .cell.insel { box-shadow: inset 0 0 0 1px #6f8fe8; }
-  .cell.droptarget { box-shadow: inset 0 0 0 2px #5A66CC; background: #3E476B33; }
-  .cell .knum { position: absolute; left: 2px; top: 40px; font-size: 10px; color: #b0b0b6; z-index: 3; }
+  .cell.droptarget { box-shadow: inset 0 0 0 2px #5A66CC; background: var(--tv-action-selected)33; }
+  .cell .knum { position: absolute; left: 2px; top: 40px; font-size: 10px; color: var(--tv-text); z-index: 3; }
   .cell .empin { position: absolute; left: 50%; top: 20px; transform: translate(-50%, -50%);
-    color: #8a8a90; font-size: 15px; z-index: 2; }
+    color: var(--tv-text-out); font-size: 15px; z-index: 2; }
   .cell .plus { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); width: 16px; height: 14px;
     z-index: 5; color: #a7d3a7; background: none; border: 0; font-size: 12px; cursor: pointer; display: none; }
   .strip:hover .cell .plus { display: block; }
-  .expLine { position: absolute; top: 1px; height: 1px; background: #9a9aa0; z-index: 3; pointer-events: none; }
+  .expLine { position: absolute; top: 1px; height: 1px; background: var(--tv-text-out); z-index: 3; pointer-events: none; }
   /* per-instance exposure handles: start = top-left, end = bottom-right (live geometry) */
   .expb { position: absolute; top: 0; height: 40px; z-index: 4; pointer-events: none; }
-  .expb .hstart, .expb .hend { position: absolute; width: 7px; height: 7px; background: #6a6a70;
+  .expb .hstart, .expb .hend { position: absolute; width: 7px; height: 7px; background: var(--tv-text-out);
     border-radius: 1px; pointer-events: auto; cursor: ew-resize; touch-action: none; }
   .expb .hstart { left: 1px; top: 1px; }
   .expb .hend { right: 1px; bottom: 1px; }
@@ -344,7 +396,7 @@
   .expHandle { position: absolute; top: 0; width: 9px; height: 40px; cursor: ew-resize; z-index: 6;
     touch-action: none; }
   .expHandle::after { content: ""; position: absolute; left: 1px; top: 1px; width: 3px; height: 38px;
-    background: #6a6a70; border-radius: 1px; box-shadow: inset 1px 0 #8a8a90; }
+    background: var(--tv-text-out); border-radius: 1px; box-shadow: inset 1px 0 var(--tv-text-out); }
   .blkExp, .blkFrame { display: none; }
   /* red current-image bounds, full track height (verified #CB0B0C in the real app) */
   #curCol { position: absolute; top: 29px; bottom: 0; width: 40px; z-index: 5; pointer-events: none;
@@ -352,27 +404,27 @@
   #curCol::before { display: none; }
   /* ---- transport: two-line Mark In / overview bar + remote icons / two-line Mark Out ---- */
   #tlTransport { display: flex; align-items: stretch; height: 64px; flex: none;
-    background: linear-gradient(#2D2D32 0 25px, #313136 25px 46px, #2D2D32 46px 100%);
-    border-bottom: 1px solid #2B2B30; }
+    background: linear-gradient(var(--tv-document) 0 25px, var(--tv-desktop) 25px 46px, var(--tv-document) 46px 100%);
+    border-bottom: 1px solid var(--tv-gadget-border); }
   .tr-spacer { width: 208px; flex: none; }
   .tr-mark { width: 94px; flex: none; position: relative; }
-  .tr-mark .lbl { position: absolute; left: 0; right: 0; top: 23px; height: 12px; color: #898989;
+  .tr-mark .lbl { position: absolute; left: 0; right: 0; top: 23px; height: 12px; color: var(--tv-text-out);
     font-size: 10px; display: flex; align-items: center; gap: 5px; white-space: nowrap; padding-left: 4px; }
   .tr-mark.right { width: 84px; margin-right: 21px; }
   .tr-mark.right .lbl { justify-content: flex-end; padding: 0 4px 0 0; }
   .tr-mark .mk { color: #9a9a9f; font-size: 11px; }
-  .tr-mark input { position: absolute; left: 0; top: 47px; width: 94px; height: 16px; background: #46464D;
-    color: #c8c8cc; border: 0; border-radius: 1px; padding: 0 5px; font-size: 10px; box-sizing: border-box; }
+  .tr-mark input { position: absolute; left: 0; top: 47px; width: 94px; height: 16px; background: var(--tv-element);
+    color: var(--tv-text); border: 0; border-radius: 1px; padding: 0 5px; font-size: 10px; box-sizing: border-box; }
   .tr-mark.right input { left: auto; right: 0; width: 84px; }
   .tr-center { flex: 1; position: relative; min-width: 0; margin: 0 6px 0 9px; }
   .tr-scroll { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 40%;
     height: 9px; background: transparent; z-index: 3; }
-  #tsThumb { width: 100%; height: 9px; background: #46464D; cursor: grab; }
+  #tsThumb { width: 100%; height: 9px; background: var(--tv-element); cursor: grab; }
   #tsThumb.drag { cursor: grabbing; }
   .tr-center #ovBar { position: absolute; left: 0; right: 0; top: 47px; height: 16px; border-radius: 0;
-    background: #2D2D32; border: 0; margin: 0; overflow: hidden; width: auto; }
+    background: var(--tv-document); border: 0; margin: 0; overflow: hidden; width: auto; }
   #ovFill { display: none; }
-  #ovCur { position: absolute; top: 0; height: 13px; background: #3E476B; }
+  #ovCur { position: absolute; top: 0; height: 13px; background: var(--tv-action-selected); }
   #ovIn { position: absolute; left: 0; bottom: 0; width: 3px; height: 4px; background: #2E7550; }
   #ovOut { position: absolute; left: 0; bottom: 0; width: 3px; height: 4px; background: #6E3550; }
   #ovNum { position: absolute; top: 0; height: 13px; line-height: 13px; color: #6b7390;
@@ -385,109 +437,109 @@
   .tr-btns .tib { width: 22px; height: 22px; padding: 0; }
   .tr-btns .tib img { width: 18px; height: 18px; display: block; filter: invert(.32) brightness(1.05); }
   .fpswrap { position: relative; display: inline-flex; align-items: center; flex: none; }
-  .tr-btns .fps { width: 72px; height: 22px; background: #3a3a40; color: #cfcfd4; border: 0;
+  .tr-btns .fps { width: 72px; height: 22px; background: var(--tv-gadget); color: #cfcfd4; border: 0;
     border-radius: 4px; font-size: 11px; padding: 0 20px 0 7px; appearance: none; -webkit-appearance: none; }
   .fpsarrow { position: absolute; right: 3px; width: 14px; height: 14px; border-radius: 50%;
-    background: #4a4a51; color: #d0d0d4; font-size: 8px; line-height: 14px; text-align: center;
+    background: var(--tv-stat); color: var(--tv-text); font-size: 8px; line-height: 14px; text-align: center;
     pointer-events: none; }
   .strip.cam { height: 20px; }
   .strip.cam .cell { background: transparent; }
   .plus.always { display: block; top: -7px; }
   /* footer: two rows like TVPaint (tabs row + Background / Start Frame row) */
-  .tlfoot { flex: none; background: #2D2D32; border-top: 1px solid #2B2B30; display: flex;
+  .tlfoot { flex: none; background: var(--tv-document); border-top: 1px solid var(--tv-gadget-border); display: flex;
     align-items: center; height: 18px; }
   .tlfoot .frow2 { height: 18px; width: 100%; display: flex; align-items: center; gap: 4px; padding: 0 6px;
     box-sizing: border-box; }
   .lfrow1 { position: absolute; left: 0; bottom: 0; width: 345px; height: 17px; display: flex;
-    align-items: center; gap: 2px; padding: 0 6px; box-sizing: border-box; background: #2D2D32;
-    border-top: 1px solid #2B2B30; z-index: 3; }
+    align-items: center; gap: 2px; padding: 0 6px; box-sizing: border-box; background: var(--tv-document);
+    border-top: 1px solid var(--tv-gadget-border); z-index: 3; }
   .lfrow1 .ftab { flex: 1 1 0; height: 15px; font-size: 10px; padding: 0 2px; }
-  .lfrow1 .lfsep { width: 1px; height: 11px; background: #4a4a51; margin: 0 2px; }
-  .lfrow1 .lfgrip { color: #8a8a90; font-size: 11px; cursor: ns-resize; padding: 0 2px; }
-  .ftab { background: #3a3a41; border: 0; border-radius: 2px; padding: 1px 8px; cursor: pointer;
+  .lfrow1 .lfsep { width: 1px; height: 11px; background: var(--tv-stat); margin: 0 2px; }
+  .lfrow1 .lfgrip { color: var(--tv-text-out); font-size: 11px; cursor: ns-resize; padding: 0 2px; }
+  .ftab { background: var(--tv-gadget); border: 0; border-radius: 2px; padding: 1px 8px; cursor: pointer;
     color: #a8a8ae; font-size: 10px; }
-  .ftab.on { color: #e0e0e4; background: #46464D; }
-  .tlfoot .frow2 > span { color: #a6a6ac; font-size: 11px; }
-  .tlfoot .frow2 .ftstart { margin-left: 10px; color: #b6b6bc; font-size: 11px; }
-  .tlfoot .frow2 input { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 4px;
-    color: #c8c8cc; font-size: 11px; padding: 0 5px; width: 46px; height: 18px; box-sizing: border-box; }
-  .tlfoot .frow2 .ftlab { color: #a6a6ac; font-size: 11px; }
-  .tlfoot .frow2 button.ftfield { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 4px;
-    color: #c9c9cf; font-size: 11px; height: 16px; padding: 0 6px; cursor: pointer; }
-  .tlfoot .frow2 button.ftfield:hover { border-color: #6a8fae; }
-  .tlfoot .frow2 .ftclock { color: #a6a6ac; font-size: 12px; cursor: pointer; }
+  .ftab.on { color: #e0e0e4; background: var(--tv-element); }
+  .tlfoot .frow2 > span { color: var(--tv-text); font-size: 11px; }
+  .tlfoot .frow2 .ftstart { margin-left: 10px; color: var(--tv-text); font-size: 11px; }
+  .tlfoot .frow2 input { background: var(--tv-gadget); border: 1px solid var(--tv-stat); border-radius: 4px;
+    color: var(--tv-text); font-size: 11px; padding: 0 5px; width: 46px; height: 18px; box-sizing: border-box; }
+  .tlfoot .frow2 .ftlab { color: var(--tv-text); font-size: 11px; }
+  .tlfoot .frow2 button.ftfield { background: var(--tv-gadget); border: 1px solid var(--tv-stat); border-radius: 4px;
+    color: var(--tv-text); font-size: 11px; height: 16px; padding: 0 6px; cursor: pointer; }
+  .tlfoot .frow2 button.ftfield:hover { border-color: var(--tv-shortcut); }
+  .tlfoot .frow2 .ftclock { color: var(--tv-text); font-size: 12px; cursor: pointer; }
   .tlfoot .frow2 .ftclock:hover { color: #e0e0e6; }
-  .tlfoot .frow2 select.ftfield { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 4px;
-    color: #b6b6bc; font-size: 11px; padding: 0 4px; width: 160px; height: 18px; box-sizing: border-box; }
+  .tlfoot .frow2 select.ftfield { background: var(--tv-gadget); border: 1px solid var(--tv-stat); border-radius: 4px;
+    color: var(--tv-text); font-size: 11px; padding: 0 4px; width: 160px; height: 18px; box-sizing: border-box; }
   .tlfoot .ftresize { margin-left: 9px; width: 15px; height: 15px; opacity: .8; cursor: ns-resize;
     filter: invert(.4); }
   .tlfoot .ftright { margin-left: auto; display: flex; align-items: center; gap: 5px; padding-right: 3px; }
   .tlfoot .ftzoom { width: 16px; height: 16px; cursor: ew-resize; opacity: .85; }
   .tlfoot .ftzoom:hover { opacity: 1; }
-  .tlfoot .ftfit { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 3px; color: #c9c9cf;
+  .tlfoot .ftfit { background: var(--tv-gadget); border: 1px solid var(--tv-stat); border-radius: 3px; color: var(--tv-text);
     font-size: 10px; height: 15px; padding: 0 5px; cursor: pointer; }
-  .tlfoot .ftfit:hover { border-color: #6a8fae; color: #fff; }
+  .tlfoot .ftfit:hover { border-color: var(--tv-shortcut); color: #fff; }
   input[readonly] { opacity: .45; }
   /* live canvas footer: rotate the view / fit / zoom % / - + / Display */
   .tr-zoom { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; }
-  .tr-zoom .tib { background: none; border: 0; color: #b0b0b6; cursor: pointer; font-size: 13px;
+  .tr-zoom .tib { background: none; border: 0; color: var(--tv-text); cursor: pointer; font-size: 13px;
     display: flex; align-items: center; padding: 1px 3px; }
   .tr-zoom .tib:hover { color: #e8e8ee; }
-  .tr-zoom .zfield { width: 68px; background: #3a3a40; border: 1px solid #4a4a51; border-radius: 3px;
-    color: #c8c8cc; font-size: 11px; padding: 1px 4px; text-align: right; }
+  .tr-zoom .zfield { width: 68px; background: var(--tv-gadget); border: 1px solid var(--tv-stat); border-radius: 3px;
+    color: var(--tv-text); font-size: 11px; padding: 1px 4px; text-align: right; }
   /* ---- status ---- */
-  #statusbar { background: #2D2D32; display: flex; align-items: center; gap: 0;
-    padding: 0 8px; color: #b0b0b6; font-size: 11px; border-top: 1px solid #2B2B30; }
+  #statusbar { background: var(--tv-document); display: flex; align-items: center; gap: 0;
+    padding: 0 8px; color: var(--tv-text); font-size: 11px; border-top: 1px solid var(--tv-gadget-border); }
   #statusbar .right { margin-left: auto; display: flex; gap: 12px; align-items: center; }
   #statusXY { width: 86px; flex: none; }
   #rgbaLbl { width: 178px; flex: none; }
   #proxyLbl { width: 180px; height: 20px; flex: none; margin-left: 80px; border-radius: 4px;
     background: linear-gradient(#4E7350, #3F5B42); color: #cfe8d2; display: flex;
     align-items: center; justify-content: center; font-size: 11px; }
-  #sbInfo { color: #b0b0b6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  #sbInfo { color: var(--tv-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     margin-left: 26px; display: flex; gap: 26px; }
-  #sbInfo b { color: #c9c9cf; font-weight: 400; }
+  #sbInfo b { color: var(--tv-text); font-weight: 400; }
   #sbInfo span { margin: 0; }
-  #roomSel { height: 18px; width: 104px; background: #46464D; color: #c8c8cc; border: 1px solid #2B2B30;
+  #roomSel { height: 18px; width: 104px; background: var(--tv-element); color: var(--tv-text); border: 1px solid var(--tv-gadget-border);
     border-radius: 3px; font-size: 10px; }
   /* floating George console (moved out of the status bar to match TVPaint) */
   #georgeWin { position: fixed; right: 14px; bottom: 36px; width: 360px; z-index: 400;
-    background: #26262b; border: 1px solid #4a4a51; border-radius: 4px; display: none;
+    background: #26262b; border: 1px solid var(--tv-stat); border-radius: 4px; display: none;
     flex-direction: column; gap: 4px; padding: 6px; box-shadow: 0 8px 24px #0008; }
-  #georgeWin .gw-head { display: flex; align-items: center; color: #c8c8cc; font: 11px Consolas, monospace; }
-  #georgeWin .gw-head button { margin-left: auto; background: none; border: 0; color: #898989;
+  #georgeWin .gw-head { display: flex; align-items: center; color: var(--tv-text); font: 11px Consolas, monospace; }
+  #georgeWin .gw-head button { margin-left: auto; background: none; border: 0; color: var(--tv-text-out);
     cursor: pointer; font-size: 12px; }
-  #georgeIn { background: #1f1f23; color: #9fe08f; border: 1px solid #3a3a40; border-radius: 3px;
+  #georgeIn { background: var(--tv-document); color: var(--tv-key-found); border: 1px solid var(--tv-gadget); border-radius: 3px;
     padding: 3px 6px; width: 100%; box-sizing: border-box; font: 11px Consolas, monospace; }
-  #georgeOut { color: #9fe08f; font: 10px Consolas, monospace; max-height: 80px; overflow: auto;
+  #georgeOut { color: var(--tv-key-found); font: 10px Consolas, monospace; max-height: 80px; overflow: auto;
     white-space: pre-wrap; }
-  .tbtn { background: none; border: 0; color: #B6B6B6; cursor: pointer; font-size: 13px; padding: 1px 4px; }
-  .tbtn.ton { color: #9fe08f; }
+  .tbtn { background: none; border: 0; color: var(--tv-text); cursor: pointer; font-size: 13px; padding: 1px 4px; }
+  .tbtn.ton { color: var(--tv-key-found); }
   #toastMsg { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%) translateY(8px);
-    background: #1f1f23; color: #d0d4d8; border: 1px solid #4a4a51; border-radius: 4px;
+    background: var(--tv-document); color: #d0d4d8; border: 1px solid var(--tv-stat); border-radius: 4px;
     padding: 4px 12px; font-size: 11px; opacity: 0; pointer-events: none;
     transition: opacity .15s, transform .15s; z-index: 500; }
   #toastMsg.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   /* ---- TVPaint-style popup menus (layer / cell / New / Background ...) ---- */
-  .tvmenu { position: fixed; z-index: 1200; background: #313136; border: 1px solid #5a5a61;
+  .tvmenu { position: fixed; z-index: 1200; background: var(--tv-desktop); border: 1px solid var(--tv-stat);
     border-radius: 2px; box-shadow: 0 10px 26px #000a; padding: 3px 0; min-width: 186px;
-    font-size: 11px; color: #c9c9cf; user-select: none; }
+    font-size: 11px; color: var(--tv-text); user-select: none; }
   .tvmi { height: 21px; display: flex; align-items: center; padding: 0 20px 0 22px;
     position: relative; white-space: nowrap; cursor: default; }
-  .tvmi:hover { background: #3E476B; color: #fff; }
+  .tvmi:hover { background: var(--tv-action-selected); color: #fff; }
   .tvmi.dis { color: #6d6d72; pointer-events: none; }
   .tvmi.danger .lbl { color: #d05a5a; }
   .tvmi .chk { position: absolute; left: 7px; width: 11px; text-align: center; color: #e6e6ea; }
   .tvmi .sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin: 0 5px 0 -12px;
     box-shadow: 0 0 0 1px #1c1c20; }
-  .tvmi .sc { margin-left: auto; color: #8a8a90; padding-left: 24px; }
+  .tvmi .sc { margin-left: auto; color: var(--tv-text-out); padding-left: 24px; }
   .tvmi .arrow { position: absolute; right: 6px; color: #b9b9c0; }
-  .tvmi.modes, .tvmi.modes .lbl, .tvmi.modes .chk, .tvmi.modes .arr { color: #8a8a90; }
+  .tvmi.modes, .tvmi.modes .lbl, .tvmi.modes .chk, .tvmi.modes .arr { color: var(--tv-text-out); }
   .tvmi.modes.act, .tvmi.modes.act .lbl, .tvmi.modes.act .chk, .tvmi.modes.act .arr { color: #fff; }
   .tvmi.modes:hover, .tvmi.modes:hover .lbl, .tvmi.modes:hover .chk, .tvmi.modes:hover .arr { color: #fff; }
   .tvmi.modes .arr { position: absolute; right: 8px; font-size: 11px; }
-  .tvmi.sep { height: 1px; padding: 0; margin: 3px 7px; background: #4a4a51; pointer-events: none; }
-  .lnm-input { background: #1f1f23; color: #e4e4e8; border: 1px solid #6a8fae; border-radius: 2px;
+  .tvmi.sep { height: 1px; padding: 0; margin: 3px 7px; background: var(--tv-stat); pointer-events: none; }
+  .lnm-input { background: var(--tv-document); color: #e4e4e8; border: 1px solid var(--tv-shortcut); border-radius: 2px;
     font: 11px system-ui, sans-serif; width: 112px; padding: 1px 3px; }
   /* per-layer flag dots (REA 25334-25338: active / lock / light table / preserve trans. / stencil) */
   .dots i { cursor: pointer; }
@@ -498,7 +550,7 @@
     cursor: pointer; line-height: 1; }
   .lblend:hover { color: #d8d8de; }
   .lop { position: relative; }
-  .llayer.selmulti .lrowbg { box-shadow: inset 2px 0 #6a8fae; }
+  .llayer.selmulti .lrowbg { box-shadow: inset 2px 0 var(--tv-shortcut); }
   .llayer.collapsed { height: 24px !important; }
   .llayer.collapsed .lbody { display: none; }
   .strip.collapsed { height: 24px !important; }
@@ -514,17 +566,17 @@
     border-style: solid; border-width: 0 4px 5px 4px; border-color: transparent transparent #e0b84a transparent; }
   /* footer panes (Notes / Sound / Color Group) */
   #tlPane { position: fixed; left: 4px; bottom: 62px; width: 372px; height: 176px; z-index: 70;
-    background: #2D2D32; border: 1px solid #4a4a51; border-radius: 4px; box-shadow: 0 8px 26px #000b;
-    display: flex; flex-direction: column; color: #b9bfc6; font-size: 11px; }
+    background: var(--tv-document); border: 1px solid var(--tv-stat); border-radius: 4px; box-shadow: 0 8px 26px #000b;
+    display: flex; flex-direction: column; color: var(--tv-text); font-size: 11px; }
   #tlPane .ph { height: 20px; display: flex; align-items: center; gap: 8px; padding: 0 6px;
-    background: #3a3a41; border-radius: 4px 4px 0 0; color: #d0d0d6; }
+    background: var(--tv-gadget); border-radius: 4px 4px 0 0; color: #d0d0d6; }
   #tlPane .ph b { flex: 1; font-weight: 600; font-size: 11px; }
   #tlPane .ph button { background: none; border: 0; color: #a9a9af; cursor: pointer; font-size: 12px; }
   #tlPane .pb { flex: 1; overflow: auto; padding: 5px 6px; display: flex; flex-direction: column; gap: 5px; }
-  #tlPane textarea { flex: 1; resize: none; background: #26262a; color: #c9c9cf;
+  #tlPane textarea { flex: 1; resize: none; background: #26262a; color: var(--tv-text);
     border: 1px solid #3f3f46; border-radius: 3px; padding: 4px 5px; font: 11px system-ui, sans-serif; }
   #tlPane .prow { display: flex; align-items: center; gap: 6px; }
-  #tlPane .prow input[type=range] { flex: 1; accent-color: #6a8fae; }
+  #tlPane .prow input[type=range] { flex: 1; accent-color: var(--tv-shortcut); }
   #tlPane .cgrow { display: flex; align-items: center; gap: 6px; height: 19px; }
   #tlPane .cgrow i { width: 12px; height: 12px; border-radius: 2px; flex: none; box-shadow: 0 0 0 1px #1c1c20; }
   #tlPane .cgrow .nm { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -556,7 +608,7 @@
           <span id="zoomLbl">100.00%</span>
           <button class="tib" id="zoomOut" title="zoom out">−</button>
           <button class="tib" id="zoomIn" title="zoom in">+</button>
-          <select id="dispSel" style="background:#2D2D32;color:#B6B6B6;border:1px solid #2B2B30;border-radius:3px">
+          <select id="dispSel" style="background:var(--tv-document);color:var(--tv-text);border:1px solid var(--tv-gadget-border);border-radius:3px">
             <option>Display</option><option>Display 1:1</option><option>Fit</option></select>
         </div>
       </div>
@@ -576,6 +628,8 @@
   <div id="statusbar"></div>
 </div>
 <script src="engine.js"></script>
+<script src="scheme.js"></script>
+<script src="panels.js"></script>
 <script>window.Engine = { BRUSHES, DRAW_MODES, SHAPES, LAYER_LOOP_MODES, XSHEET_OPS,
   BRUSH_PROFILES, brushDefaults, activateToolBrush, gradientFill,
   newCameraKey, cameraEvaluate, cameraRect, cameraKeyAt, setCameraKey, layerLengthOp,
