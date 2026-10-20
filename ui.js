@@ -679,12 +679,12 @@ const TV_MENUS = {
     { sep: true },
     { label: "Light Table", checked: () => tvPanelOpen("lt"), action: () => tvTogglePanel("lt") },
     { label: "Timesheet", checked: () => tvPanelOpen("timesheet"), action: () => tvTogglePanel("timesheet") },
-    { label: "Navigator", checked: () => tvPanelOpen("navigator"), action: () => tvTogglePanel("navigator") },
-    { label: "Effects", checked: () => tvPanelOpen("fx"), action: () => tvTogglePanel("fx") },
     { label: "Remote Control", checked: () => tvPanelOpen("remote"), action: () => tvTogglePanel("remote") },
-    { label: "Library", checked: () => tvPanelOpen("library"), action: () => tvTogglePanel("library") },
+    { label: "FX Stack", checked: () => tvPanelOpen("fxstack"), action: () => tvTogglePanel("fxstack") },
     { label: "Guidelines", checked: () => tvPanelOpen("guideline"), action: () => tvTogglePanel("guideline") },
-    { label: "Share Services", checked: () => tvPanelOpen("share"), action: () => tvTogglePanel("share") },
+    { label: "Share Manager", checked: () => tvPanelOpen("share"), action: () => tvTogglePanel("share") },
+    { label: "Navigator", checked: () => tvPanelOpen("navigator"), action: () => tvTogglePanel("navigator") },
+    { label: "Library", checked: () => tvPanelOpen("library"), action: () => tvTogglePanel("library") },
     { label: "Camera Panel", checked: () => panelEls[2] && panelEls[2].style.display !== "none", action: () => { if (panelEls[2]) panelEls[2].style.display = panelEls[2].style.display === "none" ? "" : "none"; } }
   ],
   "Custom Panels": [
@@ -1010,54 +1010,60 @@ TOOL_LABELS.selfreehand = "Freehand Selection";
 TOOL_LABELS.cutrect = "Cut Brush"; TOOL_LABELS.cutfreehand = "Cut Brush";
 
 // ---------------------------------------------------------------------------
-// The tool bar of TVPaint 12 is a row of PANEL TOGGLES.
-// REA: the tool bar builder FUN_140555d80 creates one action per panel and
-// connects it to the panel with FUN_140071450, so the button is lit while the
-// panel is open.  The same commands are used by the Windows menu
+// The tool bar of TVPaint 12 is a row of PANEL TOGGLES plus the four document
+// commands.  REA: the tool bar builder FUN_140555d80 creates one action per
+// panel and connects it to the panel with FUN_140071450, so a button is lit
+// while its panel is open.  The same commands are used by the Windows menu
 // (FUN_140530e10) and by the command registry, which is why the tool bar and
 // the menu always agree.
-//   id  icon                 command                     panel state
-//   500 MiscMainPanel        ToggleMainPanel             DAT_140cf933c
-//   430 ColorPicker          TogglePalettePanel          DAT_140cf9324
-//   460 DrawingTool          ToggleToolPanel             DAT_140cf9320
-//   420 MiscLayers           ToggleTimelinePanel         DAT_140cf9330
-//   490 Lighttable           ToggleLTPanel               DAT_140cf9368
-//   480 FX                   ToggleEffectPanel           DAT_140cf9364
-//   410 MiscNavigator        ToggleNavigatorPanel        DAT_140cf9328
-//   470 MiscRemote           ToggleRemotePanel           DAT_140cf932c
-//   325 LibraryImage         ToggleLibraryImagePanel     DAT_140cf9338
-//   320 MiscGuideline        ToggleGuidelinePanel        DAT_140cf9334
-//   330 MiscShareServices    ToggleShareServicesPanel    DAT_140cf9370
-//   485 Timesheet            Key_ToggleTimesheetPanel    DAT_140cf9374
-//   350 Help                 Online Help
-//   666 buy_now.png          the purchase button
+//
+// The tool tips below were read from the running program (every button was
+// clicked and its tool tip captured):
+//   New Project / Open/Import Project / Undo the last operation /
+//   Redo the last operation undone / Open/Close Main Panel /
+//   Open/Close Color panel / Open/close Tool panel / Open/Close Timeline /
+//   Open/Close Light Table Panel / Open/Close the Timesheet Panel /
+//   Open/Close Remote panel / Open/Close FX Stack Panel /
+//   Open/Close Guidelines Panel / Open/Close Share Manager Panel /
+//   Online Documentation
 // ---------------------------------------------------------------------------
 const TV_PANEL_DEFS = [
-  { key: "main", title: "Main Panel", icon: "MiscMainPanel-x20.png", cmd: "ToggleMainPanel", open: true },
-  { key: "color", title: "Color Panel", icon: "ColorPicker-x20.png", cmd: "TogglePalettePanel", open: true },
-  { key: "tool", title: "Tool Panel", icon: "DrawingTool-x20.png", cmd: "ToggleToolPanel", open: true },
-  { key: "timeline", title: "Timeline", icon: "MiscLayers-x20.png", cmd: "ToggleTimelinePanel", open: true },
-  { key: "lt", title: "Light Table", icon: "Lighttable-x20.png", cmd: "ToggleLTPanel" },
-  { key: "timesheet", title: "Timesheet", icon: "Timesheet-x20.png", cmd: "Key_ToggleTimesheetPanel" },
-  { key: "remote", title: "Remote Control", icon: "MiscRemote-x20.png", cmd: "ToggleRemotePanel" },
-  { key: "navigator", title: "Navigator", icon: "MiscNavigator-x20.png", cmd: "ToggleNavigatorPanel" },
-  { key: "fx", title: "Effects", icon: "FX-x20.png", cmd: "ToggleEffectPanel" },
-  { key: "share", title: "Share Services", icon: "MiscShareServices-x20.png", cmd: "ToggleShareServicesPanel" },
-  { key: "guideline", title: "Guidelines", icon: "MiscGuideline-x20.png", cmd: "ToggleGuidelinePanel" },
-  { key: "library", title: "Library", icon: "LibraryImage-x20.png", cmd: "ToggleLibraryImagePanel" }
+  { key: "main", title: "Main Panel", icon: "Toolbar-Project.png", cmd: "ToggleMainPanel",
+    tip: "Open/Close Main Panel", open: true },
+  { key: "color", title: "Color Panel", icon: "Toolbar-ColorWheel.png", cmd: "TogglePalettePanel",
+    tip: "Open/Close Color panel", open: true },
+  { key: "tool", title: "Tool Panel", icon: "Toolbar-Pen.png", cmd: "ToggleToolPanel",
+    tip: "Open/close Tool panel", open: true },
+  { key: "timeline", title: "Timeline", icon: "Toolbar-Layers.png", cmd: "ToggleTimelinePanel",
+    tip: "Open/Close Timeline", open: true },
+  { key: "lt", title: "Light Table", icon: "Toolbar-Bulb.png", cmd: "ToggleLTPanel",
+    tip: "Open/Close Light Table Panel" },
+  { key: "timesheet", title: "Timesheet", icon: "Toolbar-Table.png", cmd: "Key_ToggleTimesheetPanel",
+    tip: "Open/Close the Timesheet Panel" },
+  { key: "remote", title: "Remote Control", icon: "Toolbar-Remote.png", cmd: "ToggleRemotePanel",
+    tip: "Open/Close Remote panel" },
+  { key: "fxstack", title: "FX Stack", icon: "Toolbar-Search.png", cmd: "ToggleEffectPanel",
+    tip: "Open/Close FX Stack Panel" },
+  { key: "guideline", title: "Guidelines", icon: "Toolbar-Nature.png", cmd: "ToggleGuidelinePanel",
+    tip: "Open/Close Guidelines Panel" },
+  { key: "share", title: "Share Manager", icon: "Toolbar-Send.png", cmd: "ToggleShareServicesPanel",
+    tip: "Open/Close Share Manager Panel" },
+  // the panels the live bar does not show but the Windows menu still offers
+  { key: "library", title: "Library", icon: "LibraryImage-x20.png", cmd: "ToggleLibraryImagePanel" },
+  { key: "navigator", title: "Navigator", icon: "MiscNavigator-x20.png", cmd: "ToggleNavigatorPanel" }
 ];
-// the live order and the measured x position of every tool bar button
+// the live order of the tool bar and the measured x position of every button
 const TV_TOOLBAR_ORDER = [
-  { icon: "FileNew-x20.png", tip: "New project", cmd: "NewProject", x: 26, fn: () => uiNew() },
-  { icon: "FileOpen-x20.png", tip: "Open project", cmd: "LoadProject", x: 48, fn: () => uiOpen() },
-  { icon: "Undo-x20.png", tip: "Undo", cmd: "Undo", x: 115, fn: () => uiUndo() },
-  { icon: "Redo-x20.png", tip: "Redo", cmd: "MultiRedo", x: 140, fn: () => uiRedo() },
+  { icon: "Toolbar-New.png", tip: "New Project", cmd: "NewProject", x: 26, fn: () => uiNew() },
+  { icon: "Toolbar-Open.png", tip: "Open/Import Project", cmd: "LoadProject", x: 48, fn: () => uiOpen() },
+  { icon: "Toolbar-Undo.png", tip: "Undo the last operation", cmd: "Undo", x: 115, fn: () => uiUndo() },
+  { icon: "Toolbar-Redo.png", tip: "Redo the last operation undone", cmd: "MultiRedo", x: 140, fn: () => uiRedo() },
   { panel: "main", x: 183 }, { panel: "color", x: 207 }, { panel: "tool", x: 232 },
   { panel: "timeline", x: 257 },
   { panel: "lt", x: 286 }, { panel: "timesheet", x: 308 }, { panel: "remote", x: 337 },
-  { panel: "navigator", x: 384 }, { panel: "fx", x: 432 }, { panel: "share", x: 458 },
-  { panel: "guideline", x: 500 },
-  { icon: "Help-x20.png", tip: "Online Help", cmd: "Online Help", x: 560, fn: () => toast("online help — not in this prototype") }
+  { panel: "fxstack", x: 384 }, { panel: "guideline", x: 432 }, { panel: "share", x: 458 },
+  { icon: "Toolbar-Docs.png", tip: "Online Documentation", cmd: "Online Help", x: 500,
+    fn: () => toast("online documentation — not in this prototype") }
 ];
 // the state of every panel (the live app keeps one global per panel)
 const tvPanelState = {};
@@ -1153,7 +1159,7 @@ function syncTVPanels() {
     rf.value = proj.fps;
     rf.onchange = () => { proj.fps = +rf.value; renderAll(); };
   }
-  // Effects: the effect groups of the Effects menu
+  // Effects (the FX Stack of the live app): the effect groups of the Effects menu
   const fx = $("fxList");
   if (fx && !fx.dataset.done) {
     fx.dataset.done = "1";
@@ -1166,7 +1172,7 @@ function syncTVPanels() {
       openTvMenu(it.submenu || [], r.right + 2, r.top);
     });
   }
-  // Share services: the export destinations
+  // Share Manager: the export / share destinations
   const sh = $("shList");
   if (sh && !sh.dataset.done) {
     sh.dataset.done = "1";
@@ -1296,10 +1302,10 @@ function buildPanels() {
   nv.innerHTML = `<canvas id="navCv" width="228" height="132"
       style="background:#1c1f24;border:1px solid #4a4a51;cursor:move"></canvas>
     <div class="orow"><label>Zoom</label><span id="navZoom" style="flex:1;text-align:right"></span></div>`;
-  // Effects: the effect groups of the Effects menu
-  const fx = mkTVPanel("fx");
+  // Effects (the FX Stack of the live app): the effect groups of the Effects menu
+  const fx = mkTVPanel("fxstack");
   fx.innerHTML = `<div id="fxList"></div>`;
-  // Share Services: the export / share destinations
+  // Share Manager: the export / share destinations
   const sh = mkTVPanel("share");
   sh.innerHTML = `<div id="shList"></div>`;
   // Guidelines: the guideline options of the project window

@@ -1132,6 +1132,47 @@ The prototype now has:
   effect groups), Share Services (the export list), Guidelines (the guideline
   options) and Library (the recent files).
 
+### v30 pass - every tool bar button, identified by clicking the live app
+
+Every button of the live tool bar was **clicked in the running program** and its
+own tool tip captured, so nothing below is an inference:
+
+| x | icon | tool tip (live) | command (REA) |
+|---|---|---|---|
+| 26 | page + | **New Project** | NewProject |
+| 48 | folder | **Open/Import Project** | LoadProject |
+| 115 | undo | **Undo the last operation** | Undo |
+| 140 | redo | **Redo the last operation undone** | MultiRedo |
+| 183 | toolbox | **Open/Close Main Panel** | ToggleMainPanel |
+| 207 | colour wheel | **Open/Close Color panel** | TogglePalettePanel |
+| 232 | hand with a pen | **Open/close Tool panel** | ToggleToolPanel |
+| 257 | stacked sheets | **Open/Close Timeline** | ToggleTimelinePanel |
+| 286 | light bulb | **Open/Close Light Table Panel** | ToggleLTPanel |
+| 308 | table | **Open/Close the Timesheet Panel** | Key_ToggleTimesheetPanel |
+| 337 | remote control | **Open/Close Remote panel** | ToggleRemotePanel |
+| 384 | magnifier | **Open/Close FX Stack Panel** | ToggleEffectPanel |
+| 432 | plant in a pot | **Open/Close Guidelines Panel** | ToggleGuidelinePanel |
+| 458 | paper plane | **Open/Close Share Manager Panel** | ToggleShareServicesPanel |
+| 500 | ? notebook | **Online Documentation** | Online Help |
+| 540+ | PURCHASE | - | the demo's buy_now.png button |
+
+What the buttons actually open, seen on screen:
+- the **light bulb** floats a **Light Table** panel next to the left column
+  (Color / Instance / Bin drop downs, the 10..1 value scale, a gradient bar and
+  the swatches),
+- the **table** docks a **Timesheet** panel at the bottom of the window
+  (Page Menu, the scene / page list),
+- the **remote** floats the **Remote Control** panel (the transport, the frame
+  rate, Mark In / Mark Out, Flip X / Flip Y),
+- the four lit buttons are the four panels that are open: **Main, Color, Tools
+  and Timeline**; their shared background `62,71,107` runs from x 183 to 278.
+
+The prototype uses exactly these tool tips, the same commands, the same icons
+(taken from the running program) and the same behaviour: the button opens and
+closes its panel and the shared blue block grows and shrinks over the open
+ones.  The Windows menu uses the same commands, so the menu ticks follow the
+tool bar.
+
 ### Still not captured
 - Exact Role submenu appearance/order. The labels are known from the loc's role
   assignment commands: `Keyframe`, `Breakdown`, `Inbetween (To Do)`,
