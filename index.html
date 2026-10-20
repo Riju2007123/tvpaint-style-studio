@@ -25,22 +25,27 @@
   .menu-dd .mdis { color: #6E6E75; cursor: default; }
   .menu-dd .mdis:hover { background: none; }
 
-  /* ---- tool toolbar row ---- */
-  #toolbar { background: #313136; display: flex; align-items: center; gap: 1px;
-    padding: 0 6px; border-bottom: 1px solid #2B2B30; }
+  /* ---- tool toolbar row (TVPaint 12: y 48..80, background 49,49,54) ---- */
+  #toolbar { background: #313136; position: relative; height: 33px;
+    border-bottom: 1px solid #2B2B30; }
   .sep { width: 1px; height: 20px; background: #43484e; margin: 0 5px; }
-  .tib { width: 26px; height: 26px; border: 0; background: none; border-radius: 4px;
-    cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-  .tib img { width: 20px; height: 20px; }
+  .tib { position: absolute; top: 6px; width: auto; min-width: 16px; height: 22px;
+    border: 0; background: none; border-radius: 2px; padding: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; }
+  .tib img { height: 20px; width: auto; }
+  .tib.sel { top: 4px; height: 24px; }
+  .tib.sel img { height: 20px; }
+  .tbSel { position: absolute; top: 3px; width: 96px; height: 27px;
+    background: #3E476B; border-radius: 2px; }
   .tib:hover { background: #3d4249; }
   .tib.on { background: #3d5666; }
   #projTab { background: #40454c; color: #B6B6B6; border-radius: 3px; padding: 3px 26px 3px 10px;
-    position: relative; margin-left: 12px; font-size: 12px; }
+    position: absolute; left: 780px; top: 5px; font-size: 12px; }
   #projTab button { position: absolute; right: 4px; top: 3px; background: none; border: 0;
     color: #898989; cursor: pointer; }
-  #purchase { border: 1.5px solid #b7bec7; color: #B6B6B6; font-weight: 700;
-    background: #313136; border-radius: 3px; padding: 2px 12px; margin: 0 12px;
-    letter-spacing: .06em; cursor: pointer; }
+  #purchase { position: absolute; left: 620px; top: 7px; border: 1.5px solid #b7bec7;
+    color: #B6B6B6; font-weight: 700; background: #313136; border-radius: 3px;
+    padding: 2px 12px; font-size: 13px; letter-spacing: .06em; cursor: pointer; }
 
   /* ---- work area ---- */
   #workarea { display: grid; grid-template-columns: 252px 1fr; min-height: 0; }

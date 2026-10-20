@@ -1020,6 +1020,48 @@ the 18 px metrics, the same menus in the same order, the same submenus with
 the same separators and the same ticks, the project window information bar and
 the TVPaint panel header (25 px, background `#313136`, title in `#637D89`).
 
+### v28 pass - the tool bar of the TVPaint window
+
+The tool bar of the live app (1936 px window) is the row **y 48..80** on the
+background `49,49,54`.  Its icons were located by scanning the row for the
+light pixels and grouping them into boxes:
+
+| icon | box (x) | in the prototype |
+|---|---|---|
+| New | 26..40 | `Toolbar-New.png` |
+| Open | 48..68 | `Toolbar-Open.png` |
+| Undo | 115..135 | `Toolbar-Undo.png` |
+| Redo | 140..160 | `Toolbar-Redo.png` |
+| Project (toolbox) | 183..201 | `Toolbar-Project.png` |
+| Chromatic wheel | 207..227 | `Toolbar-ColorWheel.png` |
+| Out of pegs | 232..252 | `Toolbar-Pen.png` |
+| Layers | 257..277 | `Toolbar-Layers.png` |
+| Bulb | 286..298 | `Toolbar-Bulb.png` |
+| Table | 308..326 | `Toolbar-Table.png` |
+| Remote | 337..346 | `Toolbar-Remote.png` |
+| Magnifier | 384..427 | `Toolbar-Search.png` |
+| Nature (plant) | 432..452 | `Toolbar-Nature.png` |
+| Paper plane | 458..476 | `Toolbar-Send.png` |
+| Brush + ruler | 500..516 | `Toolbar-BrushRuler.png` |
+| Help (notebook) | - | `Help-x20.png` |
+| PURCHASE | 539..687 | the purchase button |
+
+The four buttons in the middle (**project, chromatic wheel, out of pegs,
+layers**) share **one** selected background `62,71,107` that runs from x 183 to
+x 278 - the prototype draws the same single block.
+
+TVPaint draws these icons itself (they are not in its icon resources), so the
+prototype takes the very pixels of the live app: the icon images were cut out
+of a screenshot of the running program, and the four on the selected background
+were de-blued (the background colour 62,71,107 became transparent).  The rest
+of the icon set is the **light** variant of TVPaint's own resources
+(`Resources/icons/light`, 2194 files in five sizes) - the prototype had the
+dark variant, which is why the tool bar looked wrong.
+
+The prototype now places every icon at the measured x position (verified: the
+DOM offsets are within 0-3 px of the live app) and the row is 33 px high with
+the `49,49,54` background.
+
 ### Still not captured
 - Exact Role submenu appearance/order. The labels are known from the loc's role
   assignment commands: `Keyframe`, `Breakdown`, `Inbetween (To Do)`,

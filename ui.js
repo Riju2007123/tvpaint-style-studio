@@ -866,10 +866,7 @@ function buildMenubar() {
     };
     mb.appendChild(t);
   });
-  const purchase = document.createElement("button");
-  purchase.id = "purchase"; purchase.textContent = "PURCHASE";
-  purchase.onclick = () => toast("(this is a rebuild — nothing to buy)");
-  mb.appendChild(purchase);
+  // the PURCHASE button of the live app sits in the tool bar, not in the menu
   document.addEventListener("click", closeMenus);
 }
 function closeMenus() {
@@ -884,35 +881,58 @@ function promptRecent() {
 }
 
 // ================= toolbar row =================
+// The tool bar of TVPaint 12 (live capture, 1936 px window, row y 48..80).
+// The icon boxes were measured on the live app:
+//   new 26..40 | open 48..68 | undo 115..135 | redo 140..160 |
+//   [project 183..201 | colour wheel 207..227 | pen 232..252 | layers 257..277]
+//   (the four in brackets are on the selected background 62,71,107) |
+//   bulb 286..298 | table 308..326 | remote 337..346 | search 384..427 |
+//   nature 432..452 | send 458..476 | brush+ruler 500..516 | help | purchase
 function buildToolbar() {
   const tb = $("toolbar");
-  const mk = (icon, tip, fn, id) => {
+  tb.innerHTML = "";
+  // the four highlighted buttons of the live app share ONE blue block
+  const blk = document.createElement("div");
+  blk.className = "tbSel";
+  blk.style.left = "183px";
+  tb.appendChild(blk);
+  // x = the left edge of the icon in the live TVPaint window
+  const mk = (icon, tip, fn, x, id, sel) => {
     const b = document.createElement("button");
-    b.className = "tib"; b.title = tip;
+    b.className = "tib" + (sel ? " sel" : ""); b.title = tip;
+    b.style.left = x + "px";
     if (id) b.id = id;
-    b.innerHTML = `<img src="icons/${icon}-x20.png" alt="">`;
+    b.innerHTML = `<img src="icons/${icon}" alt="">`;
     b.onclick = fn;
     tb.appendChild(b);
     return b;
   };
-  mk("FileNew", "New project", () => uiNew());
-  mk("FileOpen", "Open project", () => uiOpen());
-  mk("FileSave", "Save project", () => uiSave());
-  mk("FileSave", "Save project as…", () => uiSaveAs());
-  const sep1 = document.createElement("div"); sep1.className = "sep"; tb.appendChild(sep1);
-  mk("Undo", "Undo (Ctrl+Z)", () => uiUndo());
-  mk("Redo", "Redo (Ctrl+Y)", () => uiRedo());
-  const sep2 = document.createElement("div"); sep2.className = "sep"; tb.appendChild(sep2);
-  mk("Lighttable", "Onion skin (ghosts)", () => toggleOnion(), "tbOnion");
-  mk("MiscGuidelineGrid", "Cycle guidelines", () => cycleGuides(), "tbGuides");
-  mk("Zoom-Rect", "Fit view", () => fitView());
-  mk("MiscLayers", "Timeline focus", () => { $("tlpanel").scrollIntoView(); });
-  mk("ColorPicker", "APen color", () => { const c = prompt("APen color (#hex):", proj.apen); if (c) setApen(c); });
+  mk("Toolbar-New.png", "New project", () => uiNew(), 26);
+  mk("Toolbar-Open.png", "Open project", () => uiOpen(), 48);
+  mk("Toolbar-Undo.png", "Undo (Ctrl+Z)", () => uiUndo(), 115);
+  mk("Toolbar-Redo.png", "Redo (Ctrl+Y)", () => uiRedo(), 140);
+  // the four buttons TVPaint keeps highlighted (the current view mode)
+  mk("Toolbar-Project.png", "Project with camera", () => { proj.cameraKeys = proj.cameraKeys || []; renderAll(); }, 183, null, true);
+  mk("Toolbar-ColorWheel.png", "Chromatic wheel", () => togglePane("color"), 207, null, true);
+  mk("Toolbar-Pen.png", "Out of pegs", () => toast("out of pegs — not in this prototype"), 232, null, true);
+  mk("Toolbar-Layers.png", "Layers", () => { $("tlpanel").scrollIntoView(); }, 257, null, true);  mk("Toolbar-Bulb.png", "Onion skin (ghosts)", () => toggleOnion(), 286, "tbOnion");
+  mk("Toolbar-Table.png", "Cycle guidelines", () => cycleGuides(), 308, "tbGuides");
+  mk("Toolbar-Remote.png", "Remote control", () => toast("remote control — not in this prototype"), 337);
+  mk("Toolbar-Search.png", "Search / zoom navigator", () => toast("zoom navigator — not in this prototype"), 384);
+  mk("Toolbar-Nature.png", "Nature brushes", () => toast("nature brushes — not in this prototype"), 432);
+  mk("Toolbar-Send.png", "Send to…", () => toast("send to — not in this prototype"), 458);
+  mk("Toolbar-BrushRuler.png", "Brush presets", () => toast("brush presets — not in this prototype"), 500);
+  mk("Help-x20.png", "Help", () => toast("help — not in this prototype"), 560);
+  // the purchase button and the document tab of the live app
+  const buy = document.createElement("button");
+  buy.id = "purchase"; buy.textContent = "PURCHASE";
+  buy.onclick = () => toast("(this is a rebuild — nothing to buy)");
+  buy.style.left = "620px";
+  tb.appendChild(buy);
   const tab = document.createElement("div");
   tab.id = "projTab";
   tb.appendChild(tab);
 }
-
 // ================= left panels =================
 const MAINGRID = [
   ["selrect", "Shape-Selection-Rectangle", "Selection: rectangle"],
