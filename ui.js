@@ -1251,6 +1251,7 @@ function renderTimeline() {
       const lastExp = l.frames[lastKey].exposure || 1;
       th += `<div class="blk" id="blk-${li}" style="left:${left}px;width:${w}px" data-first="${first}" data-l="${li}">` +
         knobs +
+        `<i class="blkFrame" title="image at frame ${first}">${first}</i>` +
         `${lastExp > 1 ? `<i class="blkExp">${lastExp}</i>` : ""}` +
         `<i class="expHandle" data-k="${lastKey}" data-l="${li}" title="drag right: increase length"></i></div>`;
     }
@@ -1258,8 +1259,8 @@ function renderTimeline() {
       const k = E.effectiveFrameKey(l, f);
       const cls = k !== null ? (k === f ? "keyw" : "hold") : "";
       const cur = (f === proj.currentFrame && li === proj.currentLayer) ? " curf" : "";
-      // cell label "N." sits BELOW the strip (TVPaint drawing numbering)
-      const num = k === f ? `<span class="knum">${k}.</span>` : "";
+      // cell label = the DRAWING number (1., 2., 3. ...), shown below the strip
+      const num = k === f ? `<span class="knum">${keys.indexOf(k) + 1}.</span>` : "";
       // small ⊘ sigil inside the first key of the strip
       const vs = (k === f && keys.length && k === keys[0]) ? `<span class="vsigil">⊘</span>` : "";
       // timing handles: every key cell carries gray squares at its top corners;
