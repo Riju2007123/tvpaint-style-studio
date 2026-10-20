@@ -75,12 +75,20 @@ Works from `file://` too — just open `index.html`.
   drawing of the current frame using the layer's delete mode. Both are also in
   the Image menu (`Add Exposure`, `Delete Image`, `Delete Selection from
   Layer`, `Delete Selection from all Layers`).
-- Camera layer: the camera row is always the first row of the timeline (as in
-  TVPaint) and right clicking it opens the captured keyframe menu -
-  `Create keyframe` / `Delete keyframe` (each with `All`, `Position`,
-  `Rotation`, `Zoom`, `Camera size`, `Movement Type`), `Adjust the layer to the
-  animation`, `Cut keyframe` / `Copy keyframe` / `Paste keyframe` and
-  `Invert all keys` (inverts the camera path).
+- Camera layer: a project gets a camera either from `File > New Project... >
+  Project with Camera` (the dialog then has a *Camera View (Final Output)*, a
+  ratio and a larger *Drawing Area*) or by picking the **Camera** tool in the
+  Main Panel, which adds the camera to the current project. The live app then
+  shows a `Camera Layer` row and a `Speed curve` row above the layer list, a
+  camera row at the top of the timeline (green key marks in both rulers, a
+  yellow `+` on the current frame) and switches the tool panel to
+  `Tool : Camera[Pro]` with the camera options (Command, Lock All, See
+  bookmarks, Toggle all, Mode, Motion Blur, X/Y with axis locks, Modify ratio,
+  Rotation, Zoom, Flip X/Y, Parameters...). Right clicking the camera row opens
+  the captured keyframe menu - `Create keyframe` / `Delete keyframe` (each with
+  `All`, `Position`, `Rotation`, `Zoom`, `Camera size`, `Movement Type`),
+  `Adjust the layer to the animation`, `Cut keyframe` / `Copy keyframe` /
+  `Paste keyframe` and `Invert all keys` (inverts the camera path).
 - Layer order: the layer rows can be dragged onto each other to reorder them
   (with `Move Selected Layers` armed, the whole selection travels as a block),
   and the layer menu's `Move` submenu now carries the exact TVPaint 12 entries

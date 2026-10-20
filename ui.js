@@ -253,7 +253,7 @@ function renderOverlayOnly() {
   }
   if (sel) drawSelectionOverlay();
   if (proj.cameraKeys && proj.cameraKeys.length) {
-    drawCameraOverlay();
+    if (camFrame) drawCameraOverlay();
     if (panelEls[2] && panelEls[2].querySelector(".pbody")._syncCamera)
       panelEls[2].querySelector(".pbody")._syncCamera();
   }
@@ -854,9 +854,23 @@ function selectTool(id) {
   tool = id;
   // TVPaint keeps per-tool options: activating a brush restores ITS state
   if (E.BRUSH_PROFILES[id]) E.activateToolBrush(proj, id);
+  // The Camera tool adds a camera to the project when there is none: the live
+  // app then shows the "Camera Layer" and "Speed curve" rows plus the camera
+  // row in the timeline.
+  if (id === "camera" && !(proj.cameraKeys && proj.cameraKeys.length)) {
+    proj.cameraKeys = [E.newCameraKey(1, {})];
+    if (!proj.cameraView) proj.cameraView = { w: proj.width, h: proj.height };
+    toast("camera added to the project");
+  }
   $("toolPanel").querySelector(".pt").textContent = "Tool : " + (TOOL_LABELS[id] || id);
   document.querySelectorAll(".tbtn").forEach(b => b.classList.toggle("on", b.dataset.tool === id));
+  // the live app shows the camera options while the Camera tool is active
+  if (id === "camera") {
+    $("toolPanel").querySelector(".pt").textContent = "Tool : Camera[Pro]";
+    if (panelEls[2]) panelEls[2].style.display = "";
+  }
   syncToolPanel();
+  renderAll();
   toast("tool: " + (TOOL_LABELS[id] || id));
 }
 function selectToolQuiet(id) { selectTool(id); }
@@ -914,6 +928,7 @@ function togglePanel(i) { panelEls[i].style.display = panelEls[i].style.display 
 // Bookmarks / Toggle all, Mode: interpolation dropdown, Motion Blur, X/Y locks,
 // Rotation %, Zoom, Flip X/Y, Parameters...) ----------
 let camView = false;         // "View ▸ Camera View" render mode
+let camFrame = true;         // the camera frame overlay drawn on the canvas
 let camLocks = { x: false, y: false, rotation: false, zoom: false };
 function buildCameraPanel() {
   const body = mkThirdPanel("Camera[Proj]");
@@ -922,8 +937,8 @@ function buildCameraPanel() {
     ${mrow("Lock All", `<button class="revbtn" id="camLockAll" style="padding:1px 10px">🔒</button>`)}
     ${mrow("Toggle all", `<button class="revbtn" id="camToggle" style="padding:1px 10px">🔑</button>`)}
     ${mrow("Mode", `<select id="camMode" style="flex:1">
-        <option value="hold">Hold</option><option value="linear">Linear</option>
-        <option value="smooth" selected>Smooth</option></select>`)}
+        <option value="hold">Hold</option><option value="linear" selected>Linear</option>
+        <option value="smooth">Smooth</option></select>`)}
     ${mrow("Motion Blur", `<input type="number" id="camBlur" value="0.00" min="0" max="100" step="0.5"> %`)}
     ${mrow("X", `<input type="number" id="camX" step="1" style="flex:1">`)}
     ${mrow("Y", `<input type="number" id="camY" step="1" style="flex:1">`)}
@@ -941,7 +956,7 @@ function buildCameraPanel() {
     $("camFlipX").checked = !!cam.flipX;
     $("camFlipY").checked = !!cam.flipY;
     const k = E.cameraKeyAt(proj, proj.currentFrame);
-    $("camMode").value = k ? k.interp : "smooth";
+    $("camMode").value = k ? k.interp : "linear";
     ["camX", "camY", "camRot", "camZoom", "camMode", "camFlipX", "camFlipY"].forEach(id => {
       $(id).disabled = !(proj.cameraKeys && proj.cameraKeys.length);
     });
@@ -1000,6 +1015,12 @@ function mkThirdPanel(title) {
     (e) => { e.stopPropagation(); p.style.display = "none"; };
   panelEls.push(p);
   return body;
+}
+// The camera row's right hand button: show / hide the camera frame overlay.
+function toggleCameraFrame() {
+  camFrame = !camFrame;
+  toast("camera frame " + (camFrame ? "shown" : "hidden"));
+  renderAll();
 }
 function drawCameraOverlay() {
   if (!proj.cameraKeys || !proj.cameraKeys.length) return;
@@ -1561,8 +1582,9 @@ function renderTimeline() {
   // even frame count so the 2-frame ruler ticks fill the track without overflow
   const maxF = Math.ceil(Math.max(proj.outFrame + 4, proj.currentFrame + 4, visFrames) / 2) * 2;
   // left column — 355 px layer panel + 40 px separator column (⊘), row-for-row with the track
-  // TVPaint always shows the camera layer as the first row of the timeline.
-  const camOn = true;
+  // The camera row only exists when the project has a camera (TVPaint adds one
+  // with the Camera tool or with a "Project with Camera" new project).
+  const camOn = !!(proj.cameraKeys && proj.cameraKeys.length);
   const cl0 = proj.layers[proj.currentLayer] || {};
   const flagBtn = (flag, on, iconOn, iconOff, title) =>
     `<button class="flag${on ? "" : " off"}" title="${title}" onclick="event.stopPropagation();toggleLayerFlagAt(${proj.currentLayer},'${flag}')">
@@ -1588,9 +1610,19 @@ function renderTimeline() {
       <button class="flag" title="Layer display options" onclick="event.stopPropagation();displayMenu(this)"><img src="icons/LayerSquigglesOn-x20.png"></button>
     </div></div>
   ${camOn ? `<div class="camrow" onclick="selectTool(&quot;camera&quot;)" title="Camera Layer">
-      <img class="sq" src="icons/Shape-Camera-x20.png">
+      <img class="sq" src="icons/Shape-Camera-x20.png" title="Camera Layer">
+      <span class="lminus" title="Collapse/Uncollapse Layer" onclick="event.stopPropagation();toast('the camera row is always visible')">−</span>
+      <img class="sq" src="icons/ClipTimeline-x20.png" title="Camera keys">
       <span class="nm">Camera Layer</span>
-      <button class="flag" title="camera keys kept" onclick="event.stopPropagation();toast('camera keys kept')"><img src="icons/ReqLockOff-x20.png"></button>
+      <span class="lmore" title="Camera view: show or hide the camera frame" onclick="event.stopPropagation();toggleCameraFrame()">⊘</span>
+      <span class="lmid-dot"></span>
+    </div>
+    <div class="camrow speed" title="Speed curve">
+      <span class="lminus" title="Collapse/Uncollapse Layer" onclick="event.stopPropagation();toast('the speed curve row is always visible')">−</span>
+      <img class="sq" src="icons/ClipTimeline-x20.png" title="Speed curve points">
+      <img class="sq" src="icons/Remote-Recenter-Timeline-x20.png" title="Fit the speed curve to the animation">
+      <span class="nm">Speed curve</span>
+      <span class="lmore" title="Speed curve options" onclick="event.stopPropagation();toast('the speed curve is not in this prototype')">⚙</span>
     </div>` : ""}`;
   proj.layers.forEach((l, i) => {
     const cur = i === proj.currentLayer;
@@ -1710,12 +1742,15 @@ function renderTimeline() {
   // (loc 25317 "Display number/Time Code - Click here to switch display between
   // number of fields or frames and Time Code.")
   const tcMode = !!proj.timelineTC && CW >= 56;
+  const camKeySet = new Set((proj.cameraKeys || []).map(k => Math.round(k.frame)));
   let ticks = "";
   for (let f = 1; f <= maxF; f++) {
     const mk = proj.showMarks !== false && proj.layers.some(l => l.marks && l.marks[f]);
     const cls = [f === proj.currentFrame ? "cur" : "", f === proj.inFrame ? "in" : "", mk ? "mark" : ""].join(" ");
     const label = tcMode ? frameTimeCode(f) : (f % 2 === 1 ? f : "");
-    ticks += `<div class="tick ${cls}${tcMode ? " tc" : ""}" data-tf="${f}" title="go to image ${f} (${frameTimeCode(f)})">${label}</div>`;
+    // camera key frames are marked with a green bar in both rulers (live)
+    const camMark = camKeySet.has(f) ? `<i class="camkeymark"></i>` : "";
+    ticks += `<div class="tick ${cls}${tcMode ? " tc" : ""}" data-tf="${f}" title="go to image ${f} (${frameTimeCode(f)})">${label}${camMark}</div>`;
   }
   // info row (REA/status format): Project / Clip / Layer-count includes camera / Current Image
   const info = $("tlInfoRow");
@@ -1742,9 +1777,11 @@ function renderTimeline() {
     const camKeyFrames = new Set((proj.cameraKeys || []).map(k => Math.round(k.frame)));
     let camCells = "";
     for (let f = 1; f <= maxF; f++) {
-      const plus = (camKeyFrames.has(f) || f % 4 === 1)
-        ? `<button class="plus always" data-camf="${f}" title="${camKeyFrames.has(f) ? "camera key frame" : "add camera key here"}">+</button>` : "";
-      camCells += `<div class="cell" data-f="${f}" data-l="cam">${plus}</div>`;
+      const isKey = camKeyFrames.has(f);
+      // the yellow + sits on the current frame, the key frames carry a green mark
+      const plus = `<button class="plus${f === proj.currentFrame ? " always" : ""}" data-camf="${f}" title="${isKey ? "camera key frame" : "add camera key here"}">+</button>`;
+      const mark = isKey ? `<i class="camkeymark"></i>` : "";
+      camCells += `<div class="cell camcell${isKey ? " keyw" : ""}" data-f="${f}" data-l="cam">${mark}${plus}</div>`;
     }
     th += `<div class="strip cam"><div class="cells">${camCells}</div></div>`;
   }
