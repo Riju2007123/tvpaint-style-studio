@@ -260,6 +260,12 @@ function renderArtOnly() {
     actx.drawImage(surf, 0, 0);
     actx.globalCompositeOperation = "source-over";
     actx.globalAlpha = 1;
+    // "ToggleLayerAttenuation" (binary token "64 64 64 128"): the layers that
+    // are not the current one are dimmed with a translucent dark grey.
+    if (proj.layerAttenuation && li !== proj.currentLayer) {
+      actx.fillStyle = "rgba(64,64,64,0.5)";
+      actx.fillRect(0, 0, proj.width, proj.height);
+    }
   });
   actx.restore();
   if (camSave) actx.restore();
@@ -296,6 +302,17 @@ function renderOverlayOnly() {
 function drawCanvasHud() {
   octx.save();
   octx.setTransform(1, 0, 0, 1, 0, 0);
+  // the reticule (binary token "COLORRETICULE" = 255,255,0,255) follows the
+  // pointer in the drawing area
+  if (proj.showReticule !== false && view.mouse) {
+    octx.strokeStyle = "rgba(255,255,0,1)";
+    octx.lineWidth = 1;
+    const mx = view.x + view.mouse.x * view.zoom, my = view.y + view.mouse.y * view.zoom;
+    octx.beginPath();
+    octx.moveTo(mx - 8, my); octx.lineTo(mx + 8, my);
+    octx.moveTo(mx, my - 8); octx.lineTo(mx, my + 8);
+    octx.stroke();
+  }
   if (proj.showAnimatorDisk !== false) {
     // REA colour token "64 64 64 128" for the disc ring
     const x = 18, y = 18, r = 20;
@@ -627,6 +644,8 @@ const MENUS = [
     ["Safe Area", () => toggleGuide("safeArea", !proj.guidelines.safeArea)],
     ["Rule of Thirds", () => toggleGuide("thirds", !proj.guidelines.thirds)],
     null, ["Follow Camera", () => { proj.followCamera = !proj.followCamera; toast("follow camera " + (proj.followCamera ? "on" : "off")); renderAll(); }],
+    null, ["Reticule", () => { proj.showReticule = proj.showReticule === false; toast("reticule " + (proj.showReticule ? "on" : "off")); renderAll(); }],
+    null, ["Attenuate other layers", () => { proj.layerAttenuation = !proj.layerAttenuation; toast("layer attenuation " + (proj.layerAttenuation ? "on" : "off")); renderAll(); }],
     null, ["Fit View", () => fitView()], ["Zoom 100%", () => zoomTo()]
   ]],
   ["Windows", [["Main Panel", () => togglePanel(0)], ["Tool Panel", () => togglePanel(1)], ["Camera Panel", () => togglePanel(2)], ["Timeline", null, 1]]],
@@ -4086,6 +4105,7 @@ ovl.addEventListener("pointermove", (e) => {
 });
 function hoverStatus(e) {
   const p = toProj(e);
+  view.mouse = { x: p.x, y: p.y };
   $("statusXY").textContent = `X:${Math.round(p.x)} Y:${Math.round(p.y)}`;
   updateRGBA(p);
 }
