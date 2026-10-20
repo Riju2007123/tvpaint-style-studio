@@ -1274,6 +1274,12 @@ function renderTimeline() {
   track.querySelectorAll(".cell[data-f]").forEach(c => {
     c.onclick = () => gotoFrame(+c.dataset.f, c.dataset.l === "cam" ? proj.currentLayer : +c.dataset.l);
   });
+  // ruler numbers are clickable in TVPaint: click a number to jump to that frame
+  track.querySelectorAll(".ruler .tick").forEach(tk => {
+    tk.style.cursor = "pointer";
+    tk.title = "go to image " + tk.textContent;
+    tk.onclick = () => gotoFrame(+tk.textContent, proj.currentLayer);
+  });
   track.querySelectorAll(".plus[data-plus]").forEach(b => {
     b.onclick = (e) => { e.stopPropagation(); gotoFrame(+b.dataset.plus, +b.dataset.pl);
       hist.pushModel(proj);
