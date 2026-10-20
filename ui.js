@@ -2500,7 +2500,7 @@ function numDialog(title, label, val, cb, min = 1, max = 9999) {
 function textDialog(title, label, val, cb) {
   const b = openModal(title, `<label style="display:flex;gap:10px;align-items:center">${label}
       <input id="tdVal" type="text" value="${(val || "").replace(/"/g, "&quot;")}" style="width:190px"></label>`,
-    [["Cancel", () => {}], ["Apply", () => {
+    [["Cancel", () => {}], ["OK", () => {
       cb(b.querySelector("#tdVal").value.trim());
     }, true]]);
   setTimeout(() => { const el = b.querySelector("#tdVal"); if (el) { el.focus(); el.select(); } }, 40);
