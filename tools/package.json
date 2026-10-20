@@ -1,0 +1,9 @@
+{
+  "name": "rea-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Offline PE string/xref/function/disassembly helpers",
+  "dependencies": {
+    "iced-x86": "^1.21.0"
+  }
+}
