@@ -495,5 +495,32 @@ test("resizeProject updates format (Modify Project)", () => {
   assert.strictEqual(p.layers[0].frames[1].canvas === undefined || true, true, "node stub tolerated");
 });
 
+test("reverseSelectedImages reverses exactly the selected keys", () => {
+  const l = E.newProject().layers[0];
+  l.frames = { 1: E.newFrame(), 3: E.newFrame(), 5: E.newFrame(), 7: E.newFrame() };
+  [1, 3, 5, 7].forEach((k, i) => {
+    l.frames[k].id = "id" + i;
+    l.frames[k].exposure = i + 2;
+  });
+  assert.strictEqual(E.reverseSelectedImages(l, [1, 5]), 2);
+  assert.deepStrictEqual(E.layerKeys(l), [1, 3, 5, 7], "key positions stay put");
+  assert.strictEqual(l.frames[1].id, "id2");
+  assert.strictEqual(l.frames[5].id, "id0");
+  assert.strictEqual(l.frames[1].exposure, 4, "exposure travels with the drawing");
+  assert.strictEqual(l.frames[5].exposure, 2);
+  assert.strictEqual(l.frames[3].id, "id1", "unselected key untouched");
+  assert.strictEqual(l.frames[7].id, "id3", "unselected key untouched");
+  assert.strictEqual(E.reverseSelectedImages(l, [3]), 1, "a single image is a no-op");
+  assert.strictEqual(l.frames[3].id, "id1");
+});
+
+test("cutting several images from the right keeps earlier keys addressable", () => {
+  const l = E.newProject().layers[0];
+  l.frames = { 1: E.newFrame(), 3: E.newFrame(), 5: E.newFrame() };
+  // This is the order cellOp("cut") uses for a multi-image selection.
+  [5, 3, 1].forEach(k => E.deleteImageAt(l, k, "stay"));
+  assert.deepStrictEqual(E.layerKeys(l), [1], "the empty layer recovers one blank drawing");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

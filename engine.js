@@ -587,6 +587,17 @@ function xsheetOp(proj, layer, op, frameNum, arg) {
   return true;
 }
 
+// Reverse exactly the selected drawings (Ctrl/Shift-click selection), leaving
+// every unselected key in place. Frame objects move, so exposures, roles and
+// names travel with their drawings. Returns the number of drawings reversed.
+function reverseSelectedImages(layer, keys) {
+  const ks = (keys || []).map(Number).filter(k => layer.frames[k]).sort((a, b) => a - b);
+  if (ks.length < 2) return ks.length;
+  const snaps = ks.map(k => layer.frames[k]);
+  ks.forEach((k, i) => { layer.frames[k] = snaps[snaps.length - 1 - i]; });
+  return ks.length;
+}
+
 // ---------- undo (per-frame bitmap snapshots, bounded) ----------
 function makeHistory(depth) {
   const undoStack = [], redoStack = [];
@@ -1165,7 +1176,7 @@ if (typeof module !== "undefined" && module.exports) {
     newProject, newLayer, newFrame, frameSurface, makeSurface,
     resizeProject,
     brushStamp, strokeBegin, strokeMove, strokeEnd,
-    floodFill, pickColor, xsheetOp, makeHistory, effectiveFrameKey,
+    floodFill, pickColor, xsheetOp, makeHistory, effectiveFrameKey, reverseSelectedImages,
     serializeProject, deserializeProject, George, colorWithAlpha,
     recomputeExposure, breakExposure, splitExposure, rippleExposure,
     trimExposureStart, cloneSurface, projectMaxEnd, syncProjectOut,

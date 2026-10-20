@@ -1272,6 +1272,10 @@ function frameIsEmpty(fr) {
   return true;
 }
 let tlSuppressClickUntil = 0, tlSlide = null;
+// Timeline image selection: Shift-click extends from the anchor, Ctrl-click
+// toggles one image. A plain click clears the selection, matching the live
+// menu state where Cut/Copy/Reverse are gray after a plain cell click.
+let imageSelAnchor = null;
 // Horizontal drag on any cell/spine slides the whole layer. Live: dragging key
 // 2 from frame 3 to 4 moved every key +1 and grew Project/Clip; dragging back
 // restored it. Modifiers did not change the gesture.
@@ -1561,8 +1565,31 @@ function renderTimeline() {
   track.querySelectorAll(".cell[data-f]").forEach(c => {
     c.onclick = (ev) => {
       if (performance.now() < tlSuppressClickUntil) return;
-      if (!ev.ctrlKey && !ev.shiftKey && proj.imageSel) proj.imageSel = null;
-      gotoFrame(+c.dataset.f, c.dataset.l === "cam" ? proj.currentLayer : +c.dataset.l);
+      const li = c.dataset.l === "cam" ? proj.currentLayer : +c.dataset.l;
+      const f = +c.dataset.f;
+      if (!ev.ctrlKey && !ev.shiftKey) {
+        if (proj.imageSel) proj.imageSel = null;
+        imageSelAnchor = null;
+      } else {
+        const l = proj.layers[li];
+        const k = l ? E.effectiveFrameKey(l, f) : null;
+        if (l && k != null) {
+          let keys = (proj.imageSel && proj.imageSel.layerId === l.id)
+            ? proj.imageSel.keys.slice() : [];
+          if (ev.shiftKey && imageSelAnchor && imageSelAnchor.layerId === l.id) {
+            const a = Math.min(imageSelAnchor.key, k), b = Math.max(imageSelAnchor.key, k);
+            const range = E.layerKeys(l).filter(x => x >= a && x <= b);
+            keys = [...new Set([...keys, ...range])];
+          } else {
+            if (ev.ctrlKey && keys.includes(k)) keys = keys.filter(x => x !== k);
+            else if (!keys.includes(k)) keys.push(k);
+            imageSelAnchor = { layerId: l.id, key: k };
+          }
+          keys.sort((a, b) => a - b);
+          proj.imageSel = keys.length ? { layerId: l.id, keys } : null;
+        }
+      }
+      gotoFrame(f, li);
     };
     if (c.dataset.l !== "cam") c.onpointerdown = (e) => beginCellSlide(e, c);
   });
@@ -2521,7 +2548,23 @@ function cellFrame(li, f) {
 }
 function hasImageSelection(l) {
   return !!(proj.imageSel && proj.imageSel.layerId === l.id &&
-    Array.isArray(proj.imageSel.keys) && proj.imageSel.keys.length);
+    Array.isArray(proj.imageSel.keys) && proj.imageSel.keys.some(k => l.frames[k]));
+}
+// Only keys that still exist on this layer. This also makes a stale selection
+// from another layer harmless.
+function selectedImageKeys(l) {
+  if (!hasImageSelection(l)) return [];
+  return proj.imageSel.keys.filter(k => l.frames[k]).sort((a, b) => a - b);
+}
+function captureImage(fr) {
+  return { exposure: fr.exposure || 1, role: fr.role || null, name: fr.name || null,
+    canvas: tvCloneSurface(fr.canvas) };
+}
+function makeImageClip(l, keys) {
+  const images = keys.map(k => captureImage(l.frames[k]));
+  const first = images[0];
+  return { images, exposure: first.exposure, role: first.role, name: first.name,
+    canvas: first.canvas, layerId: l.id, keys: keys.slice() };
 }
 function cellOp(op, li, f, arg) {
   const { l } = cellFrame(li, f);
@@ -2539,6 +2582,12 @@ function cellOp(op, li, f, arg) {
     const mode = arg || l.deleteMode || "stay";
     l.deleteMode = mode;
     tvCommit(() => E.deleteImageAt(l, f, mode));
+    if (proj.imageSel && proj.imageSel.layerId === l.id) {
+      const left = proj.imageSel.keys.filter(k => l.frames[k]);
+      proj.imageSel = left.length ? { layerId: l.id, keys: left } : null;
+      if (!left.length) imageSelAnchor = null;
+      renderAll();
+    }
     toast("image deleted from layer (" + mode + ")");
   } else if (op === "delete-project") {
     tvCommit(() => E.deleteFrameColumn(proj, f)); toast("frame deleted from project");
@@ -2546,24 +2595,42 @@ function cellOp(op, li, f, arg) {
     const added = (() => { let n = 0; tvCommit(() => { n = E.repeatImages(proj, l, l.repeatValue || 2, l.repeatMode || "Loop"); }); return n; })();
     toast(added ? `repeated ${l.repeatMode} (${l.repeatValue})` : "nothing to repeat");
   } else if (op === "reverse") {
-    const ks = hasImageSelection(l) ? proj.imageSel.keys.slice().sort((a, b) => a - b) : [f];
-    const a = ks[0] != null ? ks[0] : f;
-    const b = ks[ks.length - 1] != null ? ks[ks.length - 1] : f;
-    tvCommit(() => E.xsheetOp(proj, l, "reverse", a, b));
-    toast("selected images reversed");
+    const selKeys = selectedImageKeys(l);
+    if (selKeys.length) {
+      if (selKeys.length < 2) { toast("select at least two images"); return; }
+      // Reverse the selected drawings while leaving every unselected key in
+      // place. Swapping the frame objects also carries each exposure/role.
+      tvCommit(() => E.reverseSelectedImages(l, selKeys));
+      toast(selKeys.length + " selected images reversed");
+    } else {
+      const ks = E.layerKeys(l).filter(k => k >= f);
+      if (ks.length < 2) { toast("select at least two images"); return; }
+      tvCommit(() => E.xsheetOp(proj, l, "reverse", f, ks[ks.length - 1]));
+      toast("images reversed");
+    }
   } else if (op === "copy") {
-    const { k, fr } = cellFrame(li, f);
-    if (k == null) { toast("empty cell"); return; }
-    imageClip = { exposure: fr.exposure || 1, role: fr.role || null, name: fr.name || null,
-      canvas: tvCloneSurface(fr.canvas) };
-    toast("image copied");
+    const { k } = cellFrame(li, f);
+    const selKeys = selectedImageKeys(l);
+    const sourceKeys = selKeys.length ? selKeys : (k != null ? [k] : []);
+    if (!sourceKeys.length) { toast("empty cell"); return; }
+    imageClip = makeImageClip(l, sourceKeys);
+    toast(sourceKeys.length === 1 ? "image copied" : sourceKeys.length + " images copied");
   } else if (op === "cut") {
-    const { k, fr } = cellFrame(li, f);
-    if (k == null) { toast("empty cell"); return; }
-    imageClip = { exposure: fr.exposure || 1, role: fr.role || null, name: fr.name || null,
-      canvas: tvCloneSurface(fr.canvas) };
-    tvCommit(() => E.deleteImageAt(l, f, l.deleteMode || "stay"));
-    toast("image cut");
+    const { k } = cellFrame(li, f);
+    const selKeys = selectedImageKeys(l);
+    const sourceKeys = selKeys.length ? selKeys : (k != null ? [k] : []);
+    if (!sourceKeys.length) { toast("empty cell"); return; }
+    imageClip = makeImageClip(l, sourceKeys);
+    // Delete from the right so earlier keys never move under the cursor. A
+    // single tvCommit keeps a multi-image cut as one undo step.
+    tvCommit(() => {
+      sourceKeys.slice().sort((a, b) => b - a)
+        .forEach(kk => E.deleteImageAt(l, kk, l.deleteMode || "stay"));
+    });
+    proj.imageSel = null;
+    imageSelAnchor = null;
+    renderAll();
+    toast(sourceKeys.length === 1 ? "image cut" : sourceKeys.length + " images cut");
   }
 }
 function dlgExposure(li, f) {
@@ -2639,15 +2706,22 @@ window.cellMenu = function (li, f, mx, my) {
     ] },
     { sep: true },
     { label: "Select All", shortcut: "Ctrl A", action: () => {
-      proj.imageSel = { layerId: l.id, keys: E.layerKeys(l) };
-      renderAll(); toast("all images selected");
+      const ks = E.layerKeys(l);
+      proj.imageSel = { layerId: l.id, keys: ks };
+      imageSelAnchor = ks.length ? { layerId: l.id, key: ks[0] } : null;
+      renderAll(); toast(ks.length + " images selected");
     } },
-    { label: "Select Image from Key", shortcut: "/", disabled: empty || f === k, action: () => gotoFrame(markKey, li) },
+    { label: "Select Image from Key", shortcut: "/", disabled: empty || f === k, action: () => {
+      proj.imageSel = { layerId: l.id, keys: [markKey] };
+      imageSelAnchor = { layerId: l.id, key: markKey };
+      gotoFrame(markKey, li);
+      toast("image selected from key");
+    } },
     { sep: true },
     { label: "Split", disabled: empty, action: () => { proj.currentLayer = li; proj.currentFrame = f; splitLayerAt(li); } },
     { sep: true },
-    { label: "Cut Image", shortcut: "Ctrl X", disabled: !sel, action: () => cellOp("cut", li, f) },
-    { label: "Copy Image", shortcut: "Ctrl C", disabled: !sel, action: () => cellOp("copy", li, f) },
+    { label: sel ? "Cut Selected Images" : "Cut Image", shortcut: "Ctrl X", disabled: !sel, action: () => cellOp("cut", li, f) },
+    { label: sel ? "Copy Selected Images" : "Copy Image", shortcut: "Ctrl C", disabled: !sel, action: () => cellOp("copy", li, f) },
     { sep: true },
     { label: "Reverse Selected Images", disabled: !sel, action: () => cellOp("reverse", li, f) },
     { sep: true },
@@ -2666,13 +2740,32 @@ window.cellMenu = function (li, f, mx, my) {
 function pasteImageClip() {
   if (!imageClip) { toast("no image copied"); return; }
   const l = tvCurrentLayer();
+  const images = (Array.isArray(imageClip.images) && imageClip.images.length)
+    ? imageClip.images
+    : [{ exposure: imageClip.exposure, role: imageClip.role, name: imageClip.name,
+         canvas: imageClip.canvas }];
   let at = proj.currentFrame;
-  if (E.effectiveFrameKey(l, at) != null) at = E.layerEnd(l) + 1;
+  const nextKey = E.layerKeys(l).find(k => k > at);
+  const need = images.reduce((n, im) => n + Math.max(1, im.exposure || 1), 0);
+  // Paste in the empty cell under the play-head when it fits, otherwise append
+  // after the layer so a multi-image clipboard never overwrites later keys.
+  if (E.effectiveFrameKey(l, at) != null || (nextKey != null && at + need > nextKey)) {
+    at = E.layerEnd(l) + 1;
+  }
   tvCommit(() => {
-    l.frames[at] = { exposure: imageClip.exposure, role: imageClip.role, name: imageClip.name || null,
-      canvas: tvCloneSurface(imageClip.canvas), id: Math.random().toString(36).slice(2, 10) };
+    let pos = at;
+    images.forEach(im => {
+      const exp = Math.max(1, im.exposure || 1);
+      const fr = E.newFrame();
+      fr.exposure = exp;
+      fr.role = im.role || null;
+      fr.name = im.name || null;
+      fr.canvas = tvCloneSurface(im.canvas);
+      l.frames[pos] = fr;
+      pos += exp;
+    });
   });
-  toast("image pasted @ " + at);
+  toast(images.length === 1 ? "image pasted @ " + at : images.length + " images pasted @ " + at);
 }
 function pasteLayerClip() {
   if (!layerClip) { toast("no layer copied"); return; }
@@ -3563,9 +3656,12 @@ window.addEventListener("keydown", (e) => {
   if (e.ctrlKey && e.key.toLowerCase() === "s") { e.preventDefault(); e.shiftKey ? uiSaveAs() : uiSave(); return; }
   if (e.ctrlKey && e.key.toLowerCase() === "a") {
     e.preventDefault();
-    proj.inFrame = 1;
-    proj.outFrame = Math.max(proj.outFrame, ...proj.layers.map(x => E.layerEnd(x) || 1));
-    renderAll(); toast("all images selected"); return;
+    const l = tvCurrentLayer();
+    if (!l) return;
+    const ks = E.layerKeys(l);
+    proj.imageSel = { layerId: l.id, keys: ks };
+    imageSelAnchor = ks.length ? { layerId: l.id, key: ks[0] } : null;
+    renderAll(); toast(ks.length + " images selected"); return;
   }
   if (e.ctrlKey && e.key.toLowerCase() === "c") { e.preventDefault(); cellOp("copy", proj.currentLayer, proj.currentFrame); return; }
   if (e.ctrlKey && e.key.toLowerCase() === "x") { e.preventDefault(); cellOp("cut", proj.currentLayer, proj.currentFrame); return; }

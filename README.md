@@ -60,18 +60,29 @@ Works from `file://` too — just open `index.html`.
   roles and image marks, Split (enabled at a key start: splits the layer at the
   clicked frame), reverse selected images, multi-layer selection, and the
   restored `Define Loop Limits` entry at the bottom. `Select Image from Key` is
-  grayed at a key start, matching the live menu; it is enabled on a hold.
-  (The Move / Align / Merge / Select / Role submenu entries are reconstructed from
-  the shipped `english.tvpaint.loc` strings and George commands; the top-level
-  menus and the cell submenus were observed directly.)
+  grayed at a key start, matching the live menu; it is enabled on a hold and
+  selects the held image at its key start.
+- Image selection and multi-image clipboard: plain cell clicks clear the
+  selection, Shift-click extends a key range from the anchor, Ctrl-click toggles
+  one key, `Select All` (Ctrl A) selects every key on the current layer, and a
+  selection highlight follows each image's exposed cells. `Cut Image` / `Copy
+  Image` become `Cut Selected Images` / `Copy Selected Images` when a selection
+  exists (the singular and plural labels are both in the shipped loc), cut and
+  paste handle every selected drawing as one undo step, and `Reverse Selected
+  Images` reverses only the selected keys while unselected keys stay in place.
+  (The live interaction used to create a selection was not captured; Shift/Ctrl
+  click is the inferred timeline gesture. The Move / Align / Merge / Select /
+  Role submenu entries are reconstructed from the shipped `english.tvpaint.loc`
+  strings and George commands; the top-level menus and the cell submenus were
+  observed directly.)
 - New layer ▾ (anim, background, colour & texture, folder, puppet, import footage,
   duplicate structure), 17 blending modes, 13 colour groups, background
   None / Color / Check rendering, start frame, and the footer Notes / Sound /
   Color Group panes. Per-layer lock / light table / preserve-transparency /
   stencil dots, row collapse, global layer flags and image-mark ruler ticks.
 
-36 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
-modes, auto break/create flags and history (`npm test`).
+38 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
+modes, selected-image reversal, auto break/create flags and history (`npm test`).
 
 ## Tests
 
