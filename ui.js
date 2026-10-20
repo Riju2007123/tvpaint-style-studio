@@ -669,24 +669,14 @@ const TV_MENUS = {
       { label: "Blind", action: fx("Blind") }
     ] }
   ],
-  "Windows": [
-    // the same commands as the tool bar (REA: FUN_140530e10 uses exactly the
-    // Toggle*Panel commands, so the menu and the tool bar always agree)
-    { label: "Main", checked: () => tvPanelOpen("main"), action: () => tvTogglePanel("main") },
-    { label: "Color Panel", shortcut: "P", checked: () => tvPanelOpen("color"), action: () => tvTogglePanel("color") },
-    { label: "Tools", shortcut: "Shift A", checked: () => tvPanelOpen("tool"), action: () => tvTogglePanel("tool") },
-    { label: "Timeline", checked: () => tvPanelOpen("timeline"), action: () => tvTogglePanel("timeline") },
-    { sep: true },
-    { label: "Light Table", checked: () => tvPanelOpen("lt"), action: () => tvTogglePanel("lt") },
-    { label: "Timesheet", checked: () => tvPanelOpen("timesheet"), action: () => tvTogglePanel("timesheet") },
-    { label: "Remote Control", checked: () => tvPanelOpen("remote"), action: () => tvTogglePanel("remote") },
-    { label: "FX Stack", checked: () => tvPanelOpen("fxstack"), action: () => tvTogglePanel("fxstack") },
-    { label: "Guidelines", checked: () => tvPanelOpen("guideline"), action: () => tvTogglePanel("guideline") },
-    { label: "Share Manager", checked: () => tvPanelOpen("share"), action: () => tvTogglePanel("share") },
-    { label: "Navigator", checked: () => tvPanelOpen("navigator"), action: () => tvTogglePanel("navigator") },
-    { label: "Library", checked: () => tvPanelOpen("library"), action: () => tvTogglePanel("library") },
-    { label: "Camera Panel", checked: () => { const q = document.querySelector("[data-panel-key=camera]"); return !!q && q.style.display !== "none"; }, action: () => { const q = document.querySelector("[data-panel-key=camera]"); if (q) q.style.display = q.style.display === "none" ? "" : "none"; } }
-  ],
+  "Windows": TV_PANEL_COMMANDS.map(p => ({
+    label: p.title,
+    checked: () => {
+      const el = tvPanelElement(p.panel);
+      return !!el && el.style.display !== "none";
+    },
+    action: () => tvTogglePanel(p.panel)
+  })),
   "Custom Panels": TV_CUSTOM_PANELS.map(p => ({
     label: p.name,
     checked: () => {
@@ -1063,21 +1053,24 @@ const TV_TOOLBAR_ORDER = [
 const tvPanelState = {};
 TV_PANEL_DEFS.forEach(d => { tvPanelState[d.key] = !!d.open; });
 function tvPanelDef(key) { return TV_PANEL_DEFS.find(d => d.key === key); }
-function tvTogglePanel(key) {
-  const d = tvPanelDef(key);
-  if (!d) return;
-  tvPanelState[key] = !tvPanelState[key];
-  const el = tvPanelElement(key);
-  if (el) el.style.display = tvPanelState[key] ? "" : "none";
-  syncToolbarState();
-  renderAll();
-}
 // where the panel of a key lives in the prototype
 function tvPanelElement(key) {
   if (key === "timeline") return $("tlpanel");
   return document.querySelector("[data-panel-key=\"" + key + "\"]");
 }
-function tvPanelOpen(key) { return !!tvPanelState[key]; }
+// shows or hides a dockable panel of the left column (the Toggle*Panel
+// commands of TVPaint - commands.js holds the real list)
+function tvTogglePanel(key) {
+  const el = tvPanelElement(key);
+  if (!el) { toast("the " + key + " window is not in this prototype"); return; }
+  el.style.display = el.style.display === "none" ? "" : "none";
+  syncToolbarState();
+  renderAll();
+}
+function tvPanelOpen(key) {
+  const el = tvPanelElement(key);
+  return !!el && el.style.display !== "none";
+}
 function syncToolbarState() {
   // the selected background of the live app is ONE block behind the buttons of
   // the panels that are open - it is not a per button highlight
@@ -1513,9 +1506,9 @@ function buildPanels() {
       p.style.height = big ? "" : "320px";
     };
     p.querySelector(".phead button[title=close]").onclick = (e) => {
-      e.stopPropagation(); tvPanelState[key] = false; p.style.display = "none"; syncToolbarState();
+      e.stopPropagation(); p.style.display = "none"; syncToolbarState();
     };
-    p.style.display = tvPanelState[key] ? "" : "none";
+    p.style.display = tvPanelState[key] ? "" : "none";   // the initial state
     return body;
   };
   // Color Panel: the APen / BPen colour boxes of TVPaint

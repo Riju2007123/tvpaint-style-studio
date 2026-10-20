@@ -1341,6 +1341,35 @@ resources**:
 - **The paper textures** (`Resources/papers`, 182 files) and the **light icon
   set** (`Resources/icons/light`, 2194 files in five sizes) are in the app.
 
+### v36 pass - the command table, extracted from the executable
+
+REA located the command registration (`FUN_1406e0470`) and the ~500 command
+table builders that call it, so the whole command inventory was extracted from
+the string literals of the executable.  The dockable windows are the
+Open / Close / Toggle Panel commands:
+
+`MainPanel  PalettePanel  ToolPanel  TimelinePanel  ProjectPanel  XSheetPanel
+ChronoPanel  ColorCheckerPanel  ColorGroupPanel  DisplayOptionPanel
+EffectPanel  GuidelinePanel  ImageMarkPanel  LTPanel  LibraryImagePanel
+MenuPanel  NavigatorPanel  PathManagerPanel  PixelTrackerPanel
+PreviewSetPanel  ProjectRecorderPanel  RemotePanel  ShapeSettingsPanel
+ShareServicesPanel  ShareServiceManagerPanel  StrokeRecorderPanel  UndoPanel
+VideoInPanel  LineSmoothingPanel  FlipPanel  ConnectionSettingsPanel
+SettingsPanel`
+
+and the camera commands are
+`CameraAddKey / AddPositionKey / AddRotationKey / AddZoomKey / AddSizeKey /
+CameraDeleteKey / DeletePositionKey / DeleteRotationKey / DeleteZoomKey /
+DeleteSizeKey / CameraMoveToNextKey / MoveToPreviousKey / MoveToFirstKey /
+MoveToLastKey / CameraCurrentMode / CameraData / CameraPath /
+CameraPrecisionAngle / CameraSafeArea / CameraSafeAreaBorderIn / BorderOut /
+CameraSizeX / SizeY / CameraWidth / Height / CameraMultiplierWidth / Height /
+Camera43Border / CameraCalibration1 / CameraSerialNumber`.
+
+`commands.js` now carries that inventory and the `Windows` menu is built from
+the real `Toggle*Panel` commands, so the prototype has TVPaint's own windows
+(33 of them) with TVPaint's own names.
+
 ### Still not captured
 - Exact Role submenu appearance/order. The labels are known from the loc's role
   assignment commands: `Keyframe`, `Breakdown`, `Inbetween (To Do)`,
