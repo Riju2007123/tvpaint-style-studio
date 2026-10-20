@@ -384,6 +384,7 @@ function renderAll() {
   renderTimelineStatus();
   updateZoomLbl();
   renderInfoBar();
+  syncTVPanels();
 }
 // The information bar of the project window (TVPaint 12, live capture):
 //   Project: "Untitled_(3)"  Clip: "Clip_001"  20.00%  0°  Current Layer:
@@ -669,24 +670,22 @@ const TV_MENUS = {
     ] }
   ],
   "Windows": [
-    { label: "Main", checked: () => panelEls[0] && panelEls[0].style.display !== "none", action: () => togglePanel(0) },
-    { label: "Color Panel", checked: true, action: () => togglePane("color") },
-    { label: "Tools", shortcut: "Shift A", checked: () => panelEls[1] && panelEls[1].style.display !== "none", action: () => togglePanel(1) },
-    { label: "Timeline", checked: true, action: () => togglePane("timeline") },
+    // the same commands as the tool bar (REA: FUN_140530e10 uses exactly the
+    // Toggle*Panel commands, so the menu and the tool bar always agree)
+    { label: "Main", checked: () => tvPanelOpen("main"), action: () => tvTogglePanel("main") },
+    { label: "Color Panel", shortcut: "P", checked: () => tvPanelOpen("color"), action: () => tvTogglePanel("color") },
+    { label: "Tools", shortcut: "Shift A", checked: () => tvPanelOpen("tool"), action: () => tvTogglePanel("tool") },
+    { label: "Timeline", checked: () => tvPanelOpen("timeline"), action: () => tvTogglePanel("timeline") },
     { sep: true },
-    { label: "Animation", submenu: [{ label: "Animation", action: fx("Animation window") }] },
-    { label: "Drawing", submenu: [{ label: "Drawing", action: fx("Drawing window") }] },
-    { label: "Show", submenu: [{ label: "Show", action: fx("Show window") }] },
-    { label: "FX Tools", submenu: [{ label: "FX Tools", action: fx("FX Tools window") }] },
-    { label: "Others", submenu: [
-      { label: "FX Stack", action: fx("FX Stack") },
-      { label: "Path Recorder", action: fx("Path Recorder") },
-      { label: "Pixel Tracker", action: fx("Pixel Tracker") },
-      { label: "Path Manager", action: fx("Path Manager") }
-    ] },
-    { sep: true },
-    { label: "Plugins", submenu: [{ label: "Plugins", action: fx("Plugins") }] },
-    { label: "Scripts", submenu: [{ label: "Scripts", action: fx("Scripts") }] }
+    { label: "Light Table", checked: () => tvPanelOpen("lt"), action: () => tvTogglePanel("lt") },
+    { label: "Timesheet", checked: () => tvPanelOpen("timesheet"), action: () => tvTogglePanel("timesheet") },
+    { label: "Navigator", checked: () => tvPanelOpen("navigator"), action: () => tvTogglePanel("navigator") },
+    { label: "Effects", checked: () => tvPanelOpen("fx"), action: () => tvTogglePanel("fx") },
+    { label: "Remote Control", checked: () => tvPanelOpen("remote"), action: () => tvTogglePanel("remote") },
+    { label: "Library", checked: () => tvPanelOpen("library"), action: () => tvTogglePanel("library") },
+    { label: "Guidelines", checked: () => tvPanelOpen("guideline"), action: () => tvTogglePanel("guideline") },
+    { label: "Share Services", checked: () => tvPanelOpen("share"), action: () => tvTogglePanel("share") },
+    { label: "Camera Panel", checked: () => panelEls[2] && panelEls[2].style.display !== "none", action: () => { if (panelEls[2]) panelEls[2].style.display = panelEls[2].style.display === "none" ? "" : "none"; } }
   ],
   "Custom Panels": [
     { label: "Animator Panel", checked: true, action: () => togglePane("animator") },
@@ -891,43 +890,44 @@ function promptRecent() {
 function buildToolbar() {
   const tb = $("toolbar");
   tb.innerHTML = "";
-  // the four highlighted buttons of the live app share ONE blue block
+  // the panel buttons that TVPaint keeps on the selected background share ONE
+  // blue block - it is drawn first, behind the buttons
   const blk = document.createElement("div");
   blk.className = "tbSel";
-  blk.style.left = "183px";
   tb.appendChild(blk);
-  // x = the left edge of the icon in the live TVPaint window
-  const mk = (icon, tip, fn, x, id, sel) => {
+  const W = { plain: 24, panel: 24 };   // the width of a button in the live app
+  let x = 0;
+  const items = [];
+  TV_TOOLBAR_ORDER.forEach(item => {
     const b = document.createElement("button");
-    b.className = "tib" + (sel ? " sel" : ""); b.title = tip;
-    b.style.left = x + "px";
-    if (id) b.id = id;
-    b.innerHTML = `<img src="icons/${icon}" alt="">`;
-    b.onclick = fn;
+    b.className = "tib"; b.style.left = item.x + "px";
+    if (item.panel) {
+      const d = tvPanelDef(item.panel);
+      b.dataset.panel = item.panel;
+      b.title = d.title + "  [" + d.cmd + "]";
+      b.innerHTML = `<img src="icons/${d.icon}" alt="">`;
+      b.onclick = () => tvTogglePanel(item.panel);
+    } else {
+      b.title = item.tip + (item.cmd ? "  [" + item.cmd + "]" : "");
+      b.innerHTML = `<img src="icons/${item.icon}" alt="">`;
+      b.onclick = item.fn;
+    }
     tb.appendChild(b);
-    return b;
-  };
-  mk("Toolbar-New.png", "New project", () => uiNew(), 26);
-  mk("Toolbar-Open.png", "Open project", () => uiOpen(), 48);
-  mk("Toolbar-Undo.png", "Undo (Ctrl+Z)", () => uiUndo(), 115);
-  mk("Toolbar-Redo.png", "Redo (Ctrl+Y)", () => uiRedo(), 140);
-  // the four buttons TVPaint keeps highlighted (the current view mode)
-  mk("Toolbar-Project.png", "Project with camera", () => { proj.cameraKeys = proj.cameraKeys || []; renderAll(); }, 183, null, true);
-  mk("Toolbar-ColorWheel.png", "Chromatic wheel", () => togglePane("color"), 207, null, true);
-  mk("Toolbar-Pen.png", "Out of pegs", () => toast("out of pegs — not in this prototype"), 232, null, true);
-  mk("Toolbar-Layers.png", "Layers", () => { $("tlpanel").scrollIntoView(); }, 257, null, true);  mk("Toolbar-Bulb.png", "Onion skin (ghosts)", () => toggleOnion(), 286, "tbOnion");
-  mk("Toolbar-Table.png", "Cycle guidelines", () => cycleGuides(), 308, "tbGuides");
-  mk("Toolbar-Remote.png", "Remote control", () => toast("remote control — not in this prototype"), 337);
-  mk("Toolbar-Search.png", "Search / zoom navigator", () => toast("zoom navigator — not in this prototype"), 384);
-  mk("Toolbar-Nature.png", "Nature brushes", () => toast("nature brushes — not in this prototype"), 432);
-  mk("Toolbar-Send.png", "Send to…", () => toast("send to — not in this prototype"), 458);
-  mk("Toolbar-BrushRuler.png", "Brush presets", () => toast("brush presets — not in this prototype"), 500);
-  mk("Help-x20.png", "Help", () => toast("help — not in this prototype"), 560);
-  // the purchase button and the document tab of the live app
+    items.push({ b, x: item.x, w: W[item.panel ? "panel" : "plain"] });
+    x = item.x + W[item.panel ? "panel" : "plain"];
+  });
+  // the blue block covers the contiguous run of open panel buttons
+  const openIdx = TV_TOOLBAR_ORDER.map((i, n) => i.panel && tvPanelOpen(i.panel) ? n : -1).filter(n => n >= 0);
+  if (openIdx.length) {
+    const first = openIdx[0], last = openIdx[openIdx.length - 1];
+    blk.style.left = items[first].x + "px";
+    blk.style.width = (items[last].x + items[last].w - items[first].x) + "px";
+    blk.style.display = "";
+  } else blk.style.display = "none";  // the purchase button and the document tab of the live app
   const buy = document.createElement("button");
   buy.id = "purchase"; buy.textContent = "PURCHASE";
   buy.onclick = () => toast("(this is a rebuild — nothing to buy)");
-  buy.style.left = "620px";
+  buy.style.left = (x + 40) + "px";
   tb.appendChild(buy);
   const tab = document.createElement("div");
   tab.id = "projTab";
@@ -1009,6 +1009,204 @@ TOOL_LABELS.zoomrect = "Zoom"; TOOL_LABELS.selrect = "Rectangle Selection";
 TOOL_LABELS.selfreehand = "Freehand Selection";
 TOOL_LABELS.cutrect = "Cut Brush"; TOOL_LABELS.cutfreehand = "Cut Brush";
 
+// ---------------------------------------------------------------------------
+// The tool bar of TVPaint 12 is a row of PANEL TOGGLES.
+// REA: the tool bar builder FUN_140555d80 creates one action per panel and
+// connects it to the panel with FUN_140071450, so the button is lit while the
+// panel is open.  The same commands are used by the Windows menu
+// (FUN_140530e10) and by the command registry, which is why the tool bar and
+// the menu always agree.
+//   id  icon                 command                     panel state
+//   500 MiscMainPanel        ToggleMainPanel             DAT_140cf933c
+//   430 ColorPicker          TogglePalettePanel          DAT_140cf9324
+//   460 DrawingTool          ToggleToolPanel             DAT_140cf9320
+//   420 MiscLayers           ToggleTimelinePanel         DAT_140cf9330
+//   490 Lighttable           ToggleLTPanel               DAT_140cf9368
+//   480 FX                   ToggleEffectPanel           DAT_140cf9364
+//   410 MiscNavigator        ToggleNavigatorPanel        DAT_140cf9328
+//   470 MiscRemote           ToggleRemotePanel           DAT_140cf932c
+//   325 LibraryImage         ToggleLibraryImagePanel     DAT_140cf9338
+//   320 MiscGuideline        ToggleGuidelinePanel        DAT_140cf9334
+//   330 MiscShareServices    ToggleShareServicesPanel    DAT_140cf9370
+//   485 Timesheet            Key_ToggleTimesheetPanel    DAT_140cf9374
+//   350 Help                 Online Help
+//   666 buy_now.png          the purchase button
+// ---------------------------------------------------------------------------
+const TV_PANEL_DEFS = [
+  { key: "main", title: "Main Panel", icon: "MiscMainPanel-x20.png", cmd: "ToggleMainPanel", open: true },
+  { key: "color", title: "Color Panel", icon: "ColorPicker-x20.png", cmd: "TogglePalettePanel", open: true },
+  { key: "tool", title: "Tool Panel", icon: "DrawingTool-x20.png", cmd: "ToggleToolPanel", open: true },
+  { key: "timeline", title: "Timeline", icon: "MiscLayers-x20.png", cmd: "ToggleTimelinePanel", open: true },
+  { key: "lt", title: "Light Table", icon: "Lighttable-x20.png", cmd: "ToggleLTPanel" },
+  { key: "timesheet", title: "Timesheet", icon: "Timesheet-x20.png", cmd: "Key_ToggleTimesheetPanel" },
+  { key: "remote", title: "Remote Control", icon: "MiscRemote-x20.png", cmd: "ToggleRemotePanel" },
+  { key: "navigator", title: "Navigator", icon: "MiscNavigator-x20.png", cmd: "ToggleNavigatorPanel" },
+  { key: "fx", title: "Effects", icon: "FX-x20.png", cmd: "ToggleEffectPanel" },
+  { key: "share", title: "Share Services", icon: "MiscShareServices-x20.png", cmd: "ToggleShareServicesPanel" },
+  { key: "guideline", title: "Guidelines", icon: "MiscGuideline-x20.png", cmd: "ToggleGuidelinePanel" },
+  { key: "library", title: "Library", icon: "LibraryImage-x20.png", cmd: "ToggleLibraryImagePanel" }
+];
+// the live order and the measured x position of every tool bar button
+const TV_TOOLBAR_ORDER = [
+  { icon: "FileNew-x20.png", tip: "New project", cmd: "NewProject", x: 26, fn: () => uiNew() },
+  { icon: "FileOpen-x20.png", tip: "Open project", cmd: "LoadProject", x: 48, fn: () => uiOpen() },
+  { icon: "Undo-x20.png", tip: "Undo", cmd: "Undo", x: 115, fn: () => uiUndo() },
+  { icon: "Redo-x20.png", tip: "Redo", cmd: "MultiRedo", x: 140, fn: () => uiRedo() },
+  { panel: "main", x: 183 }, { panel: "color", x: 207 }, { panel: "tool", x: 232 },
+  { panel: "timeline", x: 257 },
+  { panel: "lt", x: 286 }, { panel: "timesheet", x: 308 }, { panel: "remote", x: 337 },
+  { panel: "navigator", x: 384 }, { panel: "fx", x: 432 }, { panel: "share", x: 458 },
+  { panel: "guideline", x: 500 },
+  { icon: "Help-x20.png", tip: "Online Help", cmd: "Online Help", x: 560, fn: () => toast("online help — not in this prototype") }
+];
+// the state of every panel (the live app keeps one global per panel)
+const tvPanelState = {};
+TV_PANEL_DEFS.forEach(d => { tvPanelState[d.key] = !!d.open; });
+function tvPanelDef(key) { return TV_PANEL_DEFS.find(d => d.key === key); }
+function tvTogglePanel(key) {
+  const d = tvPanelDef(key);
+  if (!d) return;
+  tvPanelState[key] = !tvPanelState[key];
+  const el = tvPanelElement(key);
+  if (el) el.style.display = tvPanelState[key] ? "" : "none";
+  syncToolbarState();
+  renderAll();
+}
+// where the panel of a key lives in the prototype
+function tvPanelElement(key) {
+  if (key === "main") return panelEls[0];
+  if (key === "tool") return panelEls[1];
+  if (key === "timeline") return $("tlpanel");
+  return document.getElementById("tvpanel-" + key);
+}
+function tvPanelOpen(key) { return !!tvPanelState[key]; }
+function syncToolbarState() {
+  // the selected background of the live app is ONE block behind the buttons of
+  // the panels that are open - it is not a per button highlight
+  const blk = document.querySelector("#toolbar .tbSel");
+  if (!blk) return;
+  const items = TV_TOOLBAR_ORDER.map(item => {
+    const b = [...document.querySelectorAll("#toolbar .tib")]
+      .find(x => x.dataset.panel === item.panel || (x.title || "").indexOf(item.cmd || "\u0000") === 0);
+    return { item, b };
+  });
+  const open = items.filter(o => o.item.panel && tvPanelOpen(o.item.panel));
+  if (!open.length) { blk.style.display = "none"; return; }
+  const first = open[0].item.x, last = open[open.length - 1].item.x;
+  let lx = first, rx = last;
+  // the block ends after the last open button
+  const lastIdx = TV_TOOLBAR_ORDER.indexOf(open[open.length - 1].item);
+  const w = TV_TOOLBAR_ORDER[lastIdx].panel ? 21 : 20;
+  blk.style.left = lx + "px";
+  blk.style.width = (rx - lx + w) + "px";
+  blk.style.display = "";
+}
+// Fills the content of the panels the tool bar toggles.
+function syncTVPanels() {
+  // Color Panel: the two colour boxes
+  const a = $("cpAPen"), b = $("cpBPen");
+  if (a) a.style.background = proj.apen;
+  if (b) b.style.background = proj.bpen;
+  const sel = $("cpSel");
+  if (sel && !sel.options.length) {
+    (proj.palette || []).forEach(c => {
+      const o = document.createElement("option"); o.textContent = c.name; o.value = c.color; sel.appendChild(o);
+    });
+    if (!sel.options.length) {
+      const o = document.createElement("option"); o.textContent = proj.apen; o.value = proj.apen; sel.appendChild(o);
+    }
+  }
+  if (sel && sel.value) setApen(sel.value);
+  // Light Table: every layer with its light table flag
+  const lt = $("ltList");
+  if (lt) {
+    lt.innerHTML = proj.layers.map((l, i) =>
+      `<div class="orow"><label>${l.name}</label>
+        <input type="checkbox" data-lt="${i}" ${l.lighttable ? "checked" : ""}></div>`).join("");
+    lt.querySelectorAll("[data-lt]").forEach(cb => cb.onchange = () => {
+      const l = proj.layers[+cb.dataset.lt];
+      l.lighttable = cb.checked;
+      renderAll();
+    });
+  }
+  const la = $("ltAtten");
+  if (la) la.checked = !!proj.layerAttenuation;
+  // Timesheet: the images of the clip
+  const ts = $("tsList");
+  if (ts) {
+    const rows = [];
+    for (let f = 1; f <= proj.outFrame; f++) {
+      const l = proj.layers[proj.currentLayer];
+      const k = E.effectiveFrameKey(l, f);
+      rows.push(`<div class="orow" style="padding:1px 4px;cursor:pointer" data-f="${f}">
+        <label>${f}</label><span style="flex:1">${k === null ? "<i style='color:#6E6E75'>empty</i>" : "image"}</span></div>`);
+    }
+    ts.innerHTML = rows.join("");
+    ts.querySelectorAll("[data-f]").forEach(d => d.onclick = () => gotoFrame(+d.dataset.f));
+  }
+  // Remote control: the frame rate
+  const rf = $("rcFps");
+  if (rf && !rf.options.length) {
+    [12, 24, 25, 30, 50, 60].forEach(f => {
+      const o = document.createElement("option"); o.textContent = f + " fps"; o.value = f; rf.appendChild(o);
+    });
+    rf.value = proj.fps;
+    rf.onchange = () => { proj.fps = +rf.value; renderAll(); };
+  }
+  // Effects: the effect groups of the Effects menu
+  const fx = $("fxList");
+  if (fx && !fx.dataset.done) {
+    fx.dataset.done = "1";
+    fx.innerHTML = (TV_MENUS.Effects || []).map(it =>
+      `<div class="orow"><label style="flex:1">${it.label}</label><span style="color:#6E6E75">▸</span></div>`).join("");
+    fx.querySelectorAll(".orow").forEach((d, n) => d.onclick = () => {
+      const it = (TV_MENUS.Effects || [])[n];
+      if (!it) return;
+      const r = d.getBoundingClientRect();
+      openTvMenu(it.submenu || [], r.right + 2, r.top);
+    });
+  }
+  // Share services: the export destinations
+  const sh = $("shList");
+  if (sh && !sh.dataset.done) {
+    sh.dataset.done = "1";
+    const items = ["Export Current Frame (PNG)", "Export Image Sequence…", "Send to…", "Share Services"];
+    sh.innerHTML = items.map(t => `<div class="orow"><label style="flex:1">${t}</label></div>`).join("");
+    sh.querySelectorAll(".orow").forEach((d, n) => d.onclick = () => {
+      if (n === 0) exportFrame(); else if (n === 1) exportSequence();
+      else toast(items[n] + " — not in this prototype");
+    });
+  }
+  // Library: the recent files
+  const lb = $("lbList");
+  if (lb) {
+    const list = loadRecent();
+    lb.innerHTML = list.length
+      ? list.map(e => `<div class="orow" style="cursor:pointer" data-n="${e.name}"><label style="flex:1">${e.name}</label></div>`).join("")
+      : `<div class="orow"><label style="flex:1;color:#6E6E75">no recent file</label></div>`;
+    lb.querySelectorAll("[data-n]").forEach(d => d.onclick = () => uiOpenRecent(d.dataset.n));
+  }
+  // Navigator: a small view of the drawing area with the viewport rectangle
+  const nav = $("navCv");
+  if (nav) {
+    const g = nav.getContext("2d");
+    const s = Math.min(nav.width / proj.width, nav.height / proj.height);
+    g.clearRect(0, 0, nav.width, nav.height);
+    g.fillStyle = "#e8e8ea";
+    g.fillRect(0, 0, proj.width * s, proj.height * s);
+    // the artwork
+    const l = proj.layers[proj.currentLayer];
+    const k = E.effectiveFrameKey(l, proj.currentFrame);
+    const surf = k !== null ? l.frames[k].canvas : null;
+    if (surf && surf.getContext) g.drawImage(surf, 0, 0, proj.width * s, proj.height * s);
+    // the viewport
+    g.strokeStyle = "#3e8cff"; g.lineWidth = 1;
+    g.strokeRect(-view.x / view.zoom * s, -view.y / view.zoom * s,
+      (art.width / view.zoom) * s, (art.height / view.zoom) * s);
+    const nz = $("navZoom");
+    if (nz) nz.textContent = (view.zoom * 100).toFixed(2) + "%";
+  }
+}
 let panelEls = [];
 function buildPanels() {
   const wrap = $("panels"); wrap.innerHTML = ""; panelEls = [];
@@ -1036,6 +1234,87 @@ function buildPanels() {
     </div>`;
   buildBtnGrid($("mainGrid"), MAINGRID);
   $("btnBinClear").onclick = clearBin;
+  // ---- the panels the tool bar toggles (REA: one action per panel) ----
+  // The Main / Tool / Timeline panels exist above; the other TVPaint panels are
+  // created here so that every tool bar button really opens something.
+  const mkTVPanel = (key) => {
+    const d = tvPanelDef(key);
+    const p = document.createElement("div");
+    p.className = "panel"; p.id = "tvpanel-" + key;
+    p.innerHTML = `<div class="phead"><span class="pt">${d.title}</span>
+      <button class="pw" title="collapse">▼</button>
+      <button class="pw" title="close">✕</button>
+      <button class="pw" title="lock">⚿</button></div><div class="pbody"></div>`;
+    $("panels").appendChild(p);
+    const body = p.querySelector(".pbody");
+    p.querySelector(".phead button[title=collapse]").onclick =
+      (e) => { e.stopPropagation(); body.style.display = body.style.display === "none" ? "" : "none"; };
+    p.querySelector(".phead button[title=close]").onclick = (e) => {
+      e.stopPropagation(); tvPanelState[key] = false; p.style.display = "none"; syncToolbarState();
+    };
+    p.style.display = tvPanelState[key] ? "" : "none";
+    return body;
+  };
+  // Color Panel: the APen / BPen colour boxes of TVPaint
+  const cp = mkTVPanel("color");
+  cp.innerHTML = `
+    <div class="orow"><label>APen</label>
+      <span id="cpAPen" style="flex:1;height:18px;border:1px solid #000;border-radius:2px"></span>
+      <button class="minib" id="cpPickA">◈</button></div>
+    <div class="orow"><label>BPen</label>
+      <span id="cpBPen" style="flex:1;height:18px;border:1px solid #000;border-radius:2px"></span>
+      <button class="minib" id="cpPickB">◈</button></div>
+    <div class="orow"><label>Colour</label><select id="cpSel" style="flex:1"></select></div>`;
+  $("cpPickA").onclick = () => { const c = prompt("APen colour (#hex):", proj.apen); if (c) setApen(c); };
+  $("cpPickB").onclick = () => { const c = prompt("BPen colour (#hex):", proj.bpen); if (c) setBpen(c); };
+  // Light Table: the light table of every layer (TVPaint dims the other layers)
+  const lt = mkTVPanel("lt");
+  lt.innerHTML = `<div id="ltList"></div>
+    <div class="orow"><label>Attenuate</label><input type="checkbox" id="ltAtten"></div>`;
+  $("ltAtten").onchange = (e) => { proj.layerAttenuation = e.target.checked; renderAll(); };
+  // Timesheet: the list of the images of the clip
+  const ts = mkTVPanel("timesheet");
+  ts.innerHTML = `<div id="tsList" style="max-height:220px;overflow:auto"></div>`;
+  // Remote Control: the transport of the project window
+  const rc = mkTVPanel("remote");
+  rc.innerHTML = `<div class="orow" style="flex-wrap:wrap;gap:4px">
+      <button class="minib" id="rcFirst">⏮</button>
+      <button class="minib" id="rcPrev">◀</button>
+      <button class="minib" id="rcPlay">▶</button>
+      <button class="minib" id="rcStop">■</button>
+      <button class="minib" id="rcNext">▶|</button>
+      <button class="minib" id="rcLast">⏭</button></div>
+    <div class="orow"><label>Speed</label><select id="rcFps" style="flex:1"></select></div>`;
+  $("rcFirst").onclick = () => remote("first");
+  $("rcPrev").onclick = () => remote("prev");
+  $("rcPlay").onclick = () => remote("play");
+  $("rcStop").onclick = () => remote("stop");
+  $("rcNext").onclick = () => remote("next");
+  $("rcLast").onclick = () => remote("last");
+  // Navigator: the zoom navigator - a small view of the drawing area
+  const nv = mkTVPanel("navigator");
+  nv.innerHTML = `<canvas id="navCv" width="228" height="132"
+      style="background:#1c1f24;border:1px solid #4a4a51;cursor:move"></canvas>
+    <div class="orow"><label>Zoom</label><span id="navZoom" style="flex:1;text-align:right"></span></div>`;
+  // Effects: the effect groups of the Effects menu
+  const fx = mkTVPanel("fx");
+  fx.innerHTML = `<div id="fxList"></div>`;
+  // Share Services: the export / share destinations
+  const sh = mkTVPanel("share");
+  sh.innerHTML = `<div id="shList"></div>`;
+  // Guidelines: the guideline options of the project window
+  const gd = mkTVPanel("guideline");
+  gd.innerHTML = `<div class="orow"><label>Grid</label><input type="checkbox" id="gdGrid"></div>
+    <div class="orow"><label>Safe Area</label><input type="checkbox" id="gdSafe"></div>
+    <div class="orow"><label>Rule of Thirds</label><input type="checkbox" id="gdThirds"></div>
+    <div class="orow"><label>Field Chart</label><input type="checkbox" id="gdField"></div>`;
+  $("gdGrid").onchange = (e) => toggleGuide("grid", e.target.checked);
+  $("gdSafe").onchange = (e) => toggleGuide("safeArea", e.target.checked);
+  $("gdThirds").onchange = (e) => toggleGuide("thirds", e.target.checked);
+  $("gdField").onchange = (e) => toggleGuide("fieldChart", e.target.checked);
+  // Library: the files of the project library
+  const lb = mkTVPanel("library");
+  lb.innerHTML = `<div id="lbList" style="max-height:220px;overflow:auto"></div>`;
   // ---- Tool : <name> Panel ----
   const tp = mkPanel("Tool : Pen Brush");
   panelEls[1].id = "toolPanel";
@@ -5035,9 +5314,9 @@ window.addEventListener("resize", () => renderAll());
 boot();
 function boot() {
   buildMenubar();
-  buildToolbar();
   buildPanels();
   buildCameraPanel();
+  buildToolbar();
   buildTlTabs();
   buildVbRow();
   buildTransport();

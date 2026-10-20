@@ -1062,6 +1062,76 @@ The prototype now places every icon at the measured x position (verified: the
 DOM offsets are within 0-3 px of the live app) and the row is 33 px high with
 the `49,49,54` background.
 
+### v29 pass - what every tool bar button really does (the tool bar source)
+
+The tool bar is **not** a set of unrelated icons: it is a row of **panel
+toggles** plus the four document commands.  REA found the builder:
+**`FUN_140555d80`** creates one action per button and then binds it to the
+panel with `FUN_140071450(toolbar, id, &panelState)`, so the button is lit
+while its panel is open.  The same commands are used by the **Windows menu**
+(**`FUN_140530e10`**, which adds each item with the checked state
+`panelState != 0`) and by the command registry, which is why the tool bar and
+the menu can never disagree.
+
+The decompiled builder, verbatim in structure:
+
+```
+FUN_1406f8a70(local_res18,&DAT_140a376f1);            // the tooltip
+FUN_140078610(local_res10,param_1,<id>,local_38,local_res18);   // add the action
+...
+uVar4 = FUN_1400468c0(L"FileNew.png");
+FUN_1400710d0(param_1,10,uVar4);
+uVar4 = FUN_1404950a0(0x6ebe);
+FUN_140075ba0(param_1,10,uVar4,"NewProject");
+```
+
+The last part of the function assigns **every icon and command name**:
+
+| id | icon | command | what it does | panel state |
+|---|---|---|---|---|
+| 10 | FileNew.png | **NewProject** | new project | - |
+| 0x14 | FileOpen.png | **LoadProject** | open project | - |
+| 0x2a | Undo.png | Undo | undo | - |
+| 0x2b | Redo.png | **MultiRedo** | redo | - |
+| 350 | Help.png | **Online Help** | the help button | - |
+| 500 | MiscMainPanel.png | **ToggleMainPanel** | show / hide the Main Panel | `DAT_140cf933c` |
+| 430 | ColorPicker.png | **TogglePalettePanel** | show / hide the Color Panel | `DAT_140cf9324` |
+| 460 | DrawingTool.png | **ToggleToolPanel** | show / hide the Tool Panel | `DAT_140cf9320` |
+| 420 | MiscLayers.png | **ToggleTimelinePanel** | show / hide the Timeline | `DAT_140cf9330` |
+| 490 | Lighttable.png | **ToggleLTPanel** | show / hide the Light Table | `DAT_140cf9368` |
+| 480 | FX.png | **ToggleEffectPanel** | show / hide the Effects | `DAT_140cf9364` |
+| 410 | MiscNavigator.png | **ToggleNavigatorPanel** | show / hide the Navigator | `DAT_140cf9328` |
+| 470 | MiscRemote.png | **ToggleRemotePanel** | show / hide the Remote control | `DAT_140cf932c` |
+| 325 | LibraryImage.png | **ToggleLibraryImagePanel** | show / hide the Library | `DAT_140cf9338` |
+| 320 | MiscGuideline.png | **ToggleGuidelinePanel** | show / hide the Guidelines | `DAT_140cf9334` |
+| 330 | MiscShareServices.png | **ToggleShareServicesPanel** | show / hide the Share services | `DAT_140cf9370` |
+| 485 | Timesheet.png | **Key_ToggleTimesheetPanel** | show / hide the Timesheet | `DAT_140cf9374` |
+| 340 | SystemPopup.png | (0xa84795) | the overflow menu, only when the bar overflows | - |
+| 666 | buy_now.png | - | the purchase button (only in the demo) | - |
+
+**This also explains the live look.**  The four buttons that are lit in the
+running app (x 183..278, the shared background `62,71,107`) are exactly the
+four panels that are open: **Main, Color, Tools and Timeline**.  The remaining
+icons in the live bar are the same buttons in a different order (the bar order
+is restored from the user configuration) plus the custom panels that TVPaint
+loads from `Resources/custompanels` (Nature, Chalks, ...) - those names are
+not in the executable at all, which is why the plant and the film strip could
+not be found in the icon resources.
+
+The prototype now has:
+- the **real** TVPaint icons for every button (the light resource set),
+- a **panel registry** with the command names of the table above,
+- the buttons really open and close their panel, and the blue block grows and
+  shrinks over the open ones exactly like the live app,
+- the **Windows menu** uses the same commands, so the menu and the tool bar
+  stay in sync,
+- the missing TVPaint panels were created with real content: Color Panel (the
+  APen / BPen boxes), Light Table (the light table of every layer),
+  Timesheet (the images of the clip), Remote Control (the transport), Navigator
+  (a small view of the drawing area with the viewport rectangle), Effects (the
+  effect groups), Share Services (the export list), Guidelines (the guideline
+  options) and Library (the recent files).
+
 ### Still not captured
 - Exact Role submenu appearance/order. The labels are known from the loc's role
   assignment commands: `Keyframe`, `Breakdown`, `Inbetween (To Do)`,
