@@ -254,7 +254,7 @@ function colorWithAlpha(hex, a) {
 // rotation, scale; interpolation modes hold/linear/smooth(=bezier-smoothed)) ----------
 function newCameraKey(frame, data) {
   return Object.assign({ frame: Math.round(frame), x: 0, y: 0, rotation: 0, zoom: 1,
-    flipX: false, flipY: false, interp: "smooth" }, data || {});
+    flipX: false, flipY: false, interp: "linear" }, data || {});
 }
 function cameraEvaluate(proj, frame) {
   const ks = (proj.cameraKeys || []).slice().sort((a, b) => a.frame - b.frame);
@@ -264,7 +264,10 @@ function cameraEvaluate(proj, frame) {
   for (const k of ks) { if (k.frame <= frame) prev = k; else break; }
   const next = ks.find(k => k.frame > frame) || prev;
   if (next === prev || next.frame === prev.frame) return { ...prev, frame: undefined };
-  const mode = prev.interp || "smooth";
+  // the movement type of the key the camera leaves governs the segment:
+  // "hold" keeps its value until the next key (the camera keyframe menu
+  // exposes the movement type per key).
+  const mode = prev.interp || "linear";
   if (mode === "hold") return { ...prev, frame: undefined };
   let t = (frame - prev.frame) / (next.frame - prev.frame);
   if (mode === "smooth") t = t * t * (3 - 2 * t);   // smooth-step interior (bezier-like)

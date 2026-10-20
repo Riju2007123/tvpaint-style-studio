@@ -570,5 +570,23 @@ test("moveLayersTo moves a block of layers and keeps their order", () => {
   assert.deepStrictEqual(p.selectedLayers, [1, 2]);
 });
 
+test("camera: keys interpolate between the camera layer range", () => {
+  const p = E.newProject(1920, 1080, 24);
+  const l = p.layers[0];
+  l.frames = { 1: E.newFrame(), 5: E.newFrame() };
+  l.frames[1].exposure = 4;
+  p.cameraKeys = [E.newCameraKey(1, { x: 0, y: 0, zoom: 1, interp: "linear" }),
+                  E.newCameraKey(5, { x: 100, y: 0, zoom: 1, interp: "linear" })];
+  const mid = E.cameraEvaluate(p, 3);
+  assert.strictEqual(Math.round(mid.x), 50, "linear interpolation between the two keys");
+  p.cameraKeys[0].interp = "hold";
+  const held = E.cameraEvaluate(p, 3);
+  assert.strictEqual(held.x, 0, "hold keeps the previous key value");
+  p.cameraKeys[0].interp = "linear";
+  const r = E.cameraRect(p, E.cameraEvaluate(p, 1));
+  assert.strictEqual(r.w, 960, "the camera rect is half the drawing area at zoom 1");
+  assert.strictEqual(r.cx, 960, "the camera is centred on the drawing area");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -934,16 +934,22 @@ function buildCameraPanel() {
   const body = mkThirdPanel("Camera[Proj]");
   body.innerHTML = `
     ${mrow("Command", `<select id="camCmd" style="flex:1"><option>Command</option><option> parameters</option></select>`)}
-    ${mrow("Lock All", `<button class="revbtn" id="camLockAll" style="padding:1px 10px">🔒</button>`)}
+    ${mrow("Lock All", `<input type="checkbox" id="camLockAll">`)}
+    ${mrow("See bookmarks", `<input type="checkbox" id="camBookmarks">`)}
     ${mrow("Toggle all", `<button class="revbtn" id="camToggle" style="padding:1px 10px">🔑</button>`)}
     ${mrow("Mode", `<select id="camMode" style="flex:1">
         <option value="hold">Hold</option><option value="linear" selected>Linear</option>
         <option value="smooth">Smooth</option></select>`)}
     ${mrow("Motion Blur", `<input type="number" id="camBlur" value="0.00" min="0" max="100" step="0.5"> %`)}
-    ${mrow("X", `<input type="number" id="camX" step="1" style="flex:1">`)}
-    ${mrow("Y", `<input type="number" id="camY" step="1" style="flex:1">`)}
-    ${mrow("Rotation", `<input type="number" id="camRot" step="0.1" value="0.00" style="width:70px"> %`)}
-    ${mrow("Zoom", `<input type="number" id="camZoom" step="0.01" value="100.00" style="width:70px"> %`)}
+    ${mrow("X", `<button class="revbtn" id="camLockX" style="padding:0 4px">🔓</button>
+        <input type="number" id="camX" step="1" style="flex:1">`)}
+    ${mrow("Y", `<button class="revbtn" id="camLockY" style="padding:0 4px">🔓</button>
+        <input type="number" id="camY" step="1" style="flex:1">`)}
+    ${mrow("Modify ratio", `<input type="checkbox" id="camRatio">`)}
+    ${mrow("Rotation", `<button class="revbtn" id="camLockRot" style="padding:0 4px">🔓</button>
+        <input type="number" id="camRot" step="0.1" value="0.00" style="width:70px"> °`)}
+    ${mrow("Zoom", `<button class="revbtn" id="camLockZoom" style="padding:0 4px">🔓</button>
+        <input type="number" id="camZoom" step="0.01" value="100.00" style="width:70px"> %`)}
     ${mrow("Flip X", `<input type="checkbox" id="camFlipX">`)}
     ${mrow("Flip Y", `<input type="checkbox" id="camFlipY">`)}
     <div class="orow" style="justify-content:center"><button class="revbtn" onclick="toast('camera fx parameters — not in this prototype')">Parameters ...</button></div>`;
@@ -957,6 +963,11 @@ function buildCameraPanel() {
     $("camFlipY").checked = !!cam.flipY;
     const k = E.cameraKeyAt(proj, proj.currentFrame);
     $("camMode").value = k ? k.interp : "linear";
+    $("camLockAll").checked = !!(camLocks.x && camLocks.y && camLocks.rotation && camLocks.zoom);
+    $("camBookmarks").checked = !!proj.cameraBookmarks;
+    $("camRatio").checked = !!proj.cameraModifyRatio;
+    [["camLockX", "x"], ["camLockY", "y"], ["camLockRot", "rotation"], ["camLockZoom", "zoom"]]
+      .forEach(([id, key]) => { const b = $(id); if (b) b.textContent = camLocks[key] ? "🔒" : "🔓"; });
     ["camX", "camY", "camRot", "camZoom", "camMode", "camFlipX", "camFlipY"].forEach(id => {
       $(id).disabled = !(proj.cameraKeys && proj.cameraKeys.length);
     });
@@ -986,13 +997,35 @@ function buildCameraPanel() {
     if (k) { k.interp = e.target.value; toast("camera interpolation: " + e.target.value); renderAll(); }
   };
   $("camBlur").onchange = e => { proj.cameraBlur = +e.target.value || 0; toast("motion blur " + proj.cameraBlur + "% (applied on render)"); };
-  $("camLockAll").onclick = () => {
-    const all = !(camLocks.x && camLocks.y && camLocks.rotation && camLocks.zoom);
+  $("camLockAll").onchange = (e) => {
+    const all = e.target.checked;
     camLocks = { x: all, y: all, rotation: all, zoom: all };
+    ["camLockX", "camLockY", "camLockRot", "camLockZoom"].forEach(id => {
+      const b = $(id); if (b) b.textContent = all ? "🔒" : "🔓";
+    });
     toast("camera axis locks: " + (all ? "all locked" : "released"));
+  };
+  // per axis padlocks (live camera panel: a padlock next to X, Y, Rotation, Zoom)
+  [["camLockX", "x"], ["camLockY", "y"], ["camLockRot", "rotation"], ["camLockZoom", "zoom"]]
+    .forEach(([id, key]) => {
+      const b = $(id);
+      if (!b) return;
+      b.onclick = () => {
+        camLocks[key] = !camLocks[key];
+        b.textContent = camLocks[key] ? "🔒" : "🔓";
+        toast("camera " + key + (camLocks[key] ? " locked" : " unlocked"));
+      };
+    });
+  $("camBookmarks").onchange = (e) => { proj.cameraBookmarks = e.target.checked; renderAll(); };
+  $("camRatio").onchange = (e) => {
+    proj.cameraModifyRatio = e.target.checked;
+    toast("modify ratio " + (e.target.checked ? "on" : "off"));
   };
   $("camToggle").onclick = () => {
     camLocks = { x: !camLocks.x, y: !camLocks.y, rotation: !camLocks.rotation, zoom: !camLocks.zoom };
+    ["camLockX", "camLockY", "camLockRot", "camLockZoom"].forEach(id => {
+      const b = $(id); if (b) b.textContent = camLocks.x ? "🔒" : "🔓";
+    });
     toast("camera locks toggled");
   };
   $("camCmd").onchange = (e) => { e.target.value = "Command"; };
@@ -1879,6 +1912,10 @@ function renderTimeline() {
       gotoFrame(f, li);
     };
     if (c.dataset.l !== "cam") c.onpointerdown = (e) => beginCellSlide(e, c);
+  });
+  // clicking the camera row jumps the playhead to that frame
+  track.querySelectorAll(".cell[data-l='cam']").forEach(c => {
+    c.onclick = (ev) => { if (ev.button === 0) gotoFrame(+c.dataset.f, proj.currentLayer); };
   });
   // ruler numbers are clickable in TVPaint: click a number to jump to that frame
   track.querySelectorAll(".ruler .tick").forEach(tk => {

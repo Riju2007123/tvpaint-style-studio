@@ -130,9 +130,9 @@ Works from `file://` too — just open `index.html`.
   Color Group panes. Per-layer lock / light table / preserve-transparency /
   stencil dots, row collapse, global layer flags and image-mark ruler ticks.
 
-41 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
-modes, add-exposure, layer order, selected-image reversal, auto break/create
-flags and history (`npm test`).
+42 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
+modes, add-exposure, layer order, selected-image reversal, camera
+interpolation, auto break/create flags and history (`npm test`).
 
 ## Tests
 
