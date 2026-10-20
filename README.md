@@ -93,25 +93,32 @@ Works from `file://` too — just open `index.html`.
   `Camera size`, `Movement Type`), `Adjust the layer to the animation` (bakes
   the camera movement into the drawings), `Cut keyframe` / `Copy keyframe` /
   `Paste keyframe` and `Invert all keys` (inverts the camera path).
-- The project window shows the **drawing area** with the camera view as the
-  visible output: outside the camera view the paper is covered with the same
-  solid grey the live app uses (`rgb(126,126,126)`), the camera view keeps the
-  white paper and is framed in green (`0,255,0`), the artwork is drawn over the
-  **whole** drawing area (the live app does not clip it) and the camera profile
-  is drawn in the camera colour `#8080FF` with its four corner squares, the
-  centre square and the horizontal line to the right edge.
+- The project window shows the **drawing area**, always - the camera is a pure
+  overlay and never transforms the artwork (measured live, see
+  `reports/timeline-evidence.md`): the whole view is dimmed to `126/255` of its
+  brightness, the camera's field of view is punched back to full brightness,
+  and the field of view is framed with a 1 px line in the camera colour
+  `rgb(128,128,255)` plus a 20 canvas pixel centre plus. The project view
+  background is `#2d2d32` and the drawing area keeps the project background
+  colour. The artwork is drawn over the **whole** drawing area (the live app
+  does not clip it).
   `Project > Render Camera` renders the camera view of every frame into a new
   project (`Into a New Project` / `Into a New merged Project`).
 - **Canvas footer** (live layout): `Rotate the view` (LMB drag turns the view,
   RMB opens the rotation menu), a fit button, the zoom percentage field, a
   zoom-fit button, `−` / `+` and the `Display ▾` popup. The view can be rotated
   and the artwork, the overlays and the camera follow it.
+- **Zoom** follows the live TVPaint ladder (`1 2 2.5 3.33 5 6.67 10 12.5 16.67
+  20 25 33.33 50 75 100 150 200 300 400 500 600 700 800 900 1000 1200 1400
+  1600 1800 2000 3000 4000 5000 10000 %`); `Fit` fits the drawing area and
+  snaps to that ladder, and zooming keeps the **centre of the drawing area**
+  at the same screen point.
 - **Canvas display options**: the `Display ▾` popup of the canvas footer carries
   the live TVPaint 12 entries and their live states - `Show Stencil`,
   `Show Paper`, `Show Selection` (on), `Show Animator Disk` (on), `Show Camera`
   (on), `Follow Camera`, `Show Timeline Notes` - and they really switch the
-  paper, the selection overlay, the animator disc, the camera overlay, the
-  camera-follow mode and the notes. The overlay colours come from the binary's
+  selection overlay, the animator disc, the camera overlay, the camera-follow
+  mode and the notes. The overlay colours come from the binary's
   own tokens (`0 0 0 128` selection, `64 64 64 128` animator disk / layer
   attenuation, `255 255 0 255` reticule, `128 128 255 255` camera profile).
 - Two more canvas overlays taken from the binary's own tokens: the **reticule**
@@ -159,10 +166,11 @@ Works from `file://` too — just open `index.html`.
   Color Group panes. Per-layer lock / light table / preserve-transparency /
   stencil dots, row collapse, global layer flags and image-mark ruler ticks.
 
-46 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
+50 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
 modes, add-exposure, layer order, selected-image reversal, camera
 interpolation, camera movement types, camera key moves and the camera render,
-auto break/create flags and history (`npm test`).
+auto break/create flags, history and the project window zoom ladder
+(`npm test`).
 
 ## Tests
 

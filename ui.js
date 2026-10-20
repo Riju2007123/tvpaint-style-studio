@@ -78,10 +78,36 @@ function resizeCanvases() {
   }
   if (!ghostTmp || ghostTmp.width !== proj.width) ghostTmp = E.makeSurface(proj.width, proj.height);
 }
+// ---------------------------------------------------------------------------
+// TVPaint zoom ladder and project window colours live in engine.js so they can
+// be unit tested (see test/engine.test.js).
+// ---------------------------------------------------------------------------
+const TV_ZOOMS = E.ZOOM_LADDER;
+// The project view background of TVPaint 12 (measured live: 45,45,50).
+const TV_VIEW_BG = E.VIEW_BG;
+// The camera overlay colour of TVPaint 12 (binary token "128 128 255 255").
+const TV_CAMERA_COL = E.CAMERA_COL;
+// TVPaint dims the whole project view to 126/255 when the camera is shown
+// (measured live: white paper 255 -> 126, viewport 45,45,50 -> 22,22,24).
+const TV_CAMERA_DIM = E.CAMERA_DIM;
+function zoomStep(dir) {
+  zoomTo(E.zoomStep(view.zoom, dir));
+}
+function zoomTo(z) {
+  // TVPaint keeps the CENTRE OF THE DRAWING AREA at the same screen point
+  // while the zoom changes (measured live from 1 % to 1200 %).
+  const cx = proj.width / 2, cy = proj.height / 2;
+  const sx = view.x + cx * view.zoom, sy = view.y + cy * view.zoom;
+  view.zoom = Math.max(TV_ZOOMS[0], Math.min(TV_ZOOMS[TV_ZOOMS.length - 1], z));
+  view.x = sx - cx * view.zoom;
+  view.y = sy - cy * view.zoom;
+}
 function fitView() {
   resizeCanvases();
-  // TVPaint never fits above 100 %: a small project is shown 1:1
-  view.zoom = Math.min(1, Math.min(art.width / proj.width, art.height / proj.height) * 0.95);
+  // TVPaint fits the drawing area and snaps to its zoom ladder (live capture:
+  // a 3840x2160 drawing area in the 1670x506 project window fitted at 20 %).
+  // It never goes past 100 %.
+  view.zoom = E.fitZoom(Math.min(art.width / proj.width, art.height / proj.height), 1);
   view.x = (art.width - proj.width * view.zoom) / 2;
   view.y = (art.height - proj.height * view.zoom) / 2;
   renderAll();
@@ -170,107 +196,112 @@ function openLayerPlayback(i, btn) {
   };
   document.addEventListener("pointerdown", off, true);
 }
-function renderArtOnly() {
-  actx.setTransform(1, 0, 0, 1, 0, 0);
-  actx.fillStyle = "#313136";
-  actx.fillRect(0, 0, art.width, art.height);
-  actx.imageSmoothingEnabled = proj.antiAlias !== "None";
-  // paper background (timeline footer: Background dropdown — loc 25300..25302).
-  // "Show Paper" in the canvas Display popup switches the paper off.
+// The camera rectangle in drawing-area coordinates, as a path (TVPaint cameras
+// can be rotated, the field of view is then a rotated rectangle).
+function cameraPath(ctx, r) {
+  const rot = (r.rot || 0) * Math.PI / 180;
+  const cs = Math.cos(rot), sn = Math.sin(rot);
+  const hw = r.w / 2, hh = r.h / 2;
+  const c = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]
+    .map(([dx, dy]) => [r.cx + dx * cs - dy * sn, r.cy + dx * sn + dy * cs]);
+  ctx.moveTo(c[0][0], c[0][1]);
+  for (let i = 1; i < 4; i++) ctx.lineTo(c[i][0], c[i][1]);
+  ctx.closePath();
+}
+// Paints the drawing area (project background + the layers) in canvas
+// coordinates.  Shared by the normal render and by the camera's bright
+// field of view, so both show exactly the same pixels.
+function paintDrawingArea(ctx) {
+  // project background (timeline footer: Background dropdown — loc 25300..25302).
   const bg = proj.background || "none";
   const bgA = proj.bgA || "#ffffff", bgB = proj.bgB || "#cfcfcf";
-  if (proj.showPaper === false) {
-    // no paper: the drawing area stays transparent
-  } else if (bg === "check" || bg === "Checkerboard") {
+  if (bg === "check" || bg === "Checkerboard") {
     const s = 16;
-    actx.fillStyle = bgA; actx.fillRect(0, 0, proj.width, proj.height);
-    actx.fillStyle = bgB;
+    ctx.fillStyle = bgA; ctx.fillRect(0, 0, proj.width, proj.height);
+    ctx.fillStyle = bgB;
     for (let y = 0; y < proj.height; y += s)
       for (let x = 0; x < proj.width; x += s)
-        if (((x / s) + (y / s)) % 2 === 0) actx.fillRect(x, y, s, s);
-  } else if (bg === "color" || bg === "White" || bg === "Black" || bg === "Background") {
-    actx.fillStyle = bg === "Black" ? "#000000" : bg === "White" || bg === "Background" ? "#ffffff" : bgA;
-    actx.fillRect(0, 0, proj.width, proj.height);
-  } else {
+        if (((x / s) + (y / s)) % 2 === 0) ctx.fillRect(x, y, s, s);
+  } else if (bg === "none") {
     // None = transparent: TVPaint displays transparency as a checkerboard
     const s = 16;
-    actx.fillStyle = "#d9d9de"; actx.fillRect(0, 0, proj.width, proj.height);
-    actx.fillStyle = "#f4f4f7";
+    ctx.fillStyle = "#d9d9de"; ctx.fillRect(0, 0, proj.width, proj.height);
+    ctx.fillStyle = "#f4f4f7";
     for (let y = 0; y < proj.height; y += s)
       for (let x = 0; x < proj.width; x += s)
-        if (((x / s) + (y / s)) % 2 === 0) actx.fillRect(x, y, s, s);
-  }
-  const camKeys = proj.cameraKeys && proj.cameraKeys.length;
-  // Live TVPaint 12: the project window shows the DRAWING AREA and the camera
-  // view is the visible output - everything the camera does not see is covered
-  // with a solid grey (measured 126,126,126) and the camera view keeps the
-  // paper and the artwork. "Follow Camera" (canvas Display popup) switches the
-  // window to the camera view itself.
-  let camSave = false;
-  if (camKeys && proj.followCamera) {
-    applyCameraViewTransform(actx, art.width, art.height);
-    camSave = true;
+        if (((x / s) + (y / s)) % 2 === 0) ctx.fillRect(x, y, s, s);
   } else {
-    actx.translate(view.x, view.y);
-    actx.scale(view.zoom, view.zoom);
-  }
-  // the camera view polygon (used for the grey cover and for the artwork clip)
-  const camPoly = () => {
-    if (!camKeys) return;
-    const r = E.cameraRect(proj, E.cameraEvaluate(proj, proj.currentFrame));
-    const rot = (r.rot || 0) * Math.PI / 180;
-    const cs = Math.cos(rot), sn = Math.sin(rot);
-    const hw = r.w / 2, hh = r.h / 2;
-    const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]
-      .map(([dx, dy]) => [r.cx + dx * cs - dy * sn, r.cy + dx * sn + dy * cs]);
-    actx.moveTo(corners[0][0], corners[0][1]);
-    for (let i = 1; i < 4; i++) actx.lineTo(corners[i][0], corners[i][1]);
-    actx.closePath();
-  };
-  if (camKeys && !proj.followCamera) {
-    // Live TVPaint 12 (captured with artwork): the paper outside the camera view
-    // is covered with a solid grey (126,126,126) - the camera view stays white
-    // - and the artwork is drawn over the whole drawing area, it is NOT clipped.
-    actx.save();
-    actx.beginPath();
-    actx.rect(0, 0, proj.width, proj.height);
-    camPoly();
-    actx.fillStyle = "rgb(126,126,126)";
-    actx.fill("evenodd");
-    actx.restore();
+    ctx.fillStyle = bg === "Black" ? "#000000" : bg === "White" ? "#ffffff" : bgA;
+    ctx.fillRect(0, 0, proj.width, proj.height);
   }
   const cur = proj.layers[proj.currentLayer];
-  // the artwork is drawn over the whole drawing area (the live app does not
-  // clip it to the camera view)
   if (proj.onion.enabled) {
     for (let i = 1; i <= proj.onion.before; i++)
-      drawGhost(cur, proj.currentFrame - i, proj.onion.tintBefore, 0.35 / i);
+      drawGhost(ctx, cur, proj.currentFrame - i, proj.onion.tintBefore, 0.35 / i);
     for (let i = proj.onion.after; i >= 1; i--)
-      drawGhost(cur, proj.currentFrame + i, proj.onion.tintAfter, 0.35 / i);
+      drawGhost(ctx, cur, proj.currentFrame + i, proj.onion.tintAfter, 0.35 / i);
   }
   proj.layers.forEach((l, li) => {
     if (!l.visible) return;
     const key = E.effectiveFrameKey(l, proj.currentFrame);
     const surf = key !== null ? l.frames[key].canvas : null;
     if (!surf || !surf.getContext) return;
-    actx.globalAlpha = l.opacity * (l.lighttable && li !== proj.currentLayer ? 0.3 : 1);
+    ctx.globalAlpha = l.opacity * (l.lighttable && li !== proj.currentLayer ? 0.3 : 1);
     const comp = blendToComposite(l.blend);
-    if (comp) actx.globalCompositeOperation = comp;
-    actx.drawImage(surf, 0, 0);
-    actx.globalCompositeOperation = "source-over";
-    actx.globalAlpha = 1;
+    if (comp) ctx.globalCompositeOperation = comp;
+    ctx.drawImage(surf, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
     // "ToggleLayerAttenuation" (binary token "64 64 64 128"): the layers that
     // are not the current one are dimmed with a translucent dark grey.
     if (proj.layerAttenuation && li !== proj.currentLayer) {
-      actx.fillStyle = "rgba(64,64,64,0.5)";
-      actx.fillRect(0, 0, proj.width, proj.height);
+      ctx.fillStyle = "rgba(64,64,64,0.5)";
+      ctx.fillRect(0, 0, proj.width, proj.height);
     }
   });
-  if (camSave) actx.restore();
+}
+function renderArtOnly() {
+  actx.setTransform(1, 0, 0, 1, 0, 0);
+  actx.fillStyle = TV_VIEW_BG;
+  actx.fillRect(0, 0, art.width, art.height);
+  actx.imageSmoothingEnabled = proj.antiAlias !== "None";
+  // TVPaint's project window always shows the DRAWING AREA.  The camera never
+  // transforms the artwork: it only dims the project view and keeps its own
+  // field of view at full brightness (see renderOverlayOnly).
+  followCameraView();
+  actx.save();
+  actx.translate(view.x, view.y);
+  actx.scale(view.zoom, view.zoom);
+  paintDrawingArea(actx);
+  actx.restore();
 }
 function renderOverlayOnly() {
   octx.setTransform(1, 0, 0, 1, 0, 0);
   octx.clearRect(0, 0, ovl.width, ovl.height);
+  // TVPaint camera display (measured live on 12.1.0 Pro Demo):
+  //   * the whole project view is dimmed to 126/255 of its brightness
+  //     (white paper 255 -> 126, viewport 45,45,50 -> 22,22,24),
+  //   * the camera's field of view stays at full brightness,
+  //   * the field of view is framed with a 1 px line in the camera colour
+  //     (128,128,255).
+  // The artwork itself is NOT transformed by the camera.
+  const camKeys = proj.cameraKeys && proj.cameraKeys.length;
+  if (camKeys && proj.showCamera !== false) {
+    const r = E.cameraRect(proj, E.cameraEvaluate(proj, proj.currentFrame));
+    octx.save();
+    octx.fillStyle = "rgba(0,0,0," + (1 - TV_CAMERA_DIM) + ")";
+    octx.fillRect(0, 0, ovl.width, ovl.height);
+    // punch the camera field of view back to full brightness
+    octx.globalCompositeOperation = "destination-out";
+    octx.translate(view.x, view.y);
+    octx.scale(view.zoom, view.zoom);
+    octx.beginPath();
+    cameraPath(octx, r);
+    octx.fill();
+    octx.restore();
+    octx.globalCompositeOperation = "source-over";
+  }
+  octx.save();
   octx.translate(view.x, view.y);
   octx.scale(view.zoom, view.zoom);
   drawGuidelines();
@@ -287,7 +318,8 @@ function renderOverlayOnly() {
     octx.restore();
   }
   if (sel && proj.showSelection !== false) drawSelectionOverlay();
-  if (proj.cameraKeys && proj.cameraKeys.length) {
+  octx.restore();
+  if (camKeys) {
     if (proj.showCamera !== false) drawCameraOverlay();
     if (panelEls[2] && panelEls[2].querySelector(".pbody")._syncCamera)
       panelEls[2].querySelector(".pbody")._syncCamera();
@@ -323,10 +355,9 @@ function drawCanvasHud() {
   }
   octx.restore();
 }
-// The camera view mode uses the same transform as the artwork so the camera
-// frame, the path and the drawing stay aligned.
 // Zoom in / out around the centre of the project window (the live app keeps
-// the image centred while the zoom percentage changes).
+// the image centred while the zoom percentage changes).  TVPaint steps along
+// its zoom ladder, so the buttons use zoomStep().
 function zoomBy(factor) {
   const w = art.width || 800, h = art.height || 600;
   const cx = w / 2, cy = h / 2;
@@ -335,17 +366,14 @@ function zoomBy(factor) {
   view.x = cx - dx * view.zoom;
   view.y = cy - dy * view.zoom;
 }
-function applyCameraViewTransform(ctx, w, h) {
-  const cam = E.cameraEvaluate(proj, proj.currentFrame);
-  const r = E.cameraRect(proj, cam);
-  const k = Math.min(w / r.w, h / r.h);
-  ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.translate(w / 2, h / 2);
-  ctx.rotate(-(cam.rotation || 0) * Math.PI / 180);
-  ctx.scale(cam.flipX ? -k : k, cam.flipY ? -k : k);
-  ctx.translate(-r.cx, -r.cy);
-  return k;
+// "Follow Camera" (canvas Display popup): TVPaint scrolls the project window so
+// the camera stays in view.  The camera never transforms the artwork.
+function followCameraView() {
+  if (!proj.followCamera) return;
+  if (!proj.cameraKeys || !proj.cameraKeys.length) return;
+  const r = E.cameraRect(proj, E.cameraEvaluate(proj, proj.currentFrame));
+  view.x = (art.width - r.w * view.zoom) / 2;
+  view.y = (art.height - r.h * view.zoom) / 2;
 }
 function renderAll() {
   resizeCanvases();
@@ -381,6 +409,9 @@ function updateZoomLbl() {
   const t = (view.zoom * 100).toFixed(2) + "%";
   if (z) z.textContent = t;
   if (z2) z2.textContent = t;
+  // the canvas footer shows the zoom percentage in an editable field
+  const zf = $("zoomField");
+  if (zf && document.activeElement !== zf) zf.value = t;
 }
 function drawSelectionOverlay() {
   octx.save();
@@ -395,7 +426,7 @@ function drawSelectionOverlay() {
   } else octx.strokeRect(sel.x + sel.dx, sel.y + sel.dy, sel.w, sel.h);
   octx.restore();
 }
-function drawGhost(layer, f, tint, alpha) {
+function drawGhost(ctx, layer, f, tint, alpha) {
   if (f < 1) return;
   const k = E.effectiveFrameKey(layer, f);
   if (k === null || k === undefined) return;
@@ -407,7 +438,7 @@ function drawGhost(layer, f, tint, alpha) {
   t.drawImage(surf, 0, 0);
   t.globalCompositeOperation = "source-in";
   t.fillStyle = tint; t.fillRect(0, 0, proj.width, proj.height);
-  actx.globalAlpha = alpha; actx.drawImage(ghostTmp, 0, 0); actx.globalAlpha = 1;
+  ctx.globalAlpha = alpha; ctx.drawImage(ghostTmp, 0, 0); ctx.globalAlpha = 1;
 }
 function drawGuidelines() {
   octx.save(); octx.lineWidth = 1 / view.zoom;
@@ -1237,51 +1268,34 @@ function drawCameraOverlay() {
   if (!proj.cameraKeys || !proj.cameraKeys.length) return;
   const cur = E.cameraEvaluate(proj, proj.currentFrame);
   const curR = E.cameraRect(proj, cur);
-  // in camera view mode the overlay follows the artwork (same transform)
-  const camMode = !!proj.followCamera;
-  octx.save();
-  if (camMode) applyCameraViewTransform(octx, ovl.width, ovl.height);
-  const z = camMode ? 1 : view.zoom;
-  // Live TVPaint 12 (captured with artwork): the camera view - the final
-  // output - is framed in green (0,255,0), the camera profile is drawn in the
-  // camera profile colour 128,128,255 with its corner squares, the centre
-  // square and the horizontal line, and the key path joins the keys.
-  octx.strokeStyle = "rgb(0,255,0)";
-  strokeRotRect(octx, curR);
-  octx.strokeStyle = "#8080FF";
-  strokeRotRect(octx, curR);
-  // the four corner squares of the camera profile
+  // Live TVPaint 12.1.0 (captured on a project with a camera): the project
+  // window shows a single 1 px frame in the camera colour (128,128,255) around
+  // the camera field of view.  The camera does not draw a green frame, corner
+  // handles or a key path on the canvas.
+  const rot = (curR.rot || 0) * Math.PI / 180;
+  const cs = Math.cos(rot), sn = Math.sin(rot);
   const hw = curR.w / 2, hh = curR.h / 2;
-  octx.fillStyle = "#8080FF";
-  [[-hw, -hh], [hw, -hh], [-hw, hh], [hw, hh]].forEach(([dx, dy]) => {
-    octx.save();
-    octx.translate(curR.cx, curR.cy); octx.rotate((curR.rot || 0) * Math.PI / 180);
-    octx.fillRect(dx - 3 / z, dy - 3 / z, 6 / z, 6 / z);
-    octx.restore();
-  });
-  // the centre square and the horizontal line to the right edge of the profile
-  octx.strokeStyle = "#8080FF";
+  const c = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]
+    .map(([dx, dy]) => [
+      view.x + (curR.cx + dx * cs - dy * sn) * view.zoom,
+      view.y + (curR.cy + dx * sn + dy * cs) * view.zoom]);
+  octx.save();
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.strokeStyle = TV_CAMERA_COL;
+  octx.lineWidth = 1;
   octx.beginPath();
-  octx.moveTo(curR.cx, curR.cy); octx.lineTo(curR.cx + hw, curR.cy);
+  octx.moveTo(c[0][0], c[0][1]);
+  for (let i = 1; i < 4; i++) octx.lineTo(c[i][0], c[i][1]);
+  octx.closePath();
   octx.stroke();
-  octx.strokeRect(curR.cx - 3 / z, curR.cy - 3 / z, 6 / z, 6 / z);
-  // interpolation path between key centers with handle dots
-  const kp = proj.cameraKeys.slice().sort((a, b) => a.frame - b.frame);
-  if (kp.length > 1) {
-    octx.strokeStyle = "#8080FF"; octx.setLineDash([6 / z, 4 / z]);
-    octx.beginPath();
-    for (let f = kp[0].frame; f <= kp[kp.length - 1].frame; f += 0.5) {
-      const c = E.cameraEvaluate(proj, f);
-      const px = proj.width / 2 + c.x, py = proj.height / 2 + c.y;
-      f === kp[0].frame ? octx.moveTo(px, py) : octx.lineTo(px, py);
-    }
-    octx.stroke(); octx.setLineDash([]);
-    kp.forEach(k => {
-      const px = proj.width / 2 + k.x, py = proj.height / 2 + k.y;
-      octx.fillStyle = "#fff"; octx.strokeStyle = "#4a8cff";
-      octx.beginPath(); octx.arc(px, py, 4 / z, 0, Math.PI * 2); octx.fill(); octx.stroke();
-    });
-  }
+  // the centre cross of the camera profile (measured live: a 20 canvas pixel
+  // long plus sign in the camera colour, drawn in canvas coordinates)
+  const arm = 10 * view.zoom;
+  const mx = view.x + curR.cx * view.zoom, my = view.y + curR.cy * view.zoom;
+  octx.beginPath();
+  octx.moveTo(mx - arm, my); octx.lineTo(mx + arm, my);
+  octx.moveTo(mx, my - arm); octx.lineTo(mx, my + arm);
+  octx.stroke();
   octx.restore();
 }
 function strokeRotRect(c, r) {
@@ -4366,9 +4380,9 @@ function buildTransport() {
           ${[12, 24, 25, 30, 50, 60].map(f => `<option ${f === 24 ? "selected" : ""}>${f} fps</option>`).join("")}
         </select><span class="fpsarrow">▾</span></span>
         <span class="tr-hand" title="Interactive zoom ratio">
-          <button class="arw" id="rZoomOut" title="Zoom out">◀</button>
+          <button class="arw" id="rRatioOut" title="Zoom out">◀</button>
           <button class="tib" id="rHand" title="Hand — fit the drawing to the view"><img src="icons/Zoom-Hand-x20.png"></button>
-          <button class="arw" id="rZoomIn" title="Zoom in">▶</button>
+          <button class="arw" id="rRatioIn" title="Zoom in">▶</button>
         </span>
         <button class="tib" id="rPlay" title="Play/Stop (Space)"><img src="icons/Remote-PlaySmall-x20.png"></button>
         <button class="tib" id="rStop" title="Stop"><img src="icons/Remote-Stop-x20.png"></button>
@@ -4414,8 +4428,8 @@ function buildTransport() {
   };
   $("rPlay").onclick = () => togglePlay();
   $("rPlayClip").onclick = () => togglePlay();
-  $("rZoomOut").onclick = () => { view.zoom = Math.max(0.05, view.zoom / 1.2); renderArtOnly(); updateZoomLbl(); };
-  $("rZoomIn").onclick = () => { view.zoom = Math.min(20, view.zoom * 1.2); renderArtOnly(); updateZoomLbl(); };
+  $("rRatioOut").onclick = () => { zoomStep(-1); renderArtOnly(); updateZoomLbl(); };
+  $("rRatioIn").onclick = () => { zoomStep(1); renderArtOnly(); updateZoomLbl(); };
   $("rHand").onclick = () => { fitView(); toast("fit to view"); };
   $("rStop").onclick = () => stopPlayback();
   $("rLoop").onclick = () => toggleLoop();
@@ -4429,12 +4443,12 @@ function buildTransport() {
   const zf = $("zoomField");
   if (zf) zf.onchange = (e) => {
     const v = parseFloat(String(e.target.value).replace("%", ""));
-    if (v > 0) { view.zoom = v / 100; renderAll(); }
+    if (v > 0) { zoomTo(v / 100); renderAll(); }
     syncTransport();
   };
   const zi = $("rZoomIn"), zo = $("rZoomOut");
-  if (zi) zi.onclick = () => { zoomBy(1.25); renderAll(); syncTransport(); };
-  if (zo) zo.onclick = () => { zoomBy(1 / 1.25); renderAll(); syncTransport(); };
+  if (zi) zi.onclick = () => { zoomStep(1); renderAll(); syncTransport(); };
+  if (zo) zo.onclick = () => { zoomStep(-1); renderAll(); syncTransport(); };
   const zfit = $("rZoomFit"), vfit = $("rFitView");
   if (zfit) zfit.onclick = () => { fitView(); syncTransport(); };
   if (vfit) vfit.onclick = () => { fitView(); syncTransport(); };

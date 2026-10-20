@@ -1370,11 +1370,52 @@ const George = {
   }
 };
 
+// ---------- project window zoom (captured live from TVPaint 12.1.0 Pro Demo) ----------
+// The + / - buttons of the project window footer step along this ladder:
+// 1 2 2.5 3.33 5 6.67 10 12.5 16.67 20 25 33.33 50 75 100 150 200 300 400 500
+// 600 700 800 900 1000 1200 1400 1600 1800 2000 3000 4000 5000 10000 (%).
+// The exact fractions are 1/100 1/50 1/40 1/30 1/20 1/15 1/10 1/8 1/6 1/5 1/4
+// 1/3 1/2 3/4 1 3/2 2 3 4 5 6 7 8 9 10 12 14 16 18 20 30 40 50 100.
+const ZOOM_LADDER = [1 / 100, 1 / 50, 1 / 40, 1 / 30, 1 / 20, 1 / 15, 1 / 10, 1 / 8,
+  1 / 6, 1 / 5, 1 / 4, 1 / 3, 1 / 2, 3 / 4, 1, 3 / 2, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+  12, 14, 16, 18, 20, 30, 40, 50, 100];
+// The project view background of TVPaint 12 (measured live: 45,45,50).
+const VIEW_BG = "#2d2d32";
+// The camera overlay colour of TVPaint 12 (binary token "128 128 255 255").
+const CAMERA_COL = "rgb(128,128,255)";
+// When a camera is shown TVPaint dims the whole project view to 126/255 of its
+// brightness (measured live: white paper 255 -> 126, viewport 45,45,50 ->
+// 22,22,24) and keeps the camera field of view at full brightness.
+const CAMERA_DIM = 126 / 255;
+// Next / previous ladder value.  dir = +1 zooms in, -1 zooms out.
+function zoomStep(zoom, dir) {
+  const eps = 1e-9;
+  let i = ZOOM_LADDER.findIndex(v => Math.abs(v - zoom) < 1e-6);
+  if (i < 0) {
+    if (dir > 0) {
+      i = ZOOM_LADDER.findIndex(v => v > zoom + eps);
+      if (i < 0) i = ZOOM_LADDER.length - 1;
+    } else {
+      i = 0;
+      for (let j = 0; j < ZOOM_LADDER.length; j++) if (ZOOM_LADDER[j] < zoom - eps) i = j;
+    }
+  } else i = Math.max(0, Math.min(ZOOM_LADDER.length - 1, i + dir));
+  return ZOOM_LADDER[i];
+}
+// "Fit": the largest ladder value that still shows the whole drawing area.
+function fitZoom(needed, maxZoom) {
+  const cap = maxZoom === undefined ? 1 : maxZoom;
+  let z = ZOOM_LADDER[0];
+  for (const v of ZOOM_LADDER) if (v <= needed + 1e-9 && v <= cap) z = v;
+  return z;
+}
+
 // exports
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     BRUSHES, DRAW_MODES, SHAPES, LAYER_LOOP_MODES, XSHEET_OPS,
     BRUSH_PROFILES, brushDefaults, activateToolBrush, gradientFill,
+    ZOOM_LADDER, VIEW_BG, CAMERA_COL, CAMERA_DIM, zoomStep, fitZoom,
     newCameraKey, cameraEvaluate, cameraRect, cameraKeyAt, setCameraKey, moveCameraKey,
     bakeCameraIntoLayers, renderCameraFrames,
     layerLengthOp,

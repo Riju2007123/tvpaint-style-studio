@@ -24,6 +24,38 @@ test("shape vocabulary matches Shape*.png icons", () => {
     "circle3pts", "bezier", "spline3pts"]) assert.ok(E.SHAPES.includes(s), s);
 });
 
+// ---------- project window zoom ladder (captured live from TVPaint 12.1.0) ----------
+test("zoom ladder is the live TVPaint ladder from 1 % to 10000 %", () => {
+  const pct = E.ZOOM_LADDER.map(v => Math.round(v * 10000) / 100);
+  assert.deepStrictEqual(pct, [1, 2, 2.5, 3.33, 5, 6.67, 10, 12.5, 16.67, 20, 25,
+    33.33, 50, 75, 100, 150, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1200,
+    1400, 1600, 1800, 2000, 3000, 4000, 5000, 10000]);
+});
+test("zoom in / out walks the ladder in both directions", () => {
+  assert.strictEqual(E.zoomStep(0.2, 1), 0.25);
+  assert.strictEqual(E.zoomStep(0.25, 1), 1 / 3);
+  assert.strictEqual(E.zoomStep(1 / 3, 1), 0.5);
+  assert.strictEqual(E.zoomStep(0.5, -1), 1 / 3);
+  assert.strictEqual(E.zoomStep(0.01, -1), 0.01, "the minimum is 1 %");
+  assert.strictEqual(E.zoomStep(100, 1), 100, "the maximum is 10000 %");
+});
+test("fit snaps to the largest ladder value that still shows the drawing area", () => {
+  // a 3840x2160 drawing area in a 1670x506 project window (live capture)
+  assert.strictEqual(E.fitZoom(Math.min(1670 / 3840, 506 / 2160), 1), 0.2);
+  // a 1920x1080 drawing area in the same window
+  assert.strictEqual(E.fitZoom(Math.min(1670 / 1920, 506 / 1080), 1), 1 / 3);
+  // fit never goes past 100 %
+  assert.strictEqual(E.fitZoom(4, 1), 1);
+});
+test("project window colours match the live TVPaint measurements", () => {
+  assert.strictEqual(E.VIEW_BG, "#2d2d32", "project view background 45,45,50");
+  assert.strictEqual(E.CAMERA_COL, "rgb(128,128,255)", "camera colour token");
+  // TVPaint dims the project view to 126/255: white paper 255 -> 126
+  assert.strictEqual(Math.floor(255 * E.CAMERA_DIM), 126);
+  assert.strictEqual(Math.floor(45 * E.CAMERA_DIM), 22);
+  assert.strictEqual(Math.floor(50 * E.CAMERA_DIM), 24);
+});
+
 // ---------- project defaults ----------
 test("newProject defaults", () => {
   const p = E.newProject(640, 400, 12);

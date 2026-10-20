@@ -8,7 +8,12 @@ http.createServer((req, res) => {
   const file = path.join(root, path.normalize(p).replace(/^(\.\.[\/\\])+/, ""));
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end("not found"); return; }
-    res.writeHead(200, { "Content-Type": types[path.extname(file)] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": types[path.extname(file)] || "application/octet-stream",
+      // never cache during development: the prototype is edited constantly
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      "Pragma": "no-cache"
+    });
     res.end(data);
   });
 }).listen(8471, () => console.log("serving my-version at http://localhost:8471"));
