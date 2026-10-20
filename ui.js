@@ -2051,7 +2051,13 @@ window.addTypedLayer = function (type) {
       c.fillRect(0, 0, proj.width, proj.height);
       l.frames = { 1: { exposure: 1, canvas: cv, id: Math.random().toString(36).slice(2, 10) } };
     }
-    proj.layers.splice(proj.currentLayer, 0, l);
+    if (type === "background") {
+      // a background layer belongs under the artwork
+      proj.layers.unshift(l);
+      proj.currentLayer = 0;
+    } else {
+      proj.layers.splice(proj.currentLayer, 0, l);
+    }
   });
   toast((names[type] || "Anim") + " layer created");
 };
@@ -2539,7 +2545,8 @@ window.togglePane = function (kind) {
   p.querySelector("#paneX").onclick = () => togglePane(kind);
   const body = p.querySelector("#paneBody");
   if (kind === "notes") {
-    body.innerHTML = `<textarea id="paneNotes" placeholder="Timeline notes">${(proj.notes || "").replace(/</g, "&lt;")}</textarea>
+    const notesHtml = (proj.notes || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    body.innerHTML = `<textarea id="paneNotes" placeholder="Timeline notes">${notesHtml}</textarea>
       <div class="prow"><span>Size</span><input type="range" min="1" max="14" value="3">
         <span>Grid</span><input type="range" min="0" max="20" value="0">
         <button class="revbtn" id="paneNotesClear" style="font-size:10px;padding:1px 7px">Clear</button></div>`;
