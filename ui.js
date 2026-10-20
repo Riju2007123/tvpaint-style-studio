@@ -1095,34 +1095,56 @@ function dlgNewProject(modify) {
 // ---------- Increase Layer Length dialog (REA screenshot: Stretch / Interpolate
 // (disabled) / Repeat-mode dropdown "Hold" / Add Empty Instances / Add Empty
 // Exposures / Apply / Cancel) ----------
-function dlgLayerLength(prefill) {
+// REA: Resources\data\english.tvpaint.loc @ 0x000025550..25588 (exact labels + tooltips)
+//  255550 Increase Layer Length / 255551 Decrease Layer Length
+//  255560 Interpolate / 255561 Stretch / 255562 Repeat / 255563 Add Empty Instances
+//  255564 Shrink / 255565 Cut Images / 255566 Add Empty Exposures / 255567 Apply / 255568 Cancel
+//  255570-255573 repeat modes: Loop / Ping Pong / Hold / Exposure
+const LL_TIP = {
+  interpolate: "Interpolate or just copy the last image\nInterpolation will try to stretch the layer to the new\nlength, creating new frames where needed. Copy the\nlast image does exactly that for the duration of the layer",
+  stretch: "stretch the layer\nWhen extending a layer you can repeat or stretch.",
+  repeat: "Repeat modes\nThe different modes available for repeating a sequence.",
+  hold: "Repeat the image\nRepeat, hold, repeats the last image to the end of the stretch.",
+  instances: "Add Empty Images\nAdds blank frames to the end of the stretch.",
+  cut: "Cut the image from the layer.\nWhen shortening a layer you can stretch or cut.",
+  apply: "Apply the stretch to the layer",
+  cancel: "Cancel the stretch of the layer",
+  exposures: "Add Empty Exposures\n\nClick here to add empty exposures.\n\nA popup panel will ask you the number\nof exposures you want to add."
+};
+function dlgLayerLength(prefill, dir) {
+  const inc = dir !== "dec";
   const layer = proj.layers[proj.currentLayer];
   const keys = Object.keys(layer.frames).map(Number).sort((a, b) => a - b);
   const last = keys[keys.length - 1] || 1;
   const total = last + (layer.frames[last] ? (layer.frames[last].exposure || 1) : 1) - 1;
   const count = Math.max(1, Math.round(prefill || proj.outFrame - total || 1));
-  const m = openModal("Increase Layer Length", `
-    <div class="llmodes">
-      <label class="llmode"><input type="radio" name="llmode" value="stretch"> Stretch</label>
-      <label class="llmode dis"><input type="radio" name="llmode" value="interpolate" disabled> Interpolate</label>
-      <label class="llmode"><input type="radio" name="llmode" value="repeat"> Repeat</label>
-      <label class="llmode"><input type="radio" name="llmode" value="hold" checked> Hold</label>
-    </div>
+  const modes = inc
+    ? `<label class="llmode dis" title="${LL_TIP.interpolate}"><input type="radio" name="llmode" value="interpolate" disabled> Interpolate</label>
+       <label class="llmode" title="${LL_TIP.stretch}"><input type="radio" name="llmode" value="stretch" checked> Stretch</label>
+       <label class="llmode" title="${LL_TIP.repeat}"><input type="radio" name="llmode" value="repeat"> Repeat</label>`
+    : `<label class="llmode" title="${LL_TIP.stretch}"><input type="radio" name="llmode" value="shrink" checked> Shrink</label>
+       <label class="llmode" title="${LL_TIP.cut}"><input type="radio" name="llmode" value="cut"> Cut Images</label>`;
+  const m = openModal(inc ? "Increase Layer Length" : "Decrease Layer Length", `
+    <div class="llmodes">${modes}</div>
+    ${inc ? mrow("Repeat mode", `<select id="llRepeatMode" title="${LL_TIP.hold}" style="flex:1"><option>Loop</option><option>Ping Pong</option><option>Hold</option><option>Exposure</option></select>`) : ""}
+    <label class="llopt" title="${LL_TIP.instances}"><input type="checkbox" id="llEmptyInstances"> Add Empty Instances</label>
+    <label class="llopt" title="${LL_TIP.exposures}"><input type="checkbox" id="llEmptyExposures"> Add Empty Exposures</label>
     ${mrow("Added frames", `<input type="number" id="llCount" value="${count}" min="1" style="width:70px">`)}
-    <label class="llopt"><input type="checkbox" id="llEmptyInstances"> Add Empty Instances</label>
-    <label class="llopt"><input type="checkbox" id="llEmptyExposures"> Add Empty Exposures</label>
     <div style="color:#898989;font-size:11px;margin-top:6px">Layer length now: ${total} frames</div>
   `, [["Apply", () => {
     const n = Math.max(1, +document.getElementById("llCount").value || 1);
-    const op = (m.querySelector("input[name=llmode]:checked") || { value: "hold" }).value;
+    const op = (m.querySelector("input[name=llmode]:checked") || { value: inc ? "stretch" : "shrink" }).value;
+    const rsel = document.getElementById("llRepeatMode");
+    const rm = rsel ? rsel.value : "Loop";
     const addInst = document.getElementById("llEmptyInstances").checked;
     const addExp = document.getElementById("llEmptyExposures").checked;
     hist.pushModel(proj);
-    E.layerLengthOp(proj, layer, op, n);
+    E.layerLengthOp(proj, layer, op, n, rm);
     if (addInst) E.layerLengthOp(proj, layer, "instances", 1);
     if (addExp) E.layerLengthOp(proj, layer, "exposures", 1);
     hist.sealModel(proj); renderAll();
-    toast("layer +" + n + " frames (" + op + (addInst ? " + empty instances" : "") + (addExp ? " + empty exposures" : "") + ")");
+    toast((inc ? "+" : "-") + n + " frames (" + op + (op === "repeat" ? " " + rm : "") +
+      (addInst ? " + empty instances" : "") + (addExp ? " + empty exposures" : "") + ")");
   }, true], ["Cancel", () => {}]]);
 }
 
@@ -1384,17 +1406,9 @@ function renderTimeline() {
         if (moved && exp !== startExp) {
           const added = exp - startExp;
           renderAll();   // reset the drag preview
-          if (added > 0) {
-            // TVPaint: dragging the layer's right-edge handle extends it, then the
-            // Increase Layer Length dialog decides how the added time is handled.
-            dlgLayerLength(added);
-          } else {
-            hist.pushModel(proj);
-            l.frames[k].exposure = exp;
-            hist.sealModel(proj);
-            toast("exposure " + exp);
-            renderAll();
-          }
+          // TVPaint: dragging the layer's right-edge handle opens Increase / Decrease
+          // Layer Length, and the dialog decides how the added time is handled.
+          dlgLayerLength(Math.abs(added), added > 0 ? "inc" : "dec");
         }
         else renderAll();
       };

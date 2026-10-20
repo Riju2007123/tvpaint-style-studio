@@ -262,7 +262,7 @@ function setCameraKey(proj, frame, patch) {
 
 // ---------- Increase Layer Length (REA dialog: Stretch / Interpolate(disabled) /
 // Repeat via Hold dropdown / Add Empty Instances / Add Empty Exposures) ----------
-function layerLengthOp(proj, layer, op, count) {
+function layerLengthOp(proj, layer, op, count, mode) {
   const n = Math.max(1, Math.round(count || 1));
   const keys = Object.keys(layer.frames).map(Number).sort((a, b) => a - b);
   if (!keys.length) return 0;
@@ -281,19 +281,50 @@ function layerLengthOp(proj, layer, op, count) {
       });
       return newTotal;
     }
-    case "hold": {   // "Hold" mode of the dropdown: extend the last exposure n frames
+    case "hold": {   // "Hold" mode: extend the last exposure n frames
       layer.frames[last].exposure = (layer.frames[last].exposure || 1) + n;
       return total + n;
     }
-    case "repeat": { // repeat the whole instance sequence n more times (same drawings)
-      for (let r = 0; r < n; r++)
-        for (let i = 0; i < timeline.length; i++) {
-          const src = timeline[i];
-          if (src === null) continue;
-          layer.frames[total + r * timeline.length + i + 1] =
-            { exposure: 1, canvas: layer.frames[src].canvas, id: uid() };  // same drawing reused
-        }
-      return total + timeline.length * n;
+    case "repeat": {
+      // REA 0x000025570..25573: repeat modes Loop / Ping Pong / Hold / Exposure
+      const rm = String(mode || "loop").toLowerCase();
+      if (rm === "hold") {
+        layer.frames[last].exposure = (layer.frames[last].exposure || 1) + n;
+        return total + n;
+      }
+      const seq = timeline.slice();
+      if (rm === "ping pong" || rm === "pingpong") {
+        for (let i = timeline.length - 2; i >= 0; i--) seq.push(timeline[i]);
+      }
+      for (let i = 0; i < n; i++) {
+        const src = seq[i % seq.length];
+        if (src === null) continue;
+        layer.frames[total + i + 1] =
+          { exposure: 1, canvas: layer.frames[src].canvas, id: uid() };  // same drawing reused
+      }
+      return total + n;
+    }
+    case "shrink": {
+      // Decrease Layer Length: scale every exposure down to lose n frames
+      const target = Math.max(keys.length, total - n);
+      const ratio = target / total;
+      Object.keys(layer.frames).forEach(kk => {
+        const e = layer.frames[kk].exposure || 1;
+        layer.frames[kk].exposure = Math.max(1, Math.round(e * ratio));
+      });
+      return target;
+    }
+    case "cut": {
+      // Decrease Layer Length: Cut Images — drop frames from the end
+      let removed = 0;
+      const ks = Object.keys(layer.frames).map(Number).sort((a, b) => a - b);
+      for (let i = ks.length - 1; i >= 0 && removed < n; i--) {
+        const k = ks[i];
+        const e = layer.frames[k].exposure || 1;
+        if (e <= n - removed) { removed += e; delete layer.frames[k]; }
+        else { layer.frames[k].exposure = e - (n - removed); removed = n; }
+      }
+      return total - n;
     }
     case "instances": {  // add n new EMPTY drawings after the last one
       for (let i = 0; i < n; i++) {
