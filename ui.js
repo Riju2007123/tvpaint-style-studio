@@ -96,6 +96,30 @@ function playbackKey(layer, f) {
   }
   return null;
 }
+// Layer playback popup (REA screenshot: ✓ None / Loop / Ping-Pong / Hold)
+function openLayerPlayback(i, btn) {
+  document.querySelectorAll(".pbmenu").forEach(x => x.remove());
+  const cur = proj.layers[i].playback || "None";
+  const m = document.createElement("div");
+  m.className = "pbmenu";
+  const r = btn.getBoundingClientRect();
+  m.style.left = r.left + "px";
+  m.style.top = (r.bottom + 2) + "px";
+  m.innerHTML = ["None", "Loop", "Ping-Pong", "Hold"].map(k =>
+    `<div class="pbi${k === cur ? " on" : ""}" data-k="${k}"><span class="chk">${k === cur ? "✓" : ""}</span>${k}</div>`).join("");
+  document.body.appendChild(m);
+  m.querySelectorAll(".pbi").forEach(el => el.onclick = (ev) => {
+    ev.stopPropagation();
+    proj.layers[i].playback = el.dataset.k;
+    m.remove();
+    renderAll();
+    toast("playback: " + el.dataset.k);
+  });
+  const off = (ev) => {
+    if (!m.contains(ev.target)) { m.remove(); document.removeEventListener("pointerdown", off, true); }
+  };
+  document.addEventListener("pointerdown", off, true);
+}
 function renderArtOnly() {
   actx.setTransform(1, 0, 0, 1, 0, 0);
   actx.fillStyle = "#313136";
@@ -1078,32 +1102,28 @@ function dlgLayerLength(prefill) {
   const total = last + (layer.frames[last] ? (layer.frames[last].exposure || 1) : 1) - 1;
   const count = Math.max(1, Math.round(prefill || proj.outFrame - total || 1));
   const m = openModal("Increase Layer Length", `
-    <button class="revbtn" style="width:100%;margin:2px 0" id="llStretch">Stretch</button>
-    <div class="orow" style="justify-content:center;margin:2px 0"><button class="revbtn" disabled>Interpolate</button></div>
-    <button class="revbtn" style="width:100%;margin:2px 0" id="llRepeat">Repeat</button>
-    ${mrow("Mode", `<select id="llMode" style="flex:1;display:inline-block"><option>Hold</option><option>Repeat</option></select>
-      <input type="number" id="llCount" value="${count}" min="1" style="width:70px"> frames`)}
-    <button class="revbtn" style="width:100%;margin:2px 0" id="llInstances">Add Empty Instances</button>
-    <button class="revbtn" style="width:100%;margin:2px 0;background:#3d5666" id="llExposures">Add Empty Exposures</button>
+    <div class="llmodes">
+      <label class="llmode"><input type="radio" name="llmode" value="stretch"> Stretch</label>
+      <label class="llmode dis"><input type="radio" name="llmode" value="interpolate" disabled> Interpolate</label>
+      <label class="llmode"><input type="radio" name="llmode" value="repeat"> Repeat</label>
+      <label class="llmode"><input type="radio" name="llmode" value="hold" checked> Hold</label>
+    </div>
+    ${mrow("Added frames", `<input type="number" id="llCount" value="${count}" min="1" style="width:70px">`)}
+    <label class="llopt"><input type="checkbox" id="llEmptyInstances"> Add Empty Instances</label>
+    <label class="llopt"><input type="checkbox" id="llEmptyExposures"> Add Empty Exposures</label>
     <div style="color:#898989;font-size:11px;margin-top:6px">Layer length now: ${total} frames</div>
   `, [["Apply", () => {
-    const n = +document.getElementById("llCount").value || 1;
-    const mode = document.getElementById("llMode").value.toLowerCase();
-    hist.pushModel(proj);
-    E.layerLengthOp(proj, layer, mode === "repeat" ? "repeat" : "hold", n);
-    hist.sealModel(proj); renderAll(); toast("layer extended (" + mode + ")");
-  }, true], ["Cancel", () => {}]]);
-  const act = (id, op) => m.querySelector(id).onclick = () => {
-    const n = +document.getElementById("llCount").value || 1;
+    const n = Math.max(1, +document.getElementById("llCount").value || 1);
+    const op = (m.querySelector("input[name=llmode]:checked") || { value: "hold" }).value;
+    const addInst = document.getElementById("llEmptyInstances").checked;
+    const addExp = document.getElementById("llEmptyExposures").checked;
     hist.pushModel(proj);
     E.layerLengthOp(proj, layer, op, n);
+    if (addInst) E.layerLengthOp(proj, layer, "instances", 1);
+    if (addExp) E.layerLengthOp(proj, layer, "exposures", 1);
     hist.sealModel(proj); renderAll();
-    toast("layer: " + op + " " + n);
-  };
-  act("#llStretch", "stretch");
-  act("#llRepeat", "repeat");
-  act("#llInstances", "instances");
-  act("#llExposures", "exposures");
+    toast("layer +" + n + " frames (" + op + (addInst ? " + empty instances" : "") + (addExp ? " + empty exposures" : "") + ")");
+  }, true], ["Cancel", () => {}]]);
 }
 
 // ================= viewport bottom row =================
@@ -1193,10 +1213,8 @@ function renderTimeline() {
         title="Light table"><img src="icons/${l.lighttable ? "LayerLighttableOn" : "LayerLighttableOff"}-x20.png"></button>
       <button class="sf ${l.locked ? "on" : ""}" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'locked')"
         title="Lock Layer"><img src="icons/${l.locked ? "ReqLockOn" : "ReqLockOff"}-x20.png"></button>
-      <select class="pbSel" data-pb="${i}" title="playback at layer end"
-        onclick="event.stopPropagation()" style="background:#2D2D32;color:#B6B6B6;border:1px solid #2B2B30;border-radius:3px;font-size:9px;padding:0 1px">
-        ${["None","Loop","Ping-Pong","Hold"].map(m => `<option ${((l.playback||"None")===m)?"selected":""}>${m}</option>`).join("")}
-      </select>
+      <button class="pbBtn" data-pb="${i}" title="Playback at layer end"
+        onclick="event.stopPropagation();openLayerPlayback(${i},this)">${l.playback || "None"} ▾</button>
     </div>
     <div class="lblock">
       <canvas class="lthumb" data-layer="${i}" width="34" height="20"></canvas>
@@ -1228,11 +1246,7 @@ function renderTimeline() {
     };
   });
   left.querySelectorAll("[data-pb]").forEach(s => {
-    s.onchange = (e) => {
-      proj.layers[+s.dataset.pb].playback = e.target.value;
-      toast("playback: " + e.target.value);
-      renderAll();
-    };
+    s.onclick = (e) => { e.stopPropagation(); openLayerPlayback(+s.dataset.pb, s); };
   });
   // track: top ruler + strips + bottom ruler (TVPaint mirrors the ruler)
   const lastUsed = Math.max(1, ...proj.layers.map(l =>

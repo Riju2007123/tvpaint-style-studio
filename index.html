@@ -75,6 +75,23 @@
   .revbtn { background: #3E476B; border: 1px solid #2B2B30; border-radius: 3px;
     color: #B6B6B6; padding: 3px 14px; cursor: pointer; }
   .revbtn:hover { background: #454b52; }
+  /* per-layer playback control (REA: ✓ None / Loop / Ping-Pong / Hold) */
+  .pbBtn { background: #2D2D32; color: #B6B6B6; border: 1px solid #2B2B30; border-radius: 3px;
+    font-size: 9px; line-height: 14px; padding: 0 3px; height: 16px; cursor: pointer; flex: none; }
+  .pbBtn:hover { background: #3E476B; }
+  .pbmenu { position: fixed; z-index: 400; background: #313136; border: 1px solid #5A5A61;
+    box-shadow: 0 3px 10px #000a; padding: 2px 0; min-width: 92px; color: #B6B6B6; font-size: 11px; }
+  .pbmenu .pbi { padding: 3px 8px; cursor: pointer; white-space: nowrap; display: flex; gap: 6px; }
+  .pbmenu .pbi:hover { background: #3E476B; }
+  .pbmenu .pbi .chk { width: 10px; display: inline-block; }
+  /* Increase Layer Length dialog */
+  .llmodes { display: flex; flex-direction: column; gap: 3px; margin: 2px 0 6px; }
+  .llmode { display: flex; align-items: center; gap: 6px; background: #3E476B; border: 1px solid #2B2B30;
+    border-radius: 3px; padding: 3px 8px; cursor: pointer; }
+  .llmode:hover { background: #454b52; }
+  .llmode.dis { color: #6E6E75; background: #33333a; cursor: default; }
+  .llopt { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  .llopt input[type=checkbox] { margin: 0; }
   .tabs { display: flex; gap: 2px; margin: 4px 0; }
   .tabs .tab { background: #313136; border: 1px solid #2B2B30; border-bottom: 0;
     border-radius: 4px 4px 0 0; padding: 3px 14px; cursor: pointer; }
