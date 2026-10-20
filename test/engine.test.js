@@ -262,6 +262,58 @@ test("camera hold/linear/smooth interpolation", () => {
   assert.strictEqual(held.x, 0, "hold keeps prev value");
 });
 
+// ---------- REA-derived: the camera has four independent channels ----------
+// REA (command table FUN_1405d30e0 + the keyframe flag word at +0x48):
+// bit 1 = position, 2 = rotation, 4 = zoom, 8 = size, "CameraAddKey" sets 0xf.
+test("camera channels: position / rotation / zoom / size are keyed separately", () => {
+  const p = E.newProject();
+  p.cameraKeys = [];
+  E.cameraAddKey(p, 1, E.CAM_CH.POS);
+  assert.strictEqual(E.camFlags(p.cameraKeys[0]), E.CAM_CH.POS, "only the position bit");
+  E.cameraAddKey(p, 1, E.CAM_CH.ZOOM);
+  assert.strictEqual(E.camFlags(p.cameraKeys[0]), E.CAM_CH.POS | E.CAM_CH.ZOOM);
+  E.cameraAddKey(p, 10, E.CAM_CH.ALL);
+  assert.strictEqual(E.camFlags(p.cameraKeys[1]), E.CAM_CH.ALL, "CameraAddKey sets 0xf");
+});
+test("a key that does not carry a channel does not drive it", () => {
+  const p = E.newProject();
+  p.cameraKeys = [
+    E.newCameraKey(1, { flags: E.CAM_CH.POS | E.CAM_CH.ZOOM, x: 0, y: 0, zoom: 1 }),
+    E.newCameraKey(21, { flags: E.CAM_CH.POS, x: 100, y: 50, zoom: 1 })
+  ];
+  const mid = E.cameraEvaluate(p, 11);
+  assert.ok(Math.abs(mid.x - 50) < 0.01, "the position interpolates");
+  assert.strictEqual(mid.zoom, 1, "the zoom is not driven by the position only key");
+  const rot = E.cameraEvaluate(p, 11);
+  assert.strictEqual(rot.rotation, 0, "the rotation has no key at all");
+});
+test("cameraDeleteKey switches a channel off and removes an empty key", () => {
+  const p = E.newProject();
+  p.cameraKeys = [E.newCameraKey(1, { flags: E.CAM_CH.POS | E.CAM_CH.ZOOM })];
+  E.cameraDeleteKey(p, 1, E.CAM_CH.ZOOM);
+  assert.strictEqual(E.camFlags(p.cameraKeys[0]), E.CAM_CH.POS);
+  E.cameraDeleteKey(p, 1, E.CAM_CH.POS);
+  assert.strictEqual(p.cameraKeys.length, 0, "a key without a channel is removed");
+});
+test("cameraMoveKeyRelative walks the camera keys (first/last/next/previous)", () => {
+  const p = E.newProject();
+  p.cameraKeys = [E.newCameraKey(1, {}), E.newCameraKey(10, {}), E.newCameraKey(20, {})];
+  E.cameraMoveKeyRelative(p, 20, "first");
+  assert.deepStrictEqual(p.cameraKeys.map(k => k.frame), [1, 10, 20], "the key moved to the first frame");
+  E.cameraMoveKeyRelative(p, 20, "next");
+  assert.deepStrictEqual(p.cameraKeys.map(k => k.frame), [1, 10, 20], "the last key wraps to the first");
+});
+test("the camera rect is the camera size divided by the zoom", () => {
+  const p = E.newProject(1920, 1080, 12);
+  p.cameraView = { w: 1920, h: 1080 };
+  const r = E.cameraRect(p, E.cameraEvaluate(p, 1));
+  assert.strictEqual(r.w, 1920, "at 100 % the camera sees its full size");
+  assert.strictEqual(r.h, 1080);
+  const r2 = E.cameraRect(p, { x: 0, y: 0, rotation: 0, zoom: 2, w: 1920, h: 1080 });
+  assert.strictEqual(r2.w, 960, "at 200 % the camera sees half the width");
+  assert.strictEqual(r2.cx, 960, "the camera is centred on the drawing area");
+});
+
 // ---------- REA-derived: Increase Layer Length ops ----------
 test("layerLengthOp hold/repeat/stretch/instances", () => {
   const p = E.newProject();

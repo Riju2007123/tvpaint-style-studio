@@ -8,6 +8,13 @@ http.createServer((req, res) => {
   const file = path.join(root, path.normalize(p).replace(/^(\.\.[\/\\])+/, ""));
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end("not found"); return; }
+    // the prototype is edited constantly: never let the browser keep an old
+    // engine.js / ui.js (the script tags get the file time as a version)
+    if (path.basename(file) === "index.html") {
+      const v = Date.now().toString(36);
+      data = Buffer.from(String(data).replace(/(src=")(engine\.js|ui\.js)(")/g,
+        (m, a, f, c) => `${a}${f}?v=${v}${c}`));
+    }
     res.writeHead(200, {
       "Content-Type": types[path.extname(file)] || "application/octet-stream",
       // never cache during development: the prototype is edited constantly

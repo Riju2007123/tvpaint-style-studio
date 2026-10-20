@@ -338,38 +338,132 @@ function moveCameraKey(proj, from, to) {
 // ---------- camera (REA: reports/decomp_0x1403f1050.c - tv_camerainfo sets
 // width/height; camera points stride 0x380 at project+0x300 carry translationX/Y,
 // rotation, scale; interpolation modes hold/linear/smooth(=bezier-smoothed)) ----------
+//
+// TVPaint 12 keeps FOUR INDEPENDENT CAMERA CHANNELS, each with its own
+// keyframes and its own motion curve (REA: the keyframe flag word at +0x48 and
+// the four curve objects at +0x80 / +0x140 / +0x200 / +0x2c0 of the 0x380 byte
+// keyframe).  The command table (FUN_1405d30e0) registers:
+//   CameraAddKey / CameraAddPositionKey / CameraAddRotationKey /
+//   CameraAddZoomKey / CameraAddSizeKey
+//   CameraDeleteKey / CameraDeletePositionKey / CameraDeleteRotationKey /
+//   CameraDeleteZoomKey / CameraDeleteSizeKey
+//   CameraMoveToNextKey / CameraMoveToPreviousKey /
+//   CameraMoveToFirstKey / CameraMoveToLastKey
+// The channel bits are 1 = position, 2 = rotation, 4 = zoom, 8 = size and
+// "CameraAddKey" sets 0xf (all four).
+const CAM_CH = { POS: 1, ROT: 2, ZOOM: 4, SIZE: 8, ALL: 15 };
+const CAM_CH_NAMES = { 1: "Position", 2: "Rotation", 4: "Zoom", 8: "Camera size" };
+function camFlags(k) { return k && k.flags !== undefined ? k.flags : CAM_CH.ALL; }
 function newCameraKey(frame, data) {
-  return Object.assign({ frame: Math.round(frame), x: 0, y: 0, rotation: 0, zoom: 1,
-    flipX: false, flipY: false, interp: "linear" }, data || {});
+  return Object.assign({ frame: Math.round(frame),
+    flags: CAM_CH.ALL,
+    x: 0, y: 0, rotation: 0, zoom: 1, w: 0, h: 0,
+    flipX: false, flipY: false, interp: "linear",
+    interpPos: undefined, interpRot: undefined, interpZoom: undefined, interpSize: undefined
+  }, data || {});
+}
+// the easing of one camera channel between two keys (the "Mode" of the key
+// that the camera leaves: Linear / Spline / Bezier curve / Smart Spline)
+function camEase(mode, t) {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  if (mode === "hold") return 0;                // hold the previous key value
+  if (mode === "spline" || mode === "smooth") return t * t * (3 - 2 * t);
+  if (mode === "bezier") return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  if (mode === "smart") return (1 - Math.cos(Math.PI * t)) / 2;
+  return t;                                   // linear
+}
+function camInterpOf(k, ch) {
+  if (!k) return "linear";
+  const map = { 1: "interpPos", 2: "interpRot", 4: "interpZoom", 8: "interpSize" };
+  const f = map[ch];
+  if (f && k[f]) return k[f];
+  return k.interp || "linear";
+}
+// the keys of one channel, in frame order
+function cameraChannelKeys(proj, ch) {
+  return (proj.cameraKeys || []).filter(k => (camFlags(k) & ch) !== 0)
+    .sort((a, b) => a.frame - b.frame);
+}
+// the camera time profile (loc 009582110 "Time Profile", 012060000 "Camera
+// time profile (Preview)"): a curve that reshapes the way the camera moves
+// along the path.  The time axis runs from the first to the last frame, the
+// position axis from the first to the last key point.
+function cameraProfile(proj) {
+  if (!proj.cameraProfile || !proj.cameraProfile.length) {
+    proj.cameraProfile = [{ t: 0, v: 0 }, { t: 1, v: 1 }];
+  }
+  return proj.cameraProfile;
+}
+// the value of the profile at a normalised time (a monotone spline through the
+// profile points)
+function cameraProfileAt(proj, t) {
+  const p = cameraProfile(proj);
+  if (p.length < 2) return t;
+  if (t <= p[0].t) return p[0].v;
+  const last = p[p.length - 1];
+  if (t >= last.t) return last.v;
+  let i = 0;
+  while (i < p.length - 2 && p[i + 1].t <= t) i++;
+  const a = p[i], b = p[i + 1];
+  const u = (t - a.t) / ((b.t - a.t) || 1);
+  return a.v + (b.v - a.v) * (u * u * (3 - 2 * u));
+}
+// the value of one channel at a frame; undefined when the channel has no key
+function cameraEvalChannel(proj, ch, frame, get) {
+  const ks = cameraChannelKeys(proj, ch);
+  if (!ks.length) return undefined;
+  if (frame <= ks[0].frame) return get(ks[0]);
+  const last = ks[ks.length - 1];
+  if (frame >= last.frame) return get(last);
+  let i = 0;
+  while (i < ks.length - 1 && ks[i + 1].frame <= frame) i++;
+  const a = ks[i], b = ks[i + 1];
+  const t = (frame - a.frame) / (b.frame - a.frame);
+  let e = camEase(camInterpOf(a, ch), t);
+  // the time profile reshapes the motion of the camera along the path
+  const pf = cameraProfileAt(proj, t);
+  if (pf !== t) e = e * (1 - pf) + pf * e;
+  const va = get(a), vb = get(b);
+  if (va === undefined || vb === undefined) return va === undefined ? vb : va;
+  return va + (vb - va) * e;
 }
 function cameraEvaluate(proj, frame) {
   const ks = (proj.cameraKeys || []).slice().sort((a, b) => a.frame - b.frame);
-  if (!ks.length) return { x: 0, y: 0, rotation: 0, zoom: 1, flipX: false, flipY: false, interp: "smooth" };
-  if (ks.length === 1 || frame <= ks[0].frame) return { ...ks[0], frame: undefined };
-  let prev = ks[0];
-  for (const k of ks) { if (k.frame <= frame) prev = k; else break; }
-  const next = ks.find(k => k.frame > frame) || prev;
-  if (next === prev || next.frame === prev.frame) return { ...prev, frame: undefined };
-  // the movement type of the key the camera leaves governs the segment.
-  // Live TVPaint 12 offers: Linear / Spline / Bezier curve / Smart Spline.
-  const mode = prev.interp || "linear";
-  if (mode === "hold") return { ...prev, frame: undefined };
-  let t = (frame - prev.frame) / (next.frame - prev.frame);
-  if (mode === "spline") t = t * t * (3 - 2 * t);            // smooth step
-  else if (mode === "bezier") t = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  else if (mode === "smart") t = (1 - Math.cos(Math.PI * t)) / 2;
-  else if (mode === "smooth") t = t * t * (3 - 2 * t);      // legacy alias
-  const L = (a, b) => a + (b - a) * t;
-  const pick = (a, b) => (t < 1 ? a : b);
-  return { x: L(prev.x, next.x), y: L(prev.y, next.y),
-    rotation: L(prev.rotation, next.rotation), zoom: L(prev.zoom, next.zoom),
-    flipX: pick(prev.flipX, next.flipX), flipY: pick(prev.flipY, next.flipY), frame: undefined };
+  const out = { x: 0, y: 0, rotation: 0, zoom: 1, w: 0, h: 0,
+    flipX: false, flipY: false, interp: "smooth" };
+  if (!ks.length) return out;
+  // the position, the rotation, the zoom and the size are four independent
+  // channels: a key that does not carry a channel does not drive it
+  const x = cameraEvalChannel(proj, CAM_CH.POS, frame, k => k.x);
+  const y = cameraEvalChannel(proj, CAM_CH.POS, frame, k => k.y);
+  const rot = cameraEvalChannel(proj, CAM_CH.ROT, frame, k => k.rotation || 0);
+  const zoom = cameraEvalChannel(proj, CAM_CH.ZOOM, frame, k => k.zoom === undefined ? 1 : k.zoom);
+  const w = cameraEvalChannel(proj, CAM_CH.SIZE, frame, k => k.w || 0);
+  const h = cameraEvalChannel(proj, CAM_CH.SIZE, frame, k => k.h || 0);
+  if (x !== undefined) out.x = x;
+  if (y !== undefined) out.y = y;
+  if (rot !== undefined) out.rotation = rot;
+  if (zoom !== undefined) out.zoom = zoom;
+  if (w !== undefined) out.w = w;
+  if (h !== undefined) out.h = h;
+  // flips and the movement type come from the last key that carries them
+  for (const k of ks) {
+    if (k.frame > frame) break;
+    if (k.flipX !== undefined) out.flipX = k.flipX;
+    if (k.flipY !== undefined) out.flipY = k.flipY;
+  }
+  out.interp = ks[Math.min(ks.length - 1, Math.max(0, ks.findIndex(k => k.frame > frame) - 1))].interp || "linear";
+  return out;
 }
-// camera rectangle in drawing-area coordinates: TVPaint camera centers on the
-// drawing area; X/Y offsets move the rect, zoom scales its extent, rotation spins it.
+// camera rectangle in drawing-area coordinates: the camera sees a
+// (size / zoom) window centred on the drawing area, X/Y move the centre and
+// rotation spins it.
 function cameraRect(proj, cam) {
-  const vw = (proj.cameraView ? proj.cameraView.w : proj.width * 0.5) / cam.zoom;
-  const vh = (proj.cameraView ? proj.cameraView.h : proj.height * 0.5) / cam.zoom;
+  const defW = proj.cameraView ? proj.cameraView.w : proj.width * 0.5;
+  const defH = proj.cameraView ? proj.cameraView.h : proj.height * 0.5;
+  const vw = (cam.w || defW) / (cam.zoom || 1);
+  const vh = (cam.h || defH) / (cam.zoom || 1);
   return { cx: proj.width / 2 + cam.x, cy: proj.height / 2 + cam.y, w: vw, h: vh, rot: cam.rotation || 0 };
 }
 function cameraKeyAt(proj, frame) {
@@ -382,6 +476,64 @@ function setCameraKey(proj, frame, patch) {
   if (!k) { k = newCameraKey(frame, cameraEvaluate(proj, frame)); proj.cameraKeys.push(k); }
   Object.assign(k, patch, { frame: Math.round(frame) });
   return k;
+}
+// "CameraAddKey" and friends: create the key at a frame and switch on the
+// channel bits it drives (REA: AddKey sets 0xf, the others set a single bit).
+function cameraAddKey(proj, frame, ch) {
+  const mask = ch === undefined ? CAM_CH.ALL : ch;
+  const cur = cameraEvaluate(proj, frame);
+  let k = cameraKeyAt(proj, frame);
+  if (!k) {
+    k = newCameraKey(frame, { x: cur.x, y: cur.y, rotation: cur.rotation,
+      zoom: cur.zoom, w: cur.w, h: cur.h, flags: mask });
+    proj.cameraKeys.push(k);
+  }
+  k.flags = camFlags(k) | mask;
+  if (mask & CAM_CH.POS) { k.x = cur.x; k.y = cur.y; }
+  if (mask & CAM_CH.ROT) k.rotation = cur.rotation;
+  if (mask & CAM_CH.ZOOM) k.zoom = cur.zoom;
+  if (mask & CAM_CH.SIZE) { k.w = cur.w; k.h = cur.h; }
+  proj.cameraKeys.sort((a, b) => a.frame - b.frame);
+  return k;
+}
+// "CameraDeleteKey" and friends: switch the channel bits off; a key that
+// carries no channel left is removed.
+function cameraDeleteKey(proj, frame, ch) {
+  const mask = ch === undefined ? CAM_CH.ALL : ch;
+  const k = cameraKeyAt(proj, frame);
+  if (!k) return false;
+  const f = camFlags(k) & ~mask;
+  if (f === 0) {
+    proj.cameraKeys = proj.cameraKeys.filter(x => x !== k);
+    return true;
+  }
+  k.flags = f;
+  return true;
+}
+// "CameraMoveToFirstKey / LastKey / NextKey / PreviousKey": move the current
+// camera key to another frame.
+function cameraMoveKey(proj, from, to) {
+  const ks = proj.cameraKeys || [];
+  const i = ks.findIndex(k => k.frame === Math.round(from));
+  if (i < 0) return false;
+  if (ks.some(k => k.frame === Math.round(to))) return false;
+  const k = ks[i];
+  ks.splice(i, 1);
+  k.frame = Math.round(to);
+  ks.push(k);
+  ks.sort((a, b) => a.frame - b.frame);
+  return true;
+}
+function cameraMoveKeyRelative(proj, from, dir) {
+  const ks = (proj.cameraKeys || []).slice().sort((a, b) => a.frame - b.frame);
+  const i = ks.findIndex(k => k.frame === Math.round(from));
+  if (i < 0) return false;
+  const t = dir === "first" ? ks[0].frame
+    : dir === "last" ? ks[ks.length - 1].frame
+      : dir === "next" ? (i < ks.length - 1 ? ks[i + 1].frame : ks[0].frame)
+        : (i > 0 ? ks[i - 1].frame : ks[ks.length - 1].frame);
+  if (t === from) return false;
+  return cameraMoveKey(proj, from, t);
 }
 
 // ---------- Increase Layer Length (REA dialog: Stretch / Interpolate(disabled) /
@@ -1423,6 +1575,9 @@ if (typeof module !== "undefined" && module.exports) {
     BRUSH_PROFILES, brushDefaults, activateToolBrush, gradientFill,
     ZOOM_LADDER, VIEW_BG, CAMERA_COL, CAMERA_DIM, zoomStep, fitZoom,
     newCameraKey, cameraEvaluate, cameraRect, cameraKeyAt, setCameraKey, moveCameraKey,
+    CAM_CH, CAM_CH_NAMES, camFlags, camEase, camInterpOf, cameraChannelKeys,
+    cameraEvalChannel, cameraAddKey, cameraDeleteKey, cameraMoveKey, cameraMoveKeyRelative,
+    cameraProfile, cameraProfileAt,
     bakeCameraIntoLayers, renderCameraFrames,
     layerLengthOp,
     newProject, newLayer, newFrame, frameSurface, makeSurface,

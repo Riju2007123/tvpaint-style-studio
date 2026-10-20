@@ -9,10 +9,11 @@
     font: 12px/1.35 "Segoe UI", sans-serif; background: #1e2023; color: #b9bfc6; }
   #app { display: grid; height: 100vh; grid-template-rows: 24px 32px 1fr 320px 26px; }
 
-  /* ---- menu bar ---- */
-  #menubar { background: #2a2e33; display: flex; align-items: stretch; padding: 0 4px;
-    border-bottom: 1px solid #2B2B30; position: relative; }
-  .menu-t { padding: 4px 10px; cursor: default; position: relative; }
+  /* ---- menu bar (TVPaint 12: y 31..47, background 45,45,50) ---- */
+  #menubar { background: #2d2d32; display: flex; align-items: center; padding: 0 8px;
+    height: 18px; position: relative; }
+  .menu-t { padding: 0 8px; cursor: default; position: relative; font-size: 12px;
+    line-height: 18px; color: #b9bfc6; }
   .menu-t:hover, .menu-t.open { background: #3d5666; }
   .menu-dd { position: absolute; top: 100%; left: 0; min-width: 230px; z-index: 50;
     background: #2f3237; border: 1px solid #2D2D32; border-radius: 4px;
@@ -46,14 +47,23 @@
   #panels { background: #313136; border-right: 1px solid #2B2B30; overflow-y: auto;
     display: flex; flex-direction: column; }
   .panel { border-bottom: 1px solid #2B2B30; display: flex; flex-direction: column; }
-  .phead { background: #34383d; display: flex; align-items: center; gap: 6px;
-    padding: 2px 6px; border-bottom: 1px solid #2B2B30; }
+  /* TVPaint 12 panel header: background 49,49,54, the title in the muted
+     blue-grey 99,125,137, the dot / chevron / close / lock on the right */
+  .phead { background: #313136; display: flex; align-items: center; gap: 6px;
+    padding: 0 6px; height: 25px; border-bottom: 1px solid #2B2B30; }
   .phead .pt { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    color: #B6B6B6; }
+    color: #637D89; font-size: 12px; }
   .pw { background: none; border: 0; color: #898989; cursor: pointer; width: 16px;
     padding: 0; font-size: 10px; }
   .pw:hover { color: #B6B6B6; }
   .pbody { padding: 6px; overflow: hidden; }
+
+  /* ---- the project window information bar (TVPaint 12, y 83..107) ---- */
+  #infobar { background: #313136; height: 25px; display: flex; align-items: center;
+    gap: 6px; padding: 0 8px; font-size: 12px; color: #637D89;
+    border-bottom: 1px solid #2B2B30; white-space: nowrap; overflow: hidden; }
+  #infobar .ibk { color: #56707d; }
+  #infobar .ibv { color: #7d94a2; }
 
   .toolgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
   .toolgrid.g6 { grid-template-columns: repeat(6, 1fr); }
@@ -99,7 +109,7 @@
     border-radius: 4px 4px 0 0; padding: 3px 14px; cursor: pointer; }
   .tabs .tab.on { background: #3E476B; color: #B6B6B6; }
 
-  #cwrap { display: grid; grid-template-rows: 1fr 22px; min-height: 0; min-width: 0; }
+  #cwrap { display: grid; grid-template-rows: 25px 1fr 22px; min-height: 0; min-width: 0; }
   #viewport { position: relative; background: #313136; overflow: hidden; min-width: 0; }
   #art, #ovl { position: absolute; left: 0; top: 0; }
   #ovl { touch-action: none; cursor: crosshair; }
@@ -499,6 +509,7 @@
   <div id="workarea">
     <div id="panels"></div>
     <div id="cwrap">
+      <div id="infobar"></div>
       <div id="viewport">
         <canvas id="art"></canvas>
         <canvas id="ovl"></canvas>
@@ -533,6 +544,9 @@
 <script>window.Engine = { BRUSHES, DRAW_MODES, SHAPES, LAYER_LOOP_MODES, XSHEET_OPS,
   BRUSH_PROFILES, brushDefaults, activateToolBrush, gradientFill,
   newCameraKey, cameraEvaluate, cameraRect, cameraKeyAt, setCameraKey, layerLengthOp,
+  CAM_CH, CAM_CH_NAMES, camFlags, camEase, camInterpOf, cameraChannelKeys,
+  cameraEvalChannel, cameraAddKey, cameraDeleteKey, cameraMoveKey, cameraMoveKeyRelative,
+  cameraProfile, cameraProfileAt, moveCameraKey,
   resizeProject,
   newProject, newLayer, newFrame, frameSurface, makeSurface, brushStamp,
   strokeBegin, strokeMove, strokeEnd, floodFill, pickColor, xsheetOp, makeHistory,

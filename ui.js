@@ -383,6 +383,23 @@ function renderAll() {
   renderLayersPanel();
   renderTimelineStatus();
   updateZoomLbl();
+  renderInfoBar();
+}
+// The information bar of the project window (TVPaint 12, live capture):
+//   Project: "Untitled_(3)"  Clip: "Clip_001"  20.00%  0°  Current Layer:
+//   "Anim_01"  Current Image: 1
+function renderInfoBar() {
+  const el = $("infobar");
+  if (!el) return;
+  const layer = proj.layers[proj.currentLayer];
+  const rot = ((view.rotate || 0) * 180 / Math.PI) % 360;
+  el.innerHTML =
+    `<span class="ibk">Project:</span> <span class="ibv">"${proj.projectName || "Untitled_(3)"}"</span>` +
+    `<span class="ibk">Clip:</span> <span class="ibv">"${proj.clipName || "Clip_001"}"</span>` +
+    `<span class="ibv">${(view.zoom * 100).toFixed(2)}%</span>` +
+    `<span class="ibv">${rot.toFixed(0)}°</span>` +
+    `<span class="ibk">Current Layer:</span> <span class="ibv">"${layer ? layer.name : ""}"</span>` +
+    `<span class="ibk">Current Image:</span> <span class="ibv">${proj.currentFrame}</span>`;
 }
 // FAST paths used during pointer drags (TVPaint paints live, no full re-render):
 function fastRenderAll() {   // art changed, but no DOM/timeline work
@@ -1046,12 +1063,26 @@ function renderBin() {
 }
 function togglePanel(i) { panelEls[i].style.display = panelEls[i].style.display === "none" ? "" : "none"; }
 
-// ---------- Camera[Proj] panel (REA screenshot: Command select, Lock All /
-// Bookmarks / Toggle all, Mode: interpolation dropdown, Motion Blur, X/Y locks,
-// Rotation %, Zoom, Flip X/Y, Parameters...) ----------
+// ---------- Camera[Pro] panel ----------
+// The panel structure is taken from TVPaint 12's own localisation file
+// (english.tvpaint.loc, ids 009582xxx / 129582xxx / 001200158) and from the
+// live Camera[Pro] tool panel captured on screen:
+//   Command (Invert / Load... / Save... / Reset / Reset and Fit to project)
+//   Lock All        - "Lock all the Camera parameters"
+//   Time Profile    - the camera motion curve (Time / Position axes)
+//   See bookmarks   - "Display the camera position for each bookmarks"
+//   Toggle all
+//   Mode            - Linear / Spline / Bezier curve / Smart Spline
+//   Motion Blur     - "adds a 'Motion Blur' effect on the camera move"
+//   X / Y           - "X value of the current position"
+//   Width / Height  - the camera size
+//   Modify ratio    - "Lock the ratio of the camera size"
+//   Rotation / Zoom / Flip X / Flip Y
+//   Parameters ...  - the global camera parameters request
 let camView = false;         // "View ▸ Camera View" render mode
 let camFrame = true;         // the camera frame overlay drawn on the canvas
 let camLocks = { x: false, y: false, rotation: false, zoom: false };
+let camLocksAll = false;      // "Lock All": no camera parameter can be changed
 function buildCameraPanel() {
   const body = mkThirdPanel("Camera[Proj]");
   body.innerHTML = `
@@ -1063,6 +1094,7 @@ function buildCameraPanel() {
         <option value="reset">Reset</option>
         <option value="resetfit">Reset and Fit to project</option></select>`)}
     ${mrow("Lock All", `<input type="checkbox" id="camLockAll">`)}
+    ${mrow("Time Profile", `<button class="revbtn" id="camProfile" style="flex:1">Time Profile</button>`)}
     ${mrow("See bookmarks", `<input type="checkbox" id="camBookmarks">`)}
     ${mrow("Toggle all", `<button class="revbtn" id="camToggle" style="padding:1px 10px">🔑</button>`)}
     ${mrow("Mode", `<select id="camMode" style="flex:1">
@@ -1075,6 +1107,8 @@ function buildCameraPanel() {
         <input type="number" id="camX" step="1" style="flex:1">`)}
     ${mrow("Y", `<button class="revbtn" id="camLockY" style="padding:0 4px">🔓</button>
         <input type="number" id="camY" step="1" style="flex:1">`)}
+    ${mrow("Width", `<input type="number" id="camW" step="1" min="1" style="flex:1">`)}
+    ${mrow("Height", `<input type="number" id="camH" step="1" min="1" style="flex:1">`)}
     ${mrow("Modify ratio", `<input type="checkbox" id="camRatio">`)}
     ${mrow("Rotation", `<button class="revbtn" id="camLockRot" style="padding:0 4px">🔓</button>
         <input type="number" id="camRot" step="0.1" value="0.00" style="width:70px"> °`)}
@@ -1082,24 +1116,27 @@ function buildCameraPanel() {
         <input type="number" id="camZoom" step="0.01" value="100.00" style="width:70px"> %`)}
     ${mrow("Flip X", `<input type="checkbox" id="camFlipX">`)}
     ${mrow("Flip Y", `<input type="checkbox" id="camFlipY">`)}
-    <div class="orow" style="justify-content:center"><button class="revbtn" onclick="toast('camera fx parameters — not in this prototype')">Parameters ...</button></div>`;
+    <div class="orow" style="justify-content:center"><button class="revbtn" id="camParams">Parameters ...</button></div>`;
   const sync = () => {
     const cam = E.cameraEvaluate(proj, proj.currentFrame);
     $("camX").value = (proj.width / 2 + cam.x).toFixed(0);   // absolute coords like TVPaint
     $("camY").value = (proj.height / 2 + cam.y).toFixed(0);
+    const r = E.cameraRect(proj, cam);
+    $("camW").value = Math.round(cam.w || (proj.cameraView ? proj.cameraView.w : proj.width * 0.5));
+    $("camH").value = Math.round(cam.h || (proj.cameraView ? proj.cameraView.h : proj.height * 0.5));
     $("camRot").value = cam.rotation.toFixed(2);
     $("camZoom").value = (cam.zoom * 100).toFixed(2);
     $("camFlipX").checked = !!cam.flipX;
     $("camFlipY").checked = !!cam.flipY;
     const k = E.cameraKeyAt(proj, proj.currentFrame);
-    $("camMode").value = k ? k.interp : "linear";
+    $("camMode").value = k ? (k.interp || "linear") : "linear";
     $("camLockAll").checked = !!(camLocks.x && camLocks.y && camLocks.rotation && camLocks.zoom);
     $("camBookmarks").checked = !!proj.cameraBookmarks;
     $("camRatio").checked = !!proj.cameraModifyRatio;
     [["camLockX", "x"], ["camLockY", "y"], ["camLockRot", "rotation"], ["camLockZoom", "zoom"]]
       .forEach(([id, key]) => { const b = $(id); if (b) b.textContent = camLocks[key] ? "🔒" : "🔓"; });
-    ["camX", "camY", "camRot", "camZoom", "camMode", "camFlipX", "camFlipY"].forEach(id => {
-      $(id).disabled = !(proj.cameraKeys && proj.cameraKeys.length);
+    ["camX", "camY", "camW", "camH", "camRot", "camZoom", "camMode", "camFlipX", "camFlipY"].forEach(id => {
+      $(id).disabled = !(proj.cameraKeys && proj.cameraKeys.length) || !!camLocksAll;
     });
   };
   const edit = (patch) => {
@@ -1118,10 +1155,27 @@ function buildCameraPanel() {
   };
   $("camX").onchange = e => edit({ x: (+e.target.value || 0) - proj.width / 2 });
   $("camY").onchange = e => edit({ y: (+e.target.value || 0) - proj.height / 2 });
+  // Width / Height are the camera size (the "size" channel).  "Modify ratio"
+  // locks the width/height ratio while one of them is changed (loc 009582260).
+  const editSize = (which) => e => {
+    const v = Math.max(1, Math.round(+e.target.value || 1));
+    const cur = E.cameraEvaluate(proj, proj.currentFrame);
+    const w0 = cur.w || (proj.cameraView ? proj.cameraView.w : proj.width * 0.5);
+    const h0 = cur.h || (proj.cameraView ? proj.cameraView.h : proj.height * 0.5);
+    const patch = which === "w" ? { w: v } : { h: v };
+    if (proj.cameraModifyRatio) {
+      if (which === "w") patch.h = Math.max(1, Math.round(h0 * v / w0));
+      else patch.w = Math.max(1, Math.round(w0 * v / h0));
+    }
+    edit(patch);
+  };
+  $("camW").onchange = editSize("w");
+  $("camH").onchange = editSize("h");
   $("camRot").onchange = e => edit({ rotation: +e.target.value || 0 });
   $("camZoom").onchange = e => edit({ zoom: Math.max(0.05, (+e.target.value || 100) / 100) });
   $("camFlipX").onchange = e => edit({ flipX: e.target.checked });
   $("camFlipY").onchange = e => edit({ flipY: e.target.checked });
+  $("camProfile").onclick = () => openCameraTimeProfile();
   $("camMode").onchange = e => {
     const k = E.cameraKeyAt(proj, proj.currentFrame);
     if (k) { k.interp = e.target.value; toast("camera interpolation: " + e.target.value); renderAll(); }
@@ -1129,11 +1183,13 @@ function buildCameraPanel() {
   $("camBlur").onchange = e => { proj.cameraBlur = +e.target.value || 0; toast("motion blur " + proj.cameraBlur + "% (applied on render)"); };
   $("camLockAll").onchange = (e) => {
     const all = e.target.checked;
+    camLocksAll = all;
     camLocks = { x: all, y: all, rotation: all, zoom: all };
     ["camLockX", "camLockY", "camLockRot", "camLockZoom"].forEach(id => {
       const b = $(id); if (b) b.textContent = all ? "🔒" : "🔓";
     });
     toast("camera axis locks: " + (all ? "all locked" : "released"));
+    sync();
   };
   // per axis padlocks (live camera panel: a padlock next to X, Y, Rotation, Zoom)
   [["camLockX", "x"], ["camLockY", "y"], ["camLockRot", "rotation"], ["camLockZoom", "zoom"]]
@@ -1147,6 +1203,7 @@ function buildCameraPanel() {
       };
     });
   $("camBookmarks").onchange = (e) => { proj.cameraBookmarks = e.target.checked; renderAll(); };
+  $("camParams").onclick = () => dlgCameraParams();
   $("camRatio").onchange = (e) => {
     proj.cameraModifyRatio = e.target.checked;
     toast("modify ratio " + (e.target.checked ? "on" : "off"));
@@ -1164,14 +1221,24 @@ function buildCameraPanel() {
     if (cmd === "invert") invertCameraPath();
     else if (cmd === "save") {
       try {
-        localStorage.setItem("tvpaint.camera", JSON.stringify(proj.cameraKeys || []));
+        localStorage.setItem("tvpaint.camera", JSON.stringify({
+          keys: proj.cameraKeys || [], view: proj.cameraView || null,
+          format: proj.cameraFormat || null, fps: proj.cameraFps || null,
+          par: proj.cameraPAR || null, order: proj.cameraFieldOrder || null
+        }));
         toast("camera settings saved");
       } catch (err) { toast("camera save failed"); }
     } else if (cmd === "load") {
       try {
         const raw = localStorage.getItem("tvpaint.camera");
         if (!raw) { toast("no saved camera settings"); return; }
-        proj.cameraKeys = JSON.parse(raw).map(k => E.newCameraKey(k.frame, k));
+        const d = JSON.parse(raw);
+        proj.cameraKeys = (d.keys || []).map(k => E.newCameraKey(k.frame, k));
+        if (d.view) proj.cameraView = d.view;
+        if (d.format) proj.cameraFormat = d.format;
+        if (d.fps) proj.cameraFps = d.fps;
+        if (d.par) proj.cameraPAR = d.par;
+        if (d.order) proj.cameraFieldOrder = d.order;
         renderAll();
         toast("camera settings loaded");
       } catch (err) { toast("camera load failed"); }
@@ -3332,28 +3399,27 @@ function beginCamKeyDrag(e, frame) {
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
 }
+// The camera keyframe menu (loc 000025109 "Create keyframe", 000025110 "Delete
+// keyframe", 012085198 "Camera size", 012085201 "Movement Type", 012085216
+// "Adjust the layer to the animation", 011085200 "Invert all keys").
+// The channels are the four the binary knows (REA: the keyframe flag word):
+// position, rotation, zoom and camera size.
+const CAM_PART_CH = { "All": 15, "Position": 1, "Rotation": 2, "Zoom": 4, "Camera size": 8 };
 function camKeyPart(f, part, create, value) {
+  if (part === "Movement Type") {
+    const k = E.cameraKeyAt(proj, f) || E.cameraAddKey(proj, f, E.CAM_CH.ALL);
+    k.interp = value || "linear";
+    toast("camera movement type: " + k.interp);
+    renderAll();
+    return;
+  }
+  const ch = CAM_PART_CH[part] === undefined ? E.CAM_CH.ALL : CAM_PART_CH[part];
   if (create) {
-    const cur = E.cameraEvaluate(proj, f);
-    const k = E.setCameraKey(proj, f, {});
-    if (part === "All" || part === "Position") { k.x = cur.x; k.y = cur.y; }
-    if (part === "All" || part === "Rotation") k.rotation = cur.rotation;
-    if (part === "All" || part === "Zoom") k.zoom = cur.zoom;
-    if (part === "All" || part === "Movement Type") k.interp = value || cur.interp || "linear";
-    toast("camera keyframe created");
+    E.cameraAddKey(proj, f, ch);
+    toast("camera " + (part === "All" ? "" : part.toLowerCase() + " ") + "keyframe created");
   } else {
-    const k = E.cameraKeyAt(proj, f);
-    if (!k) { toast("no camera keyframe at this frame"); return; }
-    if (part === "All") {
-      proj.cameraKeys = proj.cameraKeys.filter(x => x.frame !== f);
-      toast("camera keyframe deleted");
-    } else {
-      if (part === "Position") { k.x = 0; k.y = 0; }
-      if (part === "Rotation") k.rotation = 0;
-      if (part === "Zoom") k.zoom = 1;
-      if (part === "Movement Type") k.interp = value || "linear";
-      toast("camera keyframe part removed");
-    }
+    if (!E.cameraDeleteKey(proj, f, ch)) { toast("no camera keyframe at this frame"); return; }
+    toast("camera " + (part === "All" ? "" : part.toLowerCase() + " ") + "keyframe deleted");
   }
   renderAll();
 }
@@ -3371,18 +3437,20 @@ function invertCameraPath() {
 }
 function cameraKeyMenu(f, mx, my) {
   const key = E.cameraKeyAt(proj, f);
+  // the live submenu shows a tick on every channel that is keyed at this frame
+  const has = (ch) => !!(key && (E.camFlags(key) & ch));
   const sub = (create) => ([
-    { label: "All", action: () => camKeyPart(f, "All", create) },
+    { label: "All", checked: false, action: () => camKeyPart(f, "All", create) },
     { sep: true },
-    { label: "Position", action: () => camKeyPart(f, "Position", create) },
-    { label: "Rotation", action: () => camKeyPart(f, "Rotation", create) },
-    { label: "Zoom", action: () => camKeyPart(f, "Zoom", create) },
-    { label: "Camera size", action: () => camKeyPart(f, "Camera size", create) },
+    { label: "Position", checked: has(E.CAM_CH.POS), action: () => camKeyPart(f, "Position", create) },
+    { label: "Rotation", checked: has(E.CAM_CH.ROT), action: () => camKeyPart(f, "Rotation", create) },
+    { label: "Zoom", checked: has(E.CAM_CH.ZOOM), action: () => camKeyPart(f, "Zoom", create) },
+    { label: "Camera size", checked: has(E.CAM_CH.SIZE), action: () => camKeyPart(f, "Camera size", create) },
     { label: "Movement Type", submenu: [
-      { label: "Linear", action: () => camKeyPart(f, "Movement Type", create, "linear") },
-      { label: "Spline", action: () => camKeyPart(f, "Movement Type", create, "spline") },
-      { label: "Bezier curve", action: () => camKeyPart(f, "Movement Type", create, "bezier") },
-      { label: "Smart Spline", action: () => camKeyPart(f, "Movement Type", create, "smart") }
+      { label: "Linear", checked: (key ? key.interp : "linear") === "linear", action: () => camKeyPart(f, "Movement Type", create, "linear") },
+      { label: "Spline", checked: (key ? key.interp : "linear") === "spline", action: () => camKeyPart(f, "Movement Type", create, "spline") },
+      { label: "Bezier curve", checked: (key ? key.interp : "linear") === "bezier", action: () => camKeyPart(f, "Movement Type", create, "bezier") },
+      { label: "Smart Spline", checked: (key ? key.interp : "linear") === "smart", action: () => camKeyPart(f, "Movement Type", create, "smart") }
     ] }
   ]);
   openTvMenu([
@@ -3475,6 +3543,162 @@ function cellOp(op, li, f, arg) {
     renderAll();
     toast(sourceKeys.length === 1 ? "image cut" : sourceKeys.length + " images cut");
   }
+}
+// loc 009582110 "Time Profile" - the camera time profile (loc 012060000
+// "Camera time profile (Preview)"): a curve whose X axis is the time (first
+// to last frame) and whose Y axis is the position (first to last key point).
+// Dragging a handle reshapes the way the camera moves along its path.
+function openCameraTimeProfile() {
+  const pts = E.cameraProfile(proj).map(p => Object.assign({}, p));
+  const m = openModal("Camera time profile", `
+    <div style="display:flex;gap:10px;align-items:flex-start">
+      <canvas id="ctpCv" width="440" height="280" style="background:#1c1f24;border:1px solid #4a4a51"></canvas>
+      <div style="flex:1">
+        <div style="color:#9aa3ab;font-size:11px;line-height:1.5">
+          Drag the handles to shape the camera move.<br>
+          The time axis runs from the first frame to the last frame,
+          the position axis from the first key point to the last.
+        </div>
+        <div style="margin-top:10px">
+          <div style="color:#9aa3ab;font-size:11px;margin-bottom:4px">Presets</div>
+          <div id="ctpPresets" style="display:flex;flex-direction:column;gap:3px"></div>
+        </div>
+      </div>
+    </div>`, [
+    ["OK", () => {
+      proj.cameraProfile = pts.map(p => Object.assign({}, p));
+      renderAll();
+      toast("camera time profile updated");
+    }, true],
+    ["Reset", () => {
+      proj.cameraProfile = [{ t: 0, v: 0 }, { t: 1, v: 1 }];
+      renderAll();
+      toast("camera time profile reset");
+    }]
+  ]);
+  const cv = m.querySelector("#ctpCv"), g = cv.getContext("2d");
+  const W = cv.width, H = cv.height, PAD = 34;
+  const PRESETS = {
+    "Linear": [{ t: 0, v: 0 }, { t: 1, v: 1 }],
+    "Ease in": [{ t: 0, v: 0 }, { t: 0.6, v: 0.25 }, { t: 1, v: 1 }],
+    "Ease out": [{ t: 0, v: 0 }, { t: 0.4, v: 0.75 }, { t: 1, v: 1 }],
+    "Ease in / out": [{ t: 0, v: 0 }, { t: 0.5, v: 0.5 }, { t: 1, v: 1 }],
+    "Back and forth": [{ t: 0, v: 0 }, { t: 0.5, v: 1 }, { t: 1, v: 0 }]
+  };
+  const pbox = m.querySelector("#ctpPresets");
+  Object.keys(PRESETS).forEach(name => {
+    const b = document.createElement("button");
+    b.className = "revbtn"; b.textContent = name; b.style.textAlign = "left";
+    b.onclick = () => { pts.length = 0; PRESETS[name].forEach(p => pts.push(Object.assign({}, p))); draw(); };
+    pbox.appendChild(b);
+  });
+  const sx = t => PAD + t * (W - PAD - 12);
+  const sy = v => (H - PAD) - v * (H - PAD - 12);
+  const ix = x => (x - PAD) / (W - PAD - 12);
+  const iy = y => ((H - PAD) - y) / (H - PAD - 12);
+  function draw() {
+    g.clearRect(0, 0, W, H);
+    g.strokeStyle = "#2c3036"; g.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const x = PAD + i * (W - PAD - 12) / 4;
+      g.beginPath(); g.moveTo(x, 10); g.lineTo(x, H - PAD); g.stroke();
+      const y = 10 + i * (H - PAD - 10) / 4;
+      g.beginPath(); g.moveTo(PAD, y); g.lineTo(W - 12, y); g.stroke();
+    }
+    g.strokeStyle = "#5b6068";
+    g.beginPath(); g.moveTo(PAD, 10); g.lineTo(PAD, H - PAD); g.lineTo(W - 12, H - PAD); g.stroke();
+    g.fillStyle = "#9aa3ab"; g.font = "11px sans-serif";
+    g.fillText("Time", W / 2 - 12, H - 12);
+    g.save(); g.translate(12, H / 2 + 22); g.rotate(-Math.PI / 2); g.fillText("Position", 0, 0); g.restore();
+    // the curve
+    g.strokeStyle = "#6fa8c9"; g.lineWidth = 1.5;
+    g.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const t = i / 100;
+      const x = sx(t), y = sy(profileValue(pts, t));
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.stroke();
+    // the handles
+    pts.forEach((p, i) => {
+      g.fillStyle = i === drag ? "#ffd479" : "#6fa8c9";
+      g.beginPath(); g.arc(sx(p.t), sy(p.v), 5, 0, Math.PI * 2); g.fill();
+    });
+  }
+  function profileValue(list, t) {
+    if (list.length < 2) return t;
+    if (t <= list[0].t) return list[0].v;
+    const last = list[list.length - 1];
+    if (t >= last.t) return last.v;
+    let i = 0;
+    while (i < list.length - 2 && list[i + 1].t <= t) i++;
+    const a = list[i], b = list[i + 1];
+    const u = (t - a.t) / ((b.t - a.t) || 1);
+    return a.v + (b.v - a.v) * (u * u * (3 - 2 * u));
+  }
+  let drag = -1;
+  cv.onpointerdown = e => {
+    const r = cv.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    let best = -1, bd = 1e9;
+    pts.forEach((p, i) => {
+      const d = Math.hypot(sx(p.t) - x, sy(p.v) - y);
+      if (d < bd) { bd = d; best = i; }
+    });
+    if (bd < 12) { drag = best; cv.setPointerCapture(e.pointerId); draw(); }
+  };
+  cv.onpointermove = e => {
+    if (drag < 0) return;
+    const r = cv.getBoundingClientRect();
+    const p = pts[drag];
+    p.t = Math.max(0, Math.min(1, ix(e.clientX - r.left)));
+    p.v = Math.max(0, Math.min(1, iy(e.clientY - r.top)));
+    if (drag === 0) p.t = 0;
+    if (drag === pts.length - 1) p.t = 1;
+    pts.sort((a, b) => a.t - b.t);
+    drag = pts.findIndex(q => q === p);
+    draw();
+  };
+  cv.onpointerup = () => { drag = -1; draw(); };
+  draw();
+}
+// loc 009582150 "Camera parameters" - the global camera parameters request
+// (loc 009582255 Format, 009582265 width, 009582270 height, 009582275 frame
+// rate, 009582280 pixel aspect ratio, 009582285 field order).
+function dlgCameraParams() {
+  const cam = E.cameraEvaluate(proj, proj.currentFrame);
+  const w = cam.w || (proj.cameraView ? proj.cameraView.w : proj.width * 0.5);
+  const h = cam.h || (proj.cameraView ? proj.cameraView.h : proj.height * 0.5);
+  const m = openModal("Camera parameters", `
+    ${mrow("Format:", `<select id="cpFormat" style="flex:1;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc;padding:2px 4px">
+        ${Object.keys(CAM_PRESETS).filter(k => CAM_PRESETS[k][0]).map(k =>
+      `<option ${k === proj.cameraFormat ? "selected" : ""}>${k}</option>`).join("")}
+        <option ${!proj.cameraFormat ? "selected" : ""}>Custom</option></select>`)}
+    ${mrow("Width:", `<input type="number" id="cpW" value="${Math.round(w)}" min="1" step="1" style="width:110px;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc;padding:2px 4px">`)}
+    ${mrow("Height:", `<input type="number" id="cpH" value="${Math.round(h)}" min="1" step="1" style="width:110px;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc;padding:2px 4px">`)}
+    ${mrow("Frame rate:", `<input type="number" id="cpFps" value="${proj.cameraFps || proj.fps}" min="1" step="1" style="width:110px;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc;padding:2px 4px">`)}
+    ${mrow("Pixel aspect ratio:", `<input type="number" id="cpPar" value="${proj.cameraPAR || 1}" min="0.01" step="0.01" style="width:110px;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc;padding:2px 4px">`)}
+    ${mrow("Field order:", `<select id="cpOrder" style="flex:1;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc;padding:2px 4px">
+        ${["Upper field first", "Lower field first", "Not interlaced"].map(o =>
+      `<option ${o === (proj.cameraFieldOrder || "Not interlaced") ? "selected" : ""}>${o}</option>`).join("")}</select>`)}`, [
+    ["OK", () => {
+      const fmt = m.querySelector("#cpFormat").value;
+      const nw = Math.max(1, Math.round(+m.querySelector("#cpW").value || w));
+      const nh = Math.max(1, Math.round(+m.querySelector("#cpH").value || h));
+      const pre = CAM_PRESETS[fmt];
+      proj.cameraFormat = pre ? fmt : "Custom";
+      proj.cameraView = { w: pre ? pre[0] : nw, h: pre ? pre[1] : nh };
+      proj.cameraFps = +m.querySelector("#cpFps").value || proj.fps;
+      proj.cameraPAR = +m.querySelector("#cpPar").value || 1;
+      proj.cameraFieldOrder = m.querySelector("#cpOrder").value;
+      // the new size becomes the size of the camera key
+      const f = proj.currentFrame;
+      const k = E.cameraKeyAt(proj, f);
+      if (k) { k.w = proj.cameraView.w; k.h = proj.cameraView.h; k.flags = E.camFlags(k) | E.CAM_CH.SIZE; }
+      renderAll();
+      toast("camera parameters applied");
+    }, true]
+  ]);
 }
 function dlgExposure(li, f) {
   const { k, fr } = cellFrame(li, f);
