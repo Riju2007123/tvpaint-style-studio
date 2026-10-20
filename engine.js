@@ -32,6 +32,14 @@ function newLayer(name) {
     stencil: "off",                    // off | positive | negative (REA)
     loop: "none",                      // LAYER_LOOP_MODES (REA)
     lighttable: false,
+    blend: "Normal",                   // layer blending mode (26318/28002 family)
+    group: 0,                          // colour group (REA 60300..60312)
+    role: null,                        // image role marker (REA 12104150..)
+    marks: {},                         // image marks (REA 28471..28484)
+    repeatMode: "Loop",                // Repeat Images submenu (REA 28670..)
+    repeatValue: 2,
+    collapsed: false,
+    type: "anim",                      // anim | background | ctg | folder | puppet
     frames: { 1: newFrame() }
   };
 }
@@ -49,7 +57,25 @@ function newProject(w, h, fps) {
     brush: null,                           // set from the pen profile below (REA: per-tool defaults)
     toolStates: {},                        // per-tool settings, TVPaint-style (each tool keeps its own params)
     apen: "#000000", bpen: "#ffffff",
-    name: "untitled.myproj"
+    name: "untitled.myproj",
+    // timeline footer / production state (observed live + REA loc strings)
+    background: "color",                    // none | color | check (25300..25302)
+    bgA: "#ffffff", bgB: "#cfcfcf",
+    startFrame: 1,
+    notes: "",
+    sound: null,                           // { name, duration, offset }
+    groups: [
+      { name: "Default", color: "#8f8f95" }, { name: "Dark Blue", color: "#2b3a67" },
+      { name: "Dark Green", color: "#2e5b3a" }, { name: "Dark Cyan", color: "#27585b" },
+      { name: "Dark Red", color: "#5b2a2a" }, { name: "Purple", color: "#4b2f5e" },
+      { name: "Brown", color: "#5e462f" }, { name: "Blue", color: "#3d5a9e" },
+      { name: "Green", color: "#3e8a56" }, { name: "Cyan", color: "#3ea0a6" },
+      { name: "Red", color: "#b04141" }, { name: "Magenta", color: "#a0418a" },
+      { name: "Orange", color: "#c07a3a" }
+    ],
+    showRoles: false, roleLayerOnly: false,
+    loopLimits: { mode: "mark", start: 1, end: null },
+    selectedLayers: [0]
   };
   p.brush = activateToolBrush(p, "penbrush");   // REA: penbrush profile defaults
   return p;
@@ -760,6 +786,171 @@ function breakExposure(proj, layer, frame) {
   return true;
 }
 
+// ---------- timeline cell commands (live-observed cell menu, loc 254xx/286xx) ----------
+const IMAGE_ROLES = [
+  { id: "key",            label: "Keyframe",                       color: "#d05a5a" },
+  { id: "breakdown",      label: "Breakdown",                      color: "#d09a4a" },
+  { id: "inbetween-todo", label: "Inbetween (To Do)",              color: "#4a7fd0" },
+  { id: "inbetween-done", label: "Inbetween (Done)",               color: "#4ab06a" },
+  { id: "special-todo",   label: "Special Inbetween (To Do)",      color: "#9a5ad0" },
+  { id: "special-done",   label: "Special Inbetween (Done)",       color: "#3ab0a0" }
+];
+const BLEND_MODES = ["Normal", "Add", "Multiply", "Screen", "Overlay", "Soft Light",
+  "Hard Light", "Color Dodge", "Color Burn", "Darken", "Lighten", "Difference",
+  "Exclusion", "Hue", "Saturation", "Color", "Luminosity"];
+
+function frameEndOf(k, fr) { return k + ((fr && fr.exposure) || 1) - 1; }
+function layerKeys(layer) { return Object.keys(layer.frames).map(Number).sort((a, b) => a - b); }
+function layerEnd(layer) {
+  const ks = layerKeys(layer);
+  if (!ks.length) return 0;
+  const k = ks[ks.length - 1];
+  return frameEndOf(k, layer.frames[k]);
+}
+function shiftKeys(layer, from, delta, includeFrom) {
+  const ks = layerKeys(layer).filter(k => includeFrom ? k >= from : k > from);
+  if (delta >= 0) ks.slice().reverse().forEach(k => { layer.frames[k + delta] = layer.frames[k]; delete layer.frames[k]; });
+  else ks.forEach(k => { layer.frames[k + delta] = layer.frames[k]; delete layer.frames[k]; });
+}
+function blankFrame() { return newFrame(); }
+function copyFrameObj(src) { return { exposure: src.exposure || 1, canvas: src.canvas, id: uid(), role: src.role || null }; }
+
+// Insert / duplicate images (cell menu ▸ Insert Images).
+// mode: "after" (blank), "before" (blank) or "duplicate" (copy the image at frame f).
+function insertImages(layer, f, n, mode, copyCanvas) {
+  n = Math.max(1, Math.round(n || 1));
+  const srcKey = effectiveFrameKey(layer, f);
+  let cut;
+  if (mode === "before") cut = (srcKey == null ? f : srcKey) - 1;
+  else cut = (srcKey == null ? f : srcKey);
+  if (mode === "after" || mode === "duplicate") {
+    const fr = srcKey == null ? null : layer.frames[srcKey];
+    cut = fr ? frameEndOf(srcKey, fr) : f;
+  }
+  shiftKeys(layer, cut, n, false);
+  for (let i = 1; i <= n; i++) {
+    const at = cut + i;
+    if (mode === "duplicate" && srcKey != null) {
+      const src = layer.frames[srcKey];
+      let cv = src.canvas;
+      if (copyCanvas && cv) cv = copyCanvas(cv);
+      layer.frames[at] = { exposure: src.exposure || 1, canvas: cv, id: uid(), role: src.role || null };
+    } else {
+      layer.frames[at] = blankFrame();
+    }
+  }
+  return n;
+}
+function duplicateImages(layer, f, n, copyCanvas) {
+  return insertImages(layer, f, n, "duplicate", copyCanvas);
+}
+// Delete from Layer: remove the whole drawing under f and close the gap.
+function deleteImageAt(layer, f) {
+  const k = effectiveFrameKey(layer, f);
+  if (k == null) return false;
+  const span = layer.frames[k].exposure || 1;
+  delete layer.frames[k];
+  shiftKeys(layer, k, -span, false);
+  if (!layerKeys(layer).length) layer.frames[1] = blankFrame();
+  return true;
+}
+// Delete from Project: remove one frame column across every layer.
+function deleteFrameColumn(proj, f) {
+  proj.layers.forEach(layer => {
+    const ks = layerKeys(layer);
+    if (!ks.length) return;
+    ks.forEach(k => {
+      const fr = layer.frames[k];
+      if (k === f) {
+        // the key sits on the deleted column: keep its drawing for the rest
+        // of the hold, or drop the key when it was a single frame
+        if ((fr.exposure || 1) > 1) fr.exposure -= 1;
+        else delete layer.frames[k];
+      } else if (k < f && frameEndOf(k, fr) >= f) {
+        fr.exposure = Math.max(1, (fr.exposure || 1) - 1);
+      }
+    });
+    // every key after the column moves one frame left, even on layers that
+    // have no drawing at f (deleting a project frame compacts the whole xsheet)
+    ks.filter(k => k > f).forEach(k => {
+      layer.frames[k - 1] = layer.frames[k];
+      delete layer.frames[k];
+    });
+    if (!layerKeys(layer).length) layer.frames[1] = blankFrame();
+  });
+  proj.outFrame = Math.max(1, proj.outFrame - 1);
+  proj.currentFrame = Math.max(1, Math.min(proj.currentFrame, proj.outFrame));
+  return true;
+}
+function setExposureValue(layer, f, n) {
+  const k = effectiveFrameKey(layer, f);
+  if (k == null) return false;
+  const ks = layerKeys(layer);
+  const next = ks.find(x => x > k);
+  n = Math.max(1, Math.round(n || 1));
+  if (next) n = Math.min(n, next - k);
+  layer.frames[k].exposure = n;
+  return true;
+}
+function removeExposures(layer, f) {
+  const k = effectiveFrameKey(layer, f);
+  if (k == null) return false;
+  layer.frames[k].exposure = 1;
+  return true;
+}
+// Repeat Images: repeat the layer's drawings (or the marked range) count times.
+function repeatImages(proj, layer, n, mode) {
+  n = Math.max(1, Math.round(n || layer.repeatValue || 2));
+  mode = mode || layer.repeatMode || "Loop";
+  const ks = layerKeys(layer);
+  if (!ks.length) return 0;
+  const a = Math.max(1, Math.min(proj.inFrame || ks[0], ks[0]));
+  const b = Math.min(layerEnd(layer), Math.max(proj.outFrame || layerEnd(layer), ks[ks.length - 1]));
+  const seq = ks.filter(k => k >= a && k <= b).map(k => ({ exp: layer.frames[k].exposure || 1, src: layer.frames[k] }));
+  if (!seq.length) return 0;
+  // repeat the drawings (with their exposures), not the empty gaps between them
+  const loopLen = seq.reduce((s, it) => s + it.exp, 0);
+  const added = loopLen * (n - 1);
+  shiftKeys(layer, b, added, false);
+  let x = b + 1;
+  for (let rep = 0; rep < n - 1; rep++) {
+    let order = seq.slice();
+    if (mode === "Ping-Pong" && (rep % 2 === 1)) order.reverse();
+    if (mode === "Random") {
+      for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    }
+    order.forEach(it => {
+      layer.frames[x] = { exposure: it.exp, canvas: it.src.canvas, id: uid(), role: it.src.role || null };
+      x += it.exp;
+    });
+  }
+  return added;
+}
+function slideLayer(layer, delta) {
+  delta = Math.round(delta || 0);
+  if (!delta) return false;
+  const ks = layerKeys(layer);
+  if (!ks.length) return false;
+  if (ks[0] + delta < 1) delta = 1 - ks[0];
+  shiftKeys(layer, 0, delta, true);
+  return true;
+}
+function alignLayer(proj, layer, edge) {
+  const ks = layerKeys(layer);
+  if (!ks.length) return false;
+  if (edge === "end") return slideLayer(layer, proj.outFrame - layerEnd(layer));
+  return slideLayer(layer, 1 - ks[0]);
+}
+function setImageMark(layer, f, on) {
+  layer.marks = layer.marks || {};
+  if (on) layer.marks[Math.round(f)] = true; else delete layer.marks[Math.round(f)];
+  return true;
+}
+function nextImageMark(layer, f, dir) {
+  const ms = Object.keys(layer.marks || {}).map(Number).sort((a, b) => a - b);
+  return dir < 0 ? (ms.filter(x => x < f).pop() ?? null) : (ms.find(x => x > f) ?? null);
+}
+
 // ---------- George subset for drawing ----------
 const George = {
   tv_getapen: (p) => p.apen,
@@ -826,6 +1017,10 @@ if (typeof module !== "undefined" && module.exports) {
     brushStamp, strokeBegin, strokeMove, strokeEnd,
     floodFill, pickColor, xsheetOp, makeHistory, effectiveFrameKey,
     serializeProject, deserializeProject, George, colorWithAlpha,
-    recomputeExposure, breakExposure
+    recomputeExposure, breakExposure,
+    IMAGE_ROLES, BLEND_MODES, frameEndOf, layerKeys, layerEnd, shiftKeys,
+    insertImages, duplicateImages, deleteImageAt, deleteFrameColumn,
+    setExposureValue, removeExposures, repeatImages, slideLayer, alignLayer,
+    setImageMark, nextImageMark
   };
 }

@@ -38,7 +38,24 @@ Works from `file://` too — just open `index.html`.
 - Camera layer: keyframes on canvas drag and via the camera strip `+` marks,
   hold/linear/smooth interp, View ▸ Camera View render-through, Camera[Proj] panel
 - George input: `tv_pen`, `power`, `opacity`, `tv_wetbrush`, `tv_camerainfo`, …
-- Transport: Mark In/Out, fps dropdown (12/24/25/30), play/stop/step, zoom
+- Transport: Mark In/Out, fps dropdown (12/24/25/30), play/stop/step, hand zoom
+  group, loop limits (clip / layer / Mark In-Out / image marks / custom)
+
+- Timeline menus captured live from TVPaint 12: the 15-item layer menu and the
+  15-item cell menu, with submenus, shortcuts, separators, checked and disabled
+  states. Exposure break / remove / set value, insert / duplicate / delete images,
+  delete from project, repeat Loop / Ping-Pong / Random, image roles and image
+  marks, split, merge, slide, align, reverse order, multi-layer selection.
+  (The Move / Align / Merge / Select / Role submenu entries are reconstructed from
+  the shipped `english.tvpaint.loc` strings and George commands; the top-level
+  menus and the cell submenus were observed directly.)
+- New layer ▾ (anim, background, colour & texture, folder, puppet, import footage,
+  duplicate structure), 17 blending modes, 13 colour groups, background
+  None / Color / Check rendering, start frame, and the footer Notes / Sound /
+  Color Group panes. Per-layer lock / light table / preserve-transparency /
+  stencil dots, row collapse, global layer flags and image-mark ruler ticks.
+
+31 Node tests cover the timeline operations (`npm test`).
 
 ## Tests
 

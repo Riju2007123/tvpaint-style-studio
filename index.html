@@ -329,6 +329,12 @@
   .tlfoot .frow2 .ftstart { margin-left: 10px; color: #b6b6bc; font-size: 11px; }
   .tlfoot .frow2 input { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 4px;
     color: #c8c8cc; font-size: 11px; padding: 0 5px; width: 46px; height: 18px; box-sizing: border-box; }
+  .tlfoot .frow2 .ftlab { color: #a6a6ac; font-size: 11px; }
+  .tlfoot .frow2 button.ftfield { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 4px;
+    color: #c9c9cf; font-size: 11px; height: 16px; padding: 0 6px; cursor: pointer; }
+  .tlfoot .frow2 button.ftfield:hover { border-color: #6a8fae; }
+  .tlfoot .frow2 .ftclock { color: #a6a6ac; font-size: 12px; cursor: pointer; }
+  .tlfoot .frow2 .ftclock:hover { color: #e0e0e6; }
   .tlfoot .frow2 select.ftfield { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 4px;
     color: #b6b6bc; font-size: 11px; padding: 0 4px; width: 160px; height: 18px; box-sizing: border-box; }
   .tlfoot .ftresize { margin-left: 9px; width: 15px; height: 15px; opacity: .8; cursor: ns-resize;
@@ -366,6 +372,69 @@
     padding: 4px 12px; font-size: 11px; opacity: 0; pointer-events: none;
     transition: opacity .15s, transform .15s; z-index: 500; }
   #toastMsg.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  /* ---- TVPaint-style popup menus (layer / cell / New / Background ...) ---- */
+  .tvmenu { position: fixed; z-index: 1200; background: #313136; border: 1px solid #5a5a61;
+    border-radius: 2px; box-shadow: 0 10px 26px #000a; padding: 3px 0; min-width: 186px;
+    font-size: 11px; color: #c9c9cf; user-select: none; }
+  .tvmi { height: 21px; display: flex; align-items: center; padding: 0 20px 0 22px;
+    position: relative; white-space: nowrap; cursor: default; }
+  .tvmi:hover { background: #3E476B; color: #fff; }
+  .tvmi.dis { color: #6d6d72; pointer-events: none; }
+  .tvmi.danger .lbl { color: #d05a5a; }
+  .tvmi .chk { position: absolute; left: 7px; width: 11px; text-align: center; color: #e6e6ea; }
+  .tvmi .sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin: 0 5px 0 -12px;
+    box-shadow: 0 0 0 1px #1c1c20; }
+  .tvmi .sc { margin-left: auto; color: #8a8a90; padding-left: 24px; }
+  .tvmi .arrow { position: absolute; right: 6px; color: #b9b9c0; }
+  .tvmi.sep { height: 1px; padding: 0; margin: 3px 7px; background: #4a4a51; pointer-events: none; }
+  .lnm-input { background: #1f1f23; color: #e4e4e8; border: 1px solid #6a8fae; border-radius: 2px;
+    font: 11px system-ui, sans-serif; width: 112px; padding: 1px 3px; }
+  /* per-layer flag dots (REA 25334-25338: active / lock / light table / preserve trans. / stencil) */
+  .dots i { cursor: pointer; }
+  .dots i.on { background: #7c8ce0 !important; box-shadow: 0 0 0 1px #aab4ff, 0 0 4px #7c8ce088; }
+  .dots i.neg { background: #d06a6a !important; box-shadow: 0 0 0 1px #ff9a9a; }
+  .dots i:hover { background: #8f8f96; }
+  .lblend { position: absolute; right: 1px; bottom: 1px; font-size: 8px; color: #8f8f96;
+    cursor: pointer; line-height: 1; }
+  .lblend:hover { color: #d8d8de; }
+  .lop { position: relative; }
+  .llayer.selmulti .lrowbg { box-shadow: inset 2px 0 #6a8fae; }
+  .llayer.collapsed { height: 24px !important; }
+  .llayer.collapsed .lbody { display: none; }
+  .strip.collapsed { height: 24px !important; }
+  .strip.collapsed .cells { display: none; }
+  /* image roles + image marks */
+  .cell .rolemark { position: absolute; left: 2px; bottom: 2px; width: 0; height: 0;
+    border-style: solid; border-width: 0 0 7px 7px; border-color: transparent transparent currentColor transparent;
+    z-index: 4; pointer-events: none; }
+  .cell .imgmark { position: absolute; right: 2px; top: 2px; width: 0; height: 0;
+    border-style: solid; border-width: 0 6px 6px 0; border-color: transparent #e0b84a transparent transparent;
+    z-index: 4; pointer-events: none; }
+  .tick.mark::after { content: ""; position: absolute; left: 50%; bottom: 1px; width: 0; height: 0;
+    border-style: solid; border-width: 0 4px 5px 4px; border-color: transparent transparent #e0b84a transparent; }
+  /* footer panes (Notes / Sound / Color Group) */
+  #tlPane { position: fixed; left: 4px; bottom: 62px; width: 372px; height: 176px; z-index: 70;
+    background: #2D2D32; border: 1px solid #4a4a51; border-radius: 4px; box-shadow: 0 8px 26px #000b;
+    display: flex; flex-direction: column; color: #b9bfc6; font-size: 11px; }
+  #tlPane .ph { height: 20px; display: flex; align-items: center; gap: 8px; padding: 0 6px;
+    background: #3a3a41; border-radius: 4px 4px 0 0; color: #d0d0d6; }
+  #tlPane .ph b { flex: 1; font-weight: 600; font-size: 11px; }
+  #tlPane .ph button { background: none; border: 0; color: #a9a9af; cursor: pointer; font-size: 12px; }
+  #tlPane .pb { flex: 1; overflow: auto; padding: 5px 6px; display: flex; flex-direction: column; gap: 5px; }
+  #tlPane textarea { flex: 1; resize: none; background: #26262a; color: #c9c9cf;
+    border: 1px solid #3f3f46; border-radius: 3px; padding: 4px 5px; font: 11px system-ui, sans-serif; }
+  #tlPane .prow { display: flex; align-items: center; gap: 6px; }
+  #tlPane .prow input[type=range] { flex: 1; accent-color: #6a8fae; }
+  #tlPane .cgrow { display: flex; align-items: center; gap: 6px; height: 19px; }
+  #tlPane .cgrow i { width: 12px; height: 12px; border-radius: 2px; flex: none; box-shadow: 0 0 0 1px #1c1c20; }
+  #tlPane .cgrow .nm { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #tlPane .cgrow button { font-size: 10px; padding: 1px 6px; }
+  #tlPane canvas.sndwave { width: 100%; height: 64px; background: #222226; border: 1px solid #3f3f46; border-radius: 3px; }
+  .tr-hand { display: inline-flex; align-items: center; gap: 0; }
+  .tr-hand .arw { width: 12px; height: 22px; border: 0; background: none; color: #8f95a0;
+    font-size: 8px; cursor: pointer; padding: 0; }
+  .tr-hand .arw:hover { color: #e0e0e6; }
+  .tr-hand .tib { width: 22px; height: 22px; }
 </style>
 </head>
 <body>
@@ -412,7 +481,11 @@
   resizeProject,
   newProject, newLayer, newFrame, frameSurface, makeSurface, brushStamp,
   strokeBegin, strokeMove, strokeEnd, floodFill, pickColor, xsheetOp, makeHistory,
-  serializeProject, deserializeProject, George, colorWithAlpha, effectiveFrameKey };</script>
+  serializeProject, deserializeProject, George, colorWithAlpha, effectiveFrameKey,
+  recomputeExposure, breakExposure, IMAGE_ROLES, BLEND_MODES, frameEndOf, layerKeys, layerEnd,
+  shiftKeys, insertImages, duplicateImages, deleteImageAt, deleteFrameColumn,
+  setExposureValue, removeExposures, repeatImages, slideLayer, alignLayer,
+  setImageMark, nextImageMark };</script>
 <script src="ui.js"></script>
 </body>
 </html>

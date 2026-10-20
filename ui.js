@@ -138,18 +138,27 @@ function renderArtOnly() {
   actx.translate(view.x, view.y);
   actx.scale(view.zoom, view.zoom);
   actx.imageSmoothingEnabled = proj.antiAlias !== "None";
-  // paper background (timeline footer: Background dropdown)
-  const bg = proj.background || "Background";
-  if (bg === "Checkerboard") {
+  // paper background (timeline footer: Background dropdown — loc 25300..25302)
+  const bg = proj.background || "none";
+  const bgA = proj.bgA || "#ffffff", bgB = proj.bgB || "#cfcfcf";
+  if (bg === "check" || bg === "Checkerboard") {
     const s = 16;
-    actx.fillStyle = "#f2f2f2"; actx.fillRect(0, 0, proj.width, proj.height);
-    actx.fillStyle = "#cfcfcf";
+    actx.fillStyle = bgA; actx.fillRect(0, 0, proj.width, proj.height);
+    actx.fillStyle = bgB;
     for (let y = 0; y < proj.height; y += s)
       for (let x = 0; x < proj.width; x += s)
         if (((x / s) + (y / s)) % 2 === 0) actx.fillRect(x, y, s, s);
-  } else {
-    actx.fillStyle = bg === "Black" ? "#000000" : "#ffffff";
+  } else if (bg === "color" || bg === "White" || bg === "Black" || bg === "Background") {
+    actx.fillStyle = bg === "Black" ? "#000000" : bg === "White" || bg === "Background" ? "#ffffff" : bgA;
     actx.fillRect(0, 0, proj.width, proj.height);
+  } else {
+    // None = transparent: TVPaint displays transparency as a checkerboard
+    const s = 16;
+    actx.fillStyle = "#d9d9de"; actx.fillRect(0, 0, proj.width, proj.height);
+    actx.fillStyle = "#f4f4f7";
+    for (let y = 0; y < proj.height; y += s)
+      for (let x = 0; x < proj.width; x += s)
+        if (((x / s) + (y / s)) % 2 === 0) actx.fillRect(x, y, s, s);
   }
   const camKeys = proj.cameraKeys && proj.cameraKeys.length;
   // TVPaint: the camera IS the lens — with camera keys present the canvas always
@@ -178,7 +187,10 @@ function renderArtOnly() {
     const surf = key !== null ? l.frames[key].canvas : null;
     if (!surf || !surf.getContext) return;
     actx.globalAlpha = l.opacity * (l.lighttable && li !== proj.currentLayer ? 0.3 : 1);
+    const comp = blendToComposite(l.blend);
+    if (comp) actx.globalCompositeOperation = comp;
     actx.drawImage(surf, 0, 0);
+    actx.globalCompositeOperation = "source-over";
     actx.globalAlpha = 1;
   });
   if (camKeys) actx.restore();
@@ -434,9 +446,9 @@ const MENUS = [
     ["Remove Selected Bookmark", () => removeBookmark(proj.currentFrame)],
     ["Remove All Bookmarks", () => { proj.bookmarks = []; renderAll(); }],
     null, ["Set Mark ▸", "mark"],
-    ["Go to Previous Image Mark", () => gotoFrame(proj.inFrame)],
-    ["Go to Next Image Mark", () => gotoFrame(proj.outFrame)],
-    ["Remove All Image Marks", () => { proj.inFrame = 1; proj.outFrame = 25; renderAll(); }],
+    ["Go to Previous Image Mark", () => { const m = E.nextImageMark(tvCurrentLayer(), proj.currentFrame, -1); if (m) gotoFrame(m); else toast("no previous image mark"); }],
+    ["Go to Next Image Mark", () => { const m = E.nextImageMark(tvCurrentLayer(), proj.currentFrame, 1); if (m) gotoFrame(m); else toast("no next image mark"); }],
+    ["Remove All Image Marks", () => { tvCommit(() => { tvCurrentLayer().marks = {}; }); toast("image marks removed"); }],
     null, ["Re Apply", () => { if (sel) applySelection(); }],
     null, ["ClipBoard ▸", "clipboard"],
     ["Shortcuts…", () => alert("Space play\nArrow keys: frame/layer\nCtrl+Z undo · Ctrl+Y redo · Ctrl+S save\nEnter: apply selection · Esc: cancel")],
@@ -446,8 +458,8 @@ const MENUS = [
     ["Duplicate Project", () => { proj.name = "Untitled_(" + (+(proj.name.match(/\d+/) || [0])[0] + 1) + ")"; renderTimelineStatus(); toast("project duplicated: " + proj.name); }],
     ["Modify Project…", () => dlgNewProject(true)],
     null, ["Render Camera ▸", null, 1],
-    null, ["Load Sound…", () => toast("sound — not in this prototype")],
-    ["Add sound from library", () => toast("sound — not in this prototype")],
+    null, ["Load Sound…", () => togglePane("sound")],
+    ["Add sound from library", () => togglePane("sound")],
     null, ["Project Information", () => alert(
       "Project: " + proj.name + "\nSize: " + proj.width + "x" + proj.height + "\nFrame rate: " + proj.fps +
       "\nLayers: " + proj.layers.length + "\nCamera keys: " + (proj.cameraKeys || []).length)],
@@ -458,12 +470,12 @@ const MENUS = [
     null, ["New Clip", null, 1], ["Duplicate Clip", null, 1], ["Delete Clip", null, 1],
     ["Split Clip", null, 1], ["Merge clips", null, 1],
     null, ["New Scene", null, 1], ["Duplicate Scene", null, 1], ["Delete Scene", null, 1],
-    null, ["Load Sound…", () => toast("sound — not in this prototype")],
+    null, ["Load Sound…", () => togglePane("sound")],
     null, ["Send to ▸", null, 1]
   ]],
   ["Layer", [
     ["New Layer", () => layerAdd()],
-    ["Open Layer Presets Manager", () => toast("presets — not in this prototype")],
+    ["Open Layer Presets Manager", () => layerPresetsDlg()],
     ["Rename Layer…", () => { const n = prompt("Layer name:", proj.layers[proj.currentLayer].name); if (n) { proj.layers[proj.currentLayer].name = n; renderAll(); } }],
     ["Delete All Layers…", () => toast("use Layer ▸ Delete Layer")],
     ["Delete Layer", () => layerDel()],
@@ -476,7 +488,7 @@ const MENUS = [
     null, ["View All Layers", () => { proj.layers.forEach(l => l.visible = true); renderAll(); }],
     ["View Current Layer Only", () => { proj.layers.forEach((l, i) => l.visible = i === proj.currentLayer); renderAll(); }],
     null, ["Make Anim Layer", null, 1],
-    ["Select All Layers", () => toast("one layer selected at a time in this prototype")],
+    ["Select All Layers", () => selectLayers("all")],
     null, ["Cut Layer", () => { clipboardLayer = proj.layers.splice(proj.currentLayer, 1)[0]; proj.currentLayer = Math.min(proj.currentLayer, proj.layers.length - 1); renderAll(); }],
     ["Copy Layer", () => { clipboardLayer = proj.layers[proj.currentLayer]; toast("layer copied"); }],
     ["Paste Layer (Above)", () => { if (!clipboardLayer) { toast("clipboard empty"); return; } proj.layers.splice(proj.currentLayer, 0, JSON.parse(JSON.stringify(clipboardLayer, (k, v) => k === "canvas" ? undefined : v))); renderAll(); }]
@@ -1234,21 +1246,21 @@ function renderTimeline() {
     <div class="ltabs"><div class="tab">Project</div><div class="tab on">Clip: Timeline</div></div>
   </div>
   <div class="lhiconsrow"><div class="lhicons">
-      <img class="sq" src="icons/MiscLayers-x20.png" title="layers">
-      <img class="sq" src="icons/LayerAnim-x20.png" title="animation layers">
+      <img class="sq" src="icons/MiscLayers-x20.png" title="All layers (click to filter anim layers)" onclick="event.stopPropagation();toggleLayerFilter('all')">
+      <img class="sq" src="icons/LayerAnim-x20.png" title="Animation layers only" onclick="event.stopPropagation();toggleLayerFilter('anim')">
       <span class="vsep"></span>
       <button class="hbtn" onclick="layerAdd()" title="Create a new animation layer."><img src="icons/CreateAnimLayer-x20.png"></button>
-      <button class="hbtn" onclick="event.stopPropagation();toast('folder layers — not in this prototype')" title="Create a new folder layer"><img src="icons/CreateFolderLayer-x20.png"></button>
-      <button class="hbtn" onclick="event.stopPropagation();toast('CTG layers — not in this prototype')" title="Create a new CTG layer"><img src="icons/CreateCTGLayer-x20.png"></button>
+      <button class="hbtn" onclick="event.stopPropagation();addTypedLayer('folder')" title="Create a new folder layer"><img src="icons/CreateFolderLayer-x20.png"></button>
+      <button class="hbtn" onclick="event.stopPropagation();addTypedLayer('ctg')" title="Create a new CTG layer"><img src="icons/CreateCTGLayer-x20.png"></button>
       <button class="hbtn" onclick="layerDel()" title="Delete the current layer"><img src="icons/DeleteLayer-x20.png"></button>
-      <button class="minib newbtn" onclick="layerAdd()" title="New layer">New <span class="arrow">▾</span></button>
+      <button class="minib newbtn" onclick="event.stopPropagation();newLayerMenu(this)" title="New layer">New <span class="arrow">▾</span></button>
       <span class="hsp"></span>
-      ${flagBtn("visible", cl0.visible !== false, "LayerActiveOn", "LayerActiveOff", "Show/Hide")}
-      ${flagBtn("locked", cl0.locked, "LayerLockOn", "LayerLockOff", "Lock Layer")}
-      ${flagBtn("lighttable", cl0.lighttable, "LayerLighttableOn", "LayerLighttableOff", "Light table")}
-      ${flagBtn("preserveTransparency", cl0.preserveTransparency, "LayerPreserveTransparencyOn", "LayerPreserveTransparencyOff", "Preserve transparency")}
-      <button class="flag" title="Stencil" onclick="event.stopPropagation();toast('stencil — not in this prototype')"><img src="icons/LayerStencil-x20.png"></button>
-      <button class="flag" title="Layer display options" onclick="event.stopPropagation();toast('layer display options — not in this prototype')"><img src="icons/LayerSquigglesOn-x20.png"></button>
+      <button class="flag${proj.layers.every(l => l.visible !== false) ? "" : " off"}" title="Show/Hide all layers" onclick="event.stopPropagation();toggleAllFlag('visible')"><img src="icons/${proj.layers.every(l => l.visible !== false) ? "LayerActiveOn" : "LayerActiveOff"}-x20.png"></button>
+      <button class="flag${proj.layers.every(l => l.locked) ? "" : " off"}" title="Lock/Unlock all layers" onclick="event.stopPropagation();toggleAllFlag('locked')"><img src="icons/${proj.layers.every(l => l.locked) ? "LayerLockOn" : "LayerLockOff"}-x20.png"></button>
+      <button class="flag${proj.layers.every(l => l.lighttable) ? "" : " off"}" title="Light table for all layers" onclick="event.stopPropagation();toggleAllFlag('lighttable')"><img src="icons/${proj.layers.every(l => l.lighttable) ? "LayerLighttableOn" : "LayerLighttableOff"}-x20.png"></button>
+      <button class="flag${proj.layers.every(l => l.preserveTransparency) ? "" : " off"}" title="Preserve transparency for all layers" onclick="event.stopPropagation();toggleAllFlag('preserveTransparency')"><img src="icons/${proj.layers.every(l => l.preserveTransparency) ? "LayerPreserveTransparencyOn" : "LayerPreserveTransparencyOff"}-x20.png"></button>
+      <button class="flag" title="Manage stencils" onclick="event.stopPropagation();stencilMenu(this)"><img src="icons/LayerStencil-x20.png"></button>
+      <button class="flag" title="Layer display options" onclick="event.stopPropagation();displayMenu(this)"><img src="icons/LayerSquigglesOn-x20.png"></button>
     </div></div>
   ${camOn ? `<div class="camrow" onclick="selectTool(&quot;camera&quot;)" title="Camera Layer">
       <img class="sq" src="icons/Shape-Camera-x20.png">
@@ -1257,37 +1269,81 @@ function renderTimeline() {
     </div>` : ""}`;
   proj.layers.forEach((l, i) => {
     const cur = i === proj.currentLayer;
-    lh += `<div class="llayer${cur ? " cur" : ""}" data-layer="${i}" onclick="pickLayer(${i})">
+    const g = (proj.groups && proj.groups[l.group || 0]) || { name: "Default", color: "#8f8f95" };
+    const typeIcon = l.type === "folder" ? "CreateFolderLayer" : l.type === "ctg" ? "CreateCTGLayer"
+      : l.type === "background" ? "LayerColorRendering" : "SketchHand";
+    lh += `<div class="llayer${cur ? " cur" : ""}${l.collapsed ? " collapsed" : ""}${(!cur && (proj.selectedLayers || []).includes(i)) ? " selmulti" : ""}" data-layer="${i}" style="height:${l.collapsed ? 24 : 60}px" onclick="pickLayer(${i})">
     <div class="lrowbg"></div>
     <div class="lname">
-      <span class="lminus">⊖</span>
-      <span class="nm">${l.name}</span>
-      <span class="lmore" title="layer options" onclick="event.stopPropagation();layerMenu(${i},this)"><img src="icons/Timeline-Resize-x20.png"></span>
+      <span class="lminus" title="Collapse/Expand" onclick="event.stopPropagation();collapseLayer(${i})">${l.collapsed ? "⊕" : "⊖"}</span>
+      <span class="nm" ondblclick="event.stopPropagation();startLayerRename(${i})">${l.name}</span>
+      <span class="lmore" title="Layer options" onclick="event.stopPropagation();layerMenu(${i},this)">▾</span>
     </div>
     <div class="lbody">
-      <img class="ltype" src="icons/SketchHand-x20.png" title="drag to move">
+      <img class="ltype" src="icons/${typeIcon}-x20.png" title="${l.type === "folder" ? "folder layer" : l.type === "ctg" ? "color & texture layer" : l.type === "background" ? "background layer" : "drag to move"}">
       <canvas class="lthumb" data-layer="${i}" width="52" height="26"></canvas>
       <div class="lmid">
-        <div class="lplay"><span class="dot"></span>
+        <div class="lplay"><span class="dot" style="background:${g.color}" title="Group: ${g.name}"></span>
           <button title="previous instance" onclick="event.stopPropagation();layerInst(${i},-1)"><img src="icons/Remote-Goto-PreviousInstance-x20.png"></button>
           <button title="next instance" onclick="event.stopPropagation();layerInst(${i},1)"><img src="icons/Remote-Goto-NextInstance-x20.png"></button>
           <button class="looppb" data-pb="${i}" title="Loop Mode" onclick="event.stopPropagation();openLayerPlayback(${i},this)"><img src="icons/${({ None: "LayerLoopNone", Loop: "LayerLoopRepeatAfter", "Ping-Pong": "LayerLoopPingPong", Hold: "LayerLoopHoldAfter" })[l.playback || "None"]}-x20.png"></button>
         </div>
-        <div class="lcolor">Color</div>
+        <div class="lcolor" title="Group selection — click here to select layer's group" onclick="event.stopPropagation();groupMenu(${i},this)">Color</div>
       </div>
       <div class="lflags">
-        <button class="flag${l.visible !== false ? "" : " off"}" title="Show/Hide" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'visible')"><img src="icons/${l.visible !== false ? "LayerActiveOn" : "LayerActiveOff"}-x20.png"></button>
-        <span class="dots"><i></i><i></i><i></i><i></i></span>
+        <button class="flag${l.visible !== false ? "" : " off"}" title="Show/Hide layer" onclick="event.stopPropagation();toggleLayerFlagAt(${i},'visible')"><img src="icons/${l.visible !== false ? "LayerActiveOn" : "LayerActiveOff"}-x20.png"></button>
+        <span class="dots">
+          <i class="${l.locked ? "on" : ""}" data-flag="locked" title="Lock/Unlock layer"></i>
+          <i class="${l.lighttable ? "on" : ""}" data-flag="lighttable" title="Activate/Inactivate Light Table"></i>
+          <i class="${l.preserveTransparency ? "on" : ""}" data-flag="preserveTransparency" title="Preserve transparency"></i>
+          <i class="${l.stencil !== "off" && l.stencil ? "on" : ""}${l.stencil === "negative" ? " neg" : ""}" data-flag="stencil" title="Stencil: ${l.stencil === "negative" ? "negative" : l.stencil === "positive" ? "positive" : "off"} (click to cycle)"></i>
+        </span>
       </div>
       <div class="lop"><span>⊖</span>
         <input type="range" data-lop="${i}" min="0" max="100" value="${Math.round((l.opacity ?? 1) * 100)}">
-        <span class="lval">${Math.round((l.opacity ?? 1) * 100)}%</span></div>
+        <span class="lval">${Math.round((l.opacity ?? 1) * 100)}%</span>
+        <span class="lblend" data-blend="${i}" title="Blending mode: ${l.blend || "Normal"}">◢</span></div>
     </div>
   </div>`;
   });
   lh += `<div class="lsep"><span class="pin">⊘</span></div>`;
   left.innerHTML = lh;
   buildTlTabs();
+  left.querySelectorAll(".dots i[data-flag]").forEach(el => {
+    el.onclick = (e) => {
+      e.stopPropagation();
+      const li = +el.closest(".llayer").dataset.layer;
+      const flag = el.dataset.flag;
+      const l = proj.layers[li];
+      if (flag === "stencil") {
+        l.stencil = l.stencil === "positive" ? "negative" : l.stencil === "negative" ? "off" : "positive";
+        renderAll();
+        toast("stencil: " + l.stencil);
+      } else toggleLayerFlagAt(li, flag);
+    };
+  });
+  left.querySelectorAll(".lblend").forEach(el => {
+    el.onclick = (e) => { e.stopPropagation(); blendMenu(+el.dataset.blend, el); };
+  });
+  left.oncontextmenu = (e) => {
+    const row = e.target.closest(".llayer");
+    if (!row) return;
+    e.preventDefault();
+    const li = +row.dataset.layer;
+    proj.currentLayer = li; renderAll();
+    layerMenu(li, null, e.clientX, e.clientY);
+  };
+  track.oncontextmenu = (e) => {
+    const c = e.target.closest(".cell[data-f]");
+    if (!c) return;
+    const li = +c.dataset.l;
+    if (isNaN(li)) return;
+    e.preventDefault();
+    const f = +c.dataset.f;
+    proj.currentLayer = li; proj.currentFrame = f;
+    renderAll();
+    cellMenu(li, f, e.clientX, e.clientY);
+  };
   left.querySelectorAll("[data-lop]").forEach(r => {
     r.oninput = (e) => {
       proj.layers[+r.dataset.lop].opacity = +e.target.value / 100;
@@ -1302,7 +1358,8 @@ function renderTimeline() {
   // one tick per frame (40 px); numbers on odd frames like TVPaint; current frame = blue tick
   let ticks = "";
   for (let f = 1; f <= maxF; f++) {
-    const cls = [f === proj.currentFrame ? "cur" : "", f === proj.inFrame ? "in" : ""].join(" ");
+    const mk = proj.showMarks !== false && proj.layers.some(l => l.marks && l.marks[f]);
+    const cls = [f === proj.currentFrame ? "cur" : "", f === proj.inFrame ? "in" : "", mk ? "mark" : ""].join(" ");
     ticks += `<div class="tick ${cls}" data-tf="${f}">${f % 2 === 1 ? f : ""}</div>`;
   }
   // info row (REA/status format): Project / Clip / Layer-count includes camera / Current Image
@@ -1348,10 +1405,15 @@ function renderTimeline() {
       const isKey = k === f;
       const cls = k !== null ? (isKey ? "keyw" : "hold") + (emptyByKey.get(k) ? " empty" : "") : "";
       let inner = "";
+      const fr = isKey ? l.frames[k] : null;
+      const role = fr && fr.role ? E.IMAGE_ROLES.find(r => r.id === fr.role) : null;
       if (isKey) {
         inner += `<div class="cellimg${emptyByKey.get(k) ? " empty" : ""}"></div>`;
         inner += `<span class="knum">${keys.indexOf(k) + 1}.</span>`;
         inner += `<span class="dh l" data-k="${k}" data-l="${li}"></span><span class="dh r" data-k="${k}" data-l="${li}"></span>`;
+        if (role && proj.showRoles && (!proj.roleLayerOnly || li === proj.currentLayer))
+          inner += `<i class="rolemark" style="color:${role.color}" title="${role.label}"></i>`;
+        if (l.marks && l.marks[k] && proj.showMarks !== false) inner += `<i class="imgmark" title="image mark"></i>`;
       } else if (k === null && f === firstEmpty) {
         inner += `<span class="empin">⊘</span>`;
       }
@@ -1367,7 +1429,7 @@ function renderTimeline() {
       overlay = `<div class="expLine" data-first="${keys[0]}" style="left:${(keys[0] - 1) * CW}px;width:${lineW}px">${knobs}</div>` +
         `<i class="expHandle" style="left:${(lastEnd - 1) * CW + CW - 5}px" data-k="${keys[keys.length - 1]}" data-l="${li}" title="drag right: increase length"></i>`;
     }
-    th += `<div class="strip${sel ? " sel" : ""}" data-layer="${li}"><div class="cells">${cells}</div>${overlay}</div>`;
+    th += `<div class="strip${sel ? " sel" : ""}${l.collapsed ? " collapsed" : ""}" data-layer="${li}"${l.collapsed ? ' style="height:24px"' : ""}><div class="cells">${cells}</div>${overlay}</div>`;
   });
   th += `<div class="tlspacer"></div>`;
   th += `<div class="ruler bot" id="rulerBot">${ticks}${mkBands}</div>`;
@@ -1533,46 +1595,37 @@ function renderTimeline() {
   const foot = $("tlFoot");
   if (foot) foot.innerHTML = `
     <div class="frow2">
-      <select id="ftBg" class="ftfield" title="paper background">${["Background", "White", "Black", "Checkerboard"].map(b => `<option ${(proj.background || "Background") === b ? "selected" : ""}>${b}</option>`).join("")}</select>
-      <span class="ftstart">⇤ Start Frame</span>
-      <input id="ftStartVal" class="ftnum" type="number" min="1" value="${proj.inFrame}">
+      <span class="ftlab">Background</span>
+      <button id="ftBgBtn" class="ftfield" title="Selecting none means the background is alpha or transparent (Shift B)">${({ none: "None", color: "Color", check: "Check" })[proj.background] || "None"} ▾</button>
+      <span class="ftstart">Start Frame</span>
+      <input id="ftStartVal" class="ftnum" type="number" min="0" value="${proj.startFrame ?? 1}">
+      <span class="ftclock" title="Start frame of the project">◷</span>
       <img class="ftresize" src="icons/Timeline-Resize-x20.png" title="drag up/down to resize the timeline">
     </div>`;
   const leftFoot = document.createElement("div");
   leftFoot.className = "lfrow1";
   leftFoot.innerHTML = `
-    <button class="ftab" id="ftNotes">Notes</button>
-    <button class="ftab" id="ftSound">Sound</button>
-    <button class="ftab" id="ftColor">Color Group</button>
+    <button class="ftab" id="ftNotes" title="Show timeline notes">Notes</button>
+    <button class="ftab" id="ftSound" title="Toggle the Sound panel">Sound</button>
+    <button class="ftab" id="ftColor" title="Toggle the Color Group panel">Color Group</button>
     <span class="lfsep"></span>
-    <span class="lfgrip">⇔</span>`;
+    <span class="lfgrip" title="drag up/down to resize the timeline">⇔</span>`;
   left.appendChild(leftFoot);
   if (foot) {
-    leftFoot.querySelector("#ftNotes").onclick = function () {
-      this.classList.toggle("on");
-      let ta = document.getElementById("tlNotesTa");
-      if (!ta && this.classList.contains("on")) {
-        ta = document.createElement("textarea");
-        ta.id = "tlNotesTa";
-        ta.placeholder = "project notes";
-        ta.value = proj.notes || "";
-        ta.oninput = () => proj.notes = ta.value;
-        track.appendChild(ta);
-      } else if (ta && !this.classList.contains("on")) ta.remove();
-    };
-    leftFoot.querySelector("#ftSound").onclick = () => toast("sound — not in this prototype");
-    leftFoot.querySelector("#ftColor").onclick = () => toast("color groups — not in this prototype");
+    leftFoot.querySelector("#ftNotes").onclick = () => togglePane("notes");
+    leftFoot.querySelector("#ftSound").onclick = () => togglePane("sound");
+    leftFoot.querySelector("#ftColor").onclick = () => togglePane("color");
     leftFoot.querySelector(".lfgrip").onpointerdown = (e) => startTlResize(e);
-    foot.querySelector("#ftBg").onchange = (e) => {
-      proj.background = e.target.value;
-      renderAll();
-      toast("background: " + e.target.value);
-    };
+    foot.querySelector("#ftBgBtn").onclick = (e) => backgroundMenu(e.currentTarget);
     foot.querySelector("#ftStartVal").onchange = (e) => {
-      proj.inFrame = Math.max(1, +e.target.value || 1);
+      proj.startFrame = Math.max(0, +e.target.value || 0);
       renderAll();
+      toast("start frame: " + proj.startFrame);
     };
+    const clk = foot.querySelector(".ftclock");
+    if (clk) clk.onclick = () => startFrameMenu();
     foot.querySelector(".ftresize").onpointerdown = (e) => startTlResize(e);
+    syncPaneTabs();
   }
   // in/out scrub bar (real: clip 1..outFrame, per-frame tick lines, blue current
   // block + large frame number, green in / magenta out half-frame stripes)
@@ -1837,6 +1890,759 @@ window.layerDup = () => {
   proj.layers.splice(proj.currentLayer + 1, 0, copy);
   proj.currentLayer++; renderAll();
 };
+// ================= TVPaint timeline command layer =================
+// All labels/order below were captured live from the real TVPaint 12 Pro demo
+// (right-click on layer name / timeline cell, New ▾, Background field) and
+// matched to the shipped english.tvpaint.loc string table.
+function blendToComposite(m) {
+  return ({
+    Normal: "source-over", Add: "lighter", Multiply: "multiply", Screen: "screen",
+    Overlay: "overlay", "Soft Light": "soft-light", "Hard Light": "hard-light",
+    "Color Dodge": "color-dodge", "Color Burn": "color-burn", Darken: "darken",
+    Lighten: "lighten", Difference: "difference", Exclusion: "exclusion",
+    Hue: "hue", Saturation: "saturation", Color: "color", Luminosity: "luminosity"
+  })[m] || "source-over";
+}
+let tvMenus = [];
+function closeTvMenus() {
+  tvMenus.forEach(m => m.remove());
+  tvMenus = [];
+}
+function buildTvMenu(items) {
+  const m = document.createElement("div");
+  m.className = "tvmenu";
+  let sub = null;
+  const closeSub = () => {
+    if (sub) { sub.remove(); tvMenus = tvMenus.filter(x => x !== sub); sub = null; }
+  };
+  items.forEach(it => {
+    if (it.sep) {
+      const s = document.createElement("div"); s.className = "tvmi sep"; m.appendChild(s); return;
+    }
+    const d = document.createElement("div");
+    d.className = "tvmi" + (it.disabled ? " dis" : "") + (it.danger ? " danger" : "");
+    d.innerHTML = `<span class="chk">${it.checked ? "✓" : ""}</span>` +
+      (it.sw ? `<span class="sw" style="background:${it.sw}"></span>` : "") +
+      `<span class="lbl">${it.label}</span>` +
+      (it.shortcut ? `<span class="sc">${it.shortcut}</span>` : "") +
+      (it.submenu ? `<span class="arrow">›</span>` : "");
+    if (it.submenu && !it.disabled) {
+      d.addEventListener("mouseenter", () => {
+        closeSub();
+        sub = buildTvMenu(it.submenu);
+        document.body.appendChild(sub);
+        sub.style.left = "0px"; sub.style.top = "0px";
+        const r = d.getBoundingClientRect(), sr = sub.getBoundingClientRect();
+        let sx = r.right - 3, sy = r.top - 3;
+        if (sx + sr.width > innerWidth - 2) sx = Math.max(2, r.left - sr.width + 3);
+        if (sy + sr.height > innerHeight - 2) sy = Math.max(2, innerHeight - sr.height - 2);
+        sub.style.left = sx + "px"; sub.style.top = sy + "px";
+        tvMenus.push(sub);
+      });
+    } else if (!it.disabled) {
+      d.addEventListener("mouseenter", closeSub);
+      d.addEventListener("click", ev => {
+        ev.stopPropagation(); closeTvMenus();
+        if (it.action) it.action();
+      });
+    }
+    m.appendChild(d);
+  });
+  return m;
+}
+function openTvMenu(items, x, y) {
+  closeTvMenus();
+  const m = buildTvMenu(items);
+  m.style.left = "0px"; m.style.top = "0px";
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect();
+  let nx = x, ny = y;
+  if (nx + r.width > innerWidth - 4) nx = Math.max(4, innerWidth - r.width - 4);
+  if (ny + r.height > innerHeight - 4) ny = Math.max(4, innerHeight - r.height - 4);
+  if (ny < 4) ny = 4;
+  if (nx < 4) nx = 4;
+  m.style.left = nx + "px"; m.style.top = ny + "px";
+  tvMenus = [m];
+}
+document.addEventListener("pointerdown", e => {
+  if (!e.target.closest(".tvmenu")) closeTvMenus();
+}, true);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeTvMenus(); });
+
+function tvCommit(fn) { hist.pushModel(proj); fn(); hist.sealModel(proj); renderAll(); }
+function tvCloneSurface(src) {
+  if (!src || !src.getContext) return null;
+  const s = E.makeSurface(src.width || proj.width, src.height || proj.height);
+  s.getContext("2d").drawImage(src, 0, 0);
+  return s;
+}
+function tvCloneLayer(src, name) {
+  const c = Object.assign({}, src, {
+    id: Math.random().toString(36).slice(2, 10),
+    name: name || src.name,
+    frames: {}, marks: Object.assign({}, src.marks || {})
+  });
+  Object.keys(src.frames).forEach(k => {
+    const fr = src.frames[k];
+    c.frames[k] = { exposure: fr.exposure || 1, role: fr.role || null,
+      id: Math.random().toString(36).slice(2, 10), canvas: tvCloneSurface(fr.canvas) };
+  });
+  return c;
+}
+function tvCurrentLayer() { return proj.layers[proj.currentLayer]; }
+const TV_GROUPS = [
+  { name: "Default", color: "#8f8f95" }, { name: "Dark Blue", color: "#2b3a67" },
+  { name: "Dark Green", color: "#2e5b3a" }, { name: "Dark Cyan", color: "#27585b" },
+  { name: "Dark Red", color: "#5b2a2a" }, { name: "Purple", color: "#4b2f5e" },
+  { name: "Brown", color: "#5e462f" }, { name: "Blue", color: "#3d5a9e" },
+  { name: "Green", color: "#3e8a56" }, { name: "Cyan", color: "#3ea0a6" },
+  { name: "Red", color: "#b04141" }, { name: "Magenta", color: "#a0418a" },
+  { name: "Orange", color: "#c07a3a" }
+];
+function ensureGroups() {
+  if (!Array.isArray(proj.groups) || !proj.groups.length) proj.groups = TV_GROUPS.map(g => ({ ...g }));
+}
+
+// ---- layer name operations ----
+window.pickLayerKeep = window.pickLayer;
+window.startLayerRename = function (i) {
+  const nm = document.querySelector(`.llayer[data-layer="${i}"] .nm`);
+  if (!nm) return;
+  const inp = document.createElement("input");
+  inp.className = "lnm-input"; inp.value = proj.layers[i].name;
+  nm.replaceWith(inp); inp.focus(); inp.select();
+  const done = (ok) => {
+    const v = inp.value.trim();
+    inp.onblur = null;
+    if (ok && v) proj.layers[i].name = v;
+    renderAll();
+  };
+  inp.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") { e.preventDefault(); done(true); }
+    else if (e.key === "Escape") { e.preventDefault(); done(false); }
+  };
+  inp.onblur = () => done(true);
+};
+window.collapseLayer = function (i) {
+  const l = proj.layers[i]; l.collapsed = !l.collapsed; renderAll();
+};
+window.toggleLayerFilter = function (mode) {
+  proj.layerFilter = mode;
+  toast(mode === "anim" ? "animation layers only" : "all layers");
+};
+window.toggleAllFlag = function (flag) {
+  const on = proj.layers.every(l => flag === "visible" ? l.visible !== false : !!l[flag]);
+  tvCommit(() => proj.layers.forEach(l => { l[flag] = !on; }));
+  toast(flag + ": " + (!on ? "on (all)" : "off (all)"));
+};
+
+// ---- layer create menu (captured: New ▾) ----
+window.addTypedLayer = function (type) {
+  const names = { background: "Background", ctg: "CTG", folder: "Folder", puppet: "Puppet" };
+  tvCommit(() => {
+    const l = E.newLayer(names[type] || "Anim");
+    l.type = type;
+    if (type === "folder" || type === "puppet") l.frames = {};
+    if (type === "background") {
+      const cv = E.makeSurface(proj.width, proj.height);
+      const c = cv.getContext("2d");
+      c.fillStyle = proj.background === "none" ? "#ffffff" : (proj.bgA || "#ffffff");
+      c.fillRect(0, 0, proj.width, proj.height);
+      l.frames = { 1: { exposure: 1, canvas: cv, id: Math.random().toString(36).slice(2, 10) } };
+    }
+    proj.layers.splice(proj.currentLayer, 0, l);
+  });
+  toast((names[type] || "Anim") + " layer created");
+};
+window.newLayerMenu = function (btn) {
+  const r = btn.getBoundingClientRect();
+  openTvMenu([
+    { label: "Anim Layer", action: () => layerAdd() },
+    { label: "Background Layer", action: () => addTypedLayer("background") },
+    { label: "Color & Texture Layer", action: () => addTypedLayer("ctg") },
+    { label: "Duplicate Structure Anim", action: () => dvDupStructure("anim") },
+    { label: "Duplicate Structure Folder", action: () => dvDupStructure("folder") },
+    { label: "Folder", action: () => addTypedLayer("folder") },
+    { label: "Puppet Layer", action: () => addTypedLayer("puppet") },
+    { sep: true },
+    { label: "Import Footage", action: () => importFootage() },
+    { sep: true },
+    { label: "Open Layer Presets Manager", action: () => layerPresetsDlg() }
+  ], r.left, r.bottom + 2);
+};
+function dvDupStructure(type) {
+  const src = tvCurrentLayer();
+  const l = tvCloneLayer(src, src.name + " structure");
+  l.type = type === "folder" ? "folder" : src.type;
+  if (type === "folder") l.frames = {};
+  else Object.keys(l.frames).forEach(k => l.frames[k].canvas = null);
+  l.name = src.name + " structure";
+  tvCommit(() => proj.layers.splice(proj.currentLayer, 0, l));
+  toast("structure duplicated");
+}
+function importFootage() {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
+  inp.onchange = () => {
+    [...inp.files].forEach(file => {
+      const img = new Image();
+      img.onload = () => {
+        tvCommit(() => {
+          const l = E.newLayer(file.name.replace(/\.[^.]+$/, ""));
+          const cv = E.makeSurface(proj.width, proj.height);
+          const c = cv.getContext("2d");
+          const s = Math.min(proj.width / img.width, proj.height / img.height);
+          c.drawImage(img, (proj.width - img.width * s) / 2, (proj.height - img.height * s) / 2,
+            img.width * s, img.height * s);
+          l.frames[1].canvas = cv;
+          proj.layers.splice(proj.currentLayer, 0, l);
+        });
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  };
+  inp.click();
+}
+function layerPresetsDlg() {
+  const p = proj.layerPresets || (proj.layerPresets = { autoBreak: false, autoCreate: true, lockPosition: false });
+  const b = openModal("Layer Presets Manager", `
+    <label style="display:block;margin:4px 0"><input type="checkbox" id="lpAutoBreak" ${p.autoBreak ? "checked" : ""}> Auto Break Instance</label>
+    <label style="display:block;margin:4px 0"><input type="checkbox" id="lpAutoCreate" ${p.autoCreate ? "checked" : ""}> Auto Create Instance</label>
+    <label style="display:block;margin:4px 0"><input type="checkbox" id="lpLock" ${p.lockPosition ? "checked" : ""}> Lock Position</label>
+    <div style="color:#898f96;margin-top:8px">Layer presets control how new drawings, exposures and positions are created on the timeline.</div>`,
+    [["Close", () => {}], ["Apply", () => {
+      p.autoBreak = b.querySelector("#lpAutoBreak").checked;
+      p.autoCreate = b.querySelector("#lpAutoCreate").checked;
+      p.lockPosition = b.querySelector("#lpLock").checked;
+      toast("layer presets saved");
+    }, true]]);
+}
+window.stencilMenu = function (btn) {
+  const r = btn.getBoundingClientRect();
+  openTvMenu([
+    { label: "Disable all stencils", action: () => { tvCommit(() => proj.layers.forEach(l => l.stencil = "off")); } },
+    { label: "Invert positive / negative", action: () => { tvCommit(() => proj.layers.forEach(l => { if (l.stencil === "positive") l.stencil = "negative"; else if (l.stencil === "negative") l.stencil = "positive"; })); } },
+    { sep: true },
+    { label: "Manage Stencils…", action: () => toast("click the 4th dot on a layer to cycle off / positive / negative") }
+  ], r.left, r.bottom + 2);
+};
+window.displayMenu = function (btn) {
+  const r = btn.getBoundingClientRect();
+  openTvMenu([
+    { label: "Show-Hide Roles on Timeline", checked: !!proj.showRoles, action: () => { proj.showRoles = !proj.showRoles; renderAll(); } },
+    { label: "Show-Hide Roles on Current Layer only", checked: !!proj.roleLayerOnly, action: () => { proj.roleLayerOnly = !proj.roleLayerOnly; renderAll(); } },
+    { sep: true },
+    { label: "Show Image Marks", checked: proj.showMarks !== false, action: () => { proj.showMarks = proj.showMarks === false; renderAll(); } },
+    { sep: true },
+    { label: "Show Timeline Notes", action: () => togglePane("notes") }
+  ], r.left, r.bottom + 2);
+};
+
+// ---- layer context menu (captured 15 items) ----
+let layerClip = null, imageClip = null;
+function deleteLayers(list) {
+  if (proj.layers.length - list.length < 1) { toast("cannot delete last layer"); return; }
+  tvCommit(() => {
+    [...list].sort((a, b) => b - a).forEach(i => proj.layers.splice(i, 1));
+    proj.currentLayer = Math.min(proj.currentLayer, proj.layers.length - 1);
+    proj.selectedLayers = [proj.currentLayer];
+  });
+}
+function copyLayerToClip(i) {
+  layerClip = tvCloneLayer(proj.layers[i], proj.layers[i].name);
+  toast("layer copied");
+}
+function splitLayerAt(i) {
+  const l = proj.layers[i], f = proj.currentFrame;
+  const right = tvCloneLayer(l, l.name + "_2");
+  right.frames = {};
+  const keys = E.layerKeys(l);
+  keys.forEach(k => {
+    const fr = l.frames[k], exp = fr.exposure || 1, end = k + exp - 1;
+    if (k >= f) {
+      right.frames[k] = { exposure: exp, role: fr.role || null, id: Math.random().toString(36).slice(2, 10), canvas: fr.canvas };
+      delete l.frames[k];
+    } else if (end >= f) {
+      fr.exposure = f - k;
+      right.frames[f] = { exposure: end - f + 1, role: fr.role || null, id: Math.random().toString(36).slice(2, 10), canvas: tvCloneSurface(fr.canvas) };
+    }
+  });
+  if (!E.layerKeys(right).length) { toast("nothing to split at this frame"); return; }
+  tvCommit(() => { proj.layers.splice(i, 0, right); proj.currentLayer = i; });
+  toast("layer split");
+}
+function mergeLayers(which) {
+  let idxs;
+  if (which === "all") idxs = proj.layers.map((_, i) => i);
+  else if (which === "visible") idxs = proj.layers.map((_, i) => i).filter(i => proj.layers[i].visible !== false);
+  else idxs = (proj.selectedLayers && proj.selectedLayers.length ? proj.selectedLayers : [proj.currentLayer]).slice();
+  if (idxs.length < 2) { toast("select at least 2 layers to merge"); return; }
+  const ls = idxs.map(i => proj.layers[i]);
+  const min = Math.min(...ls.map(l => E.layerKeys(l)[0] || 1));
+  const max = Math.max(...ls.map(l => E.layerEnd(l) || 1));
+  const composeAt = (f) => {
+    const cv = E.makeSurface(proj.width, proj.height);
+    const c = cv.getContext("2d");
+    ls.forEach(l => {
+      const k = E.effectiveFrameKey(l, f);
+      if (k == null || !l.frames[k].canvas) return;
+      c.globalAlpha = l.opacity ?? 1;
+      c.drawImage(l.frames[k].canvas, 0, 0);
+    });
+    return cv;
+  };
+  const frames = {};
+  let runStart = null, runSig = null, runCv = null;
+  for (let f = min; f <= max; f++) {
+    const sig = ls.map(l => E.effectiveFrameKey(l, f) ?? "-").join(",");
+    if (sig !== runSig) {
+      if (runStart != null) frames[runStart] = { exposure: f - runStart, canvas: runCv, id: Math.random().toString(36).slice(2, 10) };
+      runStart = f; runSig = sig; runCv = composeAt(f);
+    }
+  }
+  if (runStart != null) frames[runStart] = { exposure: max - runStart + 1, canvas: runCv, id: Math.random().toString(36).slice(2, 10) };
+  const merged = E.newLayer(ls[0].name + " merged");
+  merged.frames = frames;
+  const at = Math.min(...idxs);
+  tvCommit(() => {
+    [...idxs].sort((a, b) => b - a).forEach(i => proj.layers.splice(i, 1));
+    proj.layers.splice(at, 0, merged);
+    proj.currentLayer = at;
+    proj.selectedLayers = [at];
+  });
+  toast("layers merged");
+}
+function selectLayers(mode) {
+  const cur = tvCurrentLayer();
+  let sel = [];
+  if (mode === "all") sel = proj.layers.map((_, i) => i);
+  else if (mode === "visible") sel = proj.layers.map((_, i) => i).filter(i => proj.layers[i].visible !== false);
+  else if (mode === "group") sel = proj.layers.map((_, i) => i).filter(i => (proj.layers[i].group || 0) === (cur.group || 0));
+  else if (mode === "other") sel = proj.layers.map((_, i) => i).filter(i => (proj.layers[i].group || 0) !== (cur.group || 0));
+  proj.selectedLayers = sel;
+  renderAll();
+  toast(sel.length ? sel.length + " layer(s) selected" : "selection cleared");
+}
+window.layerMenu = function (i, btn, mx, my) {
+  const l = proj.layers[i];
+  const r = btn ? btn.getBoundingClientRect() : null;
+  const x = mx != null ? mx : (r ? r.left : 70);
+  const y = my != null ? my : (r ? r.bottom + 2 : 860);
+  openTvMenu([
+    { label: "Rename", action: () => startLayerRename(i) },
+    { label: "Cut Layer", shortcut: "Ctrl X", action: () => { copyLayerToClip(i); deleteLayers([i]); } },
+    { label: "Copy Layer", shortcut: "Ctrl C", action: () => copyLayerToClip(i) },
+    { label: "Duplicate", action: () => {
+      const c = tvCloneLayer(l, l.name + " copy");
+      tvCommit(() => { proj.layers.splice(i + 1, 0, c); proj.currentLayer = i + 1; });
+    } },
+    { sep: true },
+    { label: "Delete", danger: true, action: () => deleteLayers([i]) },
+    { sep: true },
+    { label: "Split", action: () => splitLayerAt(i) },
+    { label: "Move", submenu: [
+      { label: "Go to Image…", action: () => numDialog("Go to Image", "Image", proj.currentFrame, v => gotoFrame(v, i), 1, 9999) },
+      { label: "Slide Layer…", action: () => numDialog("Slide Layer", "Offset (frames)", 1, v => tvCommit(() => E.slideLayer(proj.layers[i], v)), -999, 999) },
+      { label: "Slide Layer to Image…", action: () => numDialog("Slide Layer to Image", "Target image", proj.currentFrame, v => tvCommit(() => E.slideLayer(proj.layers[i], v - (E.layerKeys(proj.layers[i])[0] || 1))), 1, 9999) }
+    ] },
+    { label: "Align", submenu: [
+      { label: "Align Left", action: () => tvCommit(() => E.alignLayer(proj, proj.layers[i], "start")) },
+      { label: "Align Right", action: () => tvCommit(() => E.alignLayer(proj, proj.layers[i], "end")) }
+    ] },
+    { label: "Merge", submenu: [
+      { label: "Merge Selected", action: () => mergeLayers("selected") },
+      { label: "Merge Visible", action: () => mergeLayers("visible") },
+      { label: "Merge All", action: () => mergeLayers("all") }
+    ] },
+    { sep: true },
+    { label: "Select Layer(s)", submenu: [
+      { label: "All", action: () => selectLayers("all") },
+      { label: "Same Color Group", action: () => selectLayers("group") },
+      { label: "Other Color Groups", action: () => selectLayers("other") },
+      { label: "Visible", action: () => selectLayers("visible") },
+      { label: "None", action: () => selectLayers("none") }
+    ] },
+    { sep: true },
+    { label: "Reverse Order", action: () => {
+      tvCommit(() => {
+        proj.layers.reverse();
+        proj.currentLayer = proj.layers.length - 1 - proj.currentLayer;
+      });
+    } },
+    { sep: true },
+    { label: "Transform into CTG Layer", action: () => {
+      tvCommit(() => {
+        l.type = l.type === "ctg" ? "anim" : "ctg";
+        l.name = l.type === "ctg" ? "CTG " + l.name.replace(/^CTG /, "") : l.name.replace(/^CTG /, "");
+      });
+      toast(l.type === "ctg" ? "transformed into CTG layer" : "transformed into anim layer");
+    } },
+    { label: "Create folder in Image Library", action: () => toast("image library folder: " + l.name) },
+    { sep: true },
+    { label: "Show-Hide Roles on Timeline", checked: !!proj.showRoles, action: () => { proj.showRoles = !proj.showRoles; renderAll(); } },
+    { label: "Show-Hide Roles on Current Layer only", checked: !!proj.roleLayerOnly, action: () => { proj.roleLayerOnly = !proj.roleLayerOnly; renderAll(); } }
+  ], x, y);
+};
+
+// ---- cell context menu (captured from right-click on timeline cell) ----
+function numDialog(title, label, val, cb, min = 1, max = 9999) {
+  const b = openModal(title, `<label style="display:flex;gap:10px;align-items:center">${label}
+      <input id="ndVal" type="number" min="${min}" max="${max}" value="${val}" style="width:120px"></label>`,
+    [["Cancel", () => {}], ["Apply", () => {
+      const v = +b.querySelector("#ndVal").value;
+      if (!isFinite(v) || v < min || v > max) { toast("invalid value"); return false; }
+      cb(Math.round(v));
+    }, true]]);
+  setTimeout(() => { const el = b.querySelector("#ndVal"); if (el) { el.focus(); el.select(); } }, 40);
+}
+function cellFrame(li, f) {
+  const l = proj.layers[li];
+  const k = E.effectiveFrameKey(l, f);
+  return { l, k, fr: k != null ? l.frames[k] : null };
+}
+function cellOp(op, li, f) {
+  const { l } = cellFrame(li, f);
+  if (!l) return;
+  if (op === "break") {
+    const ok = (() => { let r = false; tvCommit(() => { r = E.breakExposure(proj, l, f); }); return r; })();
+    toast(ok ? "instance broken" : "cannot break this exposure");
+  } else if (op === "unexpose") {
+    tvCommit(() => E.removeExposures(l, f)); toast("exposure removed");
+  } else if (op === "exposure") {
+    dlgExposure(li, f);
+  } else if (op === "delete-layer") {
+    tvCommit(() => E.deleteImageAt(l, f)); toast("image deleted from layer");
+  } else if (op === "delete-project") {
+    tvCommit(() => E.deleteFrameColumn(proj, f)); toast("frame deleted from project");
+  } else if (op === "repeat") {
+    const added = (() => { let n = 0; tvCommit(() => { n = E.repeatImages(proj, l, l.repeatValue || 2, l.repeatMode || "Loop"); }); return n; })();
+    toast(added ? `repeated ${l.repeatMode} (${l.repeatValue})` : "nothing to repeat");
+  } else if (op === "reverse") {
+    tvCommit(() => E.xsheetOp(proj, l, "reverse", f)); toast("images reversed");
+  } else if (op === "copy") {
+    const { k, fr } = cellFrame(li, f);
+    if (k == null) { toast("empty cell"); return; }
+    imageClip = { exposure: fr.exposure || 1, role: fr.role || null, canvas: tvCloneSurface(fr.canvas) };
+    toast("image copied");
+  } else if (op === "cut") {
+    const { k, fr } = cellFrame(li, f);
+    if (k == null) { toast("empty cell"); return; }
+    imageClip = { exposure: fr.exposure || 1, role: fr.role || null, canvas: tvCloneSurface(fr.canvas) };
+    tvCommit(() => E.deleteImageAt(l, f));
+    toast("image cut");
+  }
+}
+function dlgExposure(li, f) {
+  const { k, fr } = cellFrame(li, f);
+  numDialog("Layer: Set Exposure Value", "Exposure", fr ? (fr.exposure || 1) : 1,
+    v => tvCommit(() => E.setExposureValue(proj.layers[li], k != null ? k : f, v)), 1, 999);
+}
+function dlgInsert(li, f, mode) {
+  numDialog(mode === "before" ? "Insert Images (before)" : "Insert Images (after)", "Number of images", 1,
+    n => tvCommit(() => E.insertImages(proj.layers[li], f, n, mode)), 1, 120);
+}
+function dlgDuplicate(li, f) {
+  numDialog("Duplicate Images", "Number of copies", 1,
+    n => tvCommit(() => E.insertImages(proj.layers[li], f, n, "duplicate", tvCloneSurface)), 1, 120);
+}
+function dlgRepeatValue(l) {
+  numDialog("Repeat Images", "Repeat value", l.repeatValue || 2, v => { l.repeatValue = v; toast("repeat value: " + v); }, 1, 120);
+}
+function setImageRole(li, f, roleId) {
+  const { l, k } = cellFrame(li, f);
+  if (k == null) { toast("empty cell"); return; }
+  tvCommit(() => { l.frames[k].role = roleId; proj.showRoles = true; });
+  toast(roleId ? "role: " + roleId : "role cleared");
+}
+window.cellMenu = function (li, f, mx, my) {
+  const { l, k, fr } = cellFrame(li, f);
+  const markKey = k != null ? k : f;
+  openTvMenu([
+    { label: "Exposure", submenu: [
+      { label: "Break Instance", action: () => cellOp("break", li, f) },
+      { label: "Remove exposures", action: () => cellOp("unexpose", li, f) },
+      { sep: true },
+      { label: "Set Exposure Value…", action: () => dlgExposure(li, Math.max(f, k != null ? k : f)) }
+    ] },
+    { label: "Insert Images", submenu: [
+      { label: "Insert Images (after)…", action: () => dlgInsert(li, f, "after") },
+      { label: "Insert Images (before)…", action: () => dlgInsert(li, f, "before") },
+      { label: "Duplicate Images…", action: () => dlgDuplicate(li, f) }
+    ] },
+    { sep: true },
+    { label: "Delete from Layer", action: () => cellOp("delete-layer", li, f) },
+    { label: "Delete from Project", shortcut: "Shift F5", danger: true, action: () => cellOp("delete-project", li, f) },
+    { sep: true },
+    { label: "Repeat Images", submenu: [
+      { label: "Set the Repeat Images Value…", action: () => dlgRepeatValue(l) },
+      { label: "Reset", action: () => { l.repeatValue = 2; toast("repeat value reset to 2"); } },
+      { sep: true },
+      ...["Loop", "Ping-Pong", "Random"].map(m => ({
+        label: m, checked: (l.repeatMode || "Loop") === m,
+        action: () => { l.repeatMode = m; cellOp("repeat", li, f); }
+      }))
+    ] },
+    { sep: true },
+    { label: "Rename", action: () => startLayerRename(li) },
+    { label: "Image Marks", submenu: [
+      { label: "Set Mark", action: () => { tvCommit(() => E.setImageMark(l, markKey, true)); } },
+      { label: "Clear Mark", disabled: !(l.marks && l.marks[markKey]), action: () => { tvCommit(() => E.setImageMark(l, markKey, false)); } },
+      { sep: true },
+      { label: "Go to Previous Image Mark", action: () => { const m = E.nextImageMark(l, proj.currentFrame, -1); if (m) gotoFrame(m); else toast("no previous image mark"); } },
+      { label: "Go to Next Image Mark", action: () => { const m = E.nextImageMark(l, proj.currentFrame, 1); if (m) gotoFrame(m); else toast("no next image mark"); } },
+      { label: "Remove All Image Marks", action: () => { tvCommit(() => { l.marks = {}; }); toast("image marks removed"); } }
+    ] },
+    { sep: true },
+    { label: "Select All", shortcut: "Ctrl A", action: () => {
+      proj.inFrame = 1;
+      proj.outFrame = Math.max(proj.outFrame, ...proj.layers.map(x => E.layerEnd(x) || 1));
+      renderAll(); toast("all images selected");
+    } },
+    { label: "Select Image from Key", disabled: true },
+    { sep: true },
+    { label: "Split", action: () => cellOp("break", li, f) },
+    { sep: true },
+    { label: "Cut Image", shortcut: "Ctrl X", action: () => cellOp("cut", li, f) },
+    { label: "Copy Image", shortcut: "Ctrl C", action: () => cellOp("copy", li, f) },
+    { sep: true },
+    { label: "Reverse Selected Images", action: () => cellOp("reverse", li, f) },
+    { sep: true },
+    { label: "Role", submenu: [
+      ...E.IMAGE_ROLES.map(r => ({
+        label: r.label, sw: r.color, checked: !!(fr && fr.role === r.id),
+        action: () => setImageRole(li, f, r.id)
+      })),
+      { sep: true },
+      { label: "None", checked: !(fr && fr.role), action: () => setImageRole(li, f, null) }
+    ] },
+    { label: "Define Loop Limits", action: () => dlgLoopLimits() }
+  ], mx, my);
+};
+function pasteImageClip() {
+  if (!imageClip) { toast("no image copied"); return; }
+  const l = tvCurrentLayer();
+  let at = proj.currentFrame;
+  if (E.effectiveFrameKey(l, at) != null) at = E.layerEnd(l) + 1;
+  tvCommit(() => {
+    l.frames[at] = { exposure: imageClip.exposure, role: imageClip.role,
+      canvas: tvCloneSurface(imageClip.canvas), id: Math.random().toString(36).slice(2, 10) };
+  });
+  toast("image pasted @ " + at);
+}
+function pasteLayerClip() {
+  if (!layerClip) { toast("no layer copied"); return; }
+  const c = tvCloneLayer(layerClip, layerClip.name + " copy");
+  tvCommit(() => { proj.layers.splice(proj.currentLayer + 1, 0, c); proj.currentLayer++; });
+  toast("layer pasted");
+}
+function dlgLoopLimits() {
+  const lim = proj.loopLimits || (proj.loopLimits = { mode: "mark", start: 1, end: null });
+  const b = openModal("Define Loop Limits", `
+    <div class="orow"><label style="flex:0 0 140px">Limits</label>
+      <select id="llMode" style="flex:1">
+        <option value="clip">Clip duration</option>
+        <option value="layer">Current layer</option>
+        <option value="mark">Mark In / Mark Out</option>
+        <option value="bookmarks">Bookmarks</option>
+        <option value="marks">Image Marks</option>
+        <option value="custom">Custom limits</option>
+      </select></div>
+    <div class="orow" style="margin-top:8px"><label style="flex:0 0 140px">Custom</label>
+      <input id="llStart" type="number" min="1" value="${lim.start || 1}" style="width:90px"> –
+      <input id="llEnd" type="number" min="1" value="${lim.end || proj.outFrame}" style="width:90px"></div>
+    <div style="color:#898f96;margin-top:10px;line-height:1.35">The limits can be the duration of the clip or the current layer, the Mark In/Out values, the Bookmarks, the Image Marks, or you can set your own limits.</div>`,
+    [["Cancel", () => {}], ["Apply", () => {
+      lim.mode = b.querySelector("#llMode").value;
+      lim.start = Math.max(1, +b.querySelector("#llStart").value || 1);
+      lim.end = Math.max(lim.start, +b.querySelector("#llEnd").value || proj.outFrame);
+      toast("loop limits: " + lim.mode);
+    }, true]]);
+  b.querySelector("#llMode").value = lim.mode || "mark";
+}
+function playRange() {
+  const lim = proj.loopLimits || { mode: "mark" };
+  if (lim.mode === "clip") return { a: 1, b: Math.max(1, proj.outFrame) };
+  if (lim.mode === "layer") {
+    const l = tvCurrentLayer();
+    const ks = E.layerKeys(l);
+    return { a: ks[0] || 1, b: E.layerEnd(l) || proj.outFrame };
+  }
+  if (lim.mode === "custom") return { a: Math.max(1, lim.start || 1), b: Math.max(lim.start || 1, lim.end || proj.outFrame) };
+  if (lim.mode === "marks") {
+    const ms = Object.keys(tvCurrentLayer().marks || {}).map(Number).sort((a, b) => a - b);
+    if (ms.length > 1) return { a: ms[0], b: ms[ms.length - 1] };
+  }
+  return { a: proj.inFrame, b: proj.outFrame };
+}
+
+// ---- background / blending / color group popups ----
+window.backgroundMenu = function (btn) {
+  const r = btn.getBoundingClientRect();
+  const set = (v) => { proj.background = v; renderAll(); toast("background: " + v); };
+  openTvMenu([
+    { label: "None", shortcut: "Shift B", checked: proj.background === "none", action: () => set("none") },
+    { label: "Color", shortcut: "Shift B", checked: proj.background === "color", action: () => set("color") },
+    { label: "Check", shortcut: "Shift B", checked: proj.background === "check", action: () => set("check") }
+  ], r.left, r.top - 70);
+};
+window.startFrameMenu = function () {
+  const el = $("ftStartVal");
+  const r = el ? el.getBoundingClientRect() : { left: 250, top: 1000 };
+  openTvMenu([
+    { label: "0", checked: proj.startFrame === 0, action: () => { proj.startFrame = 0; renderAll(); } },
+    { label: "1", checked: proj.startFrame === 1, action: () => { proj.startFrame = 1; renderAll(); } },
+    { label: "Custom…", action: () => numDialog("Start Frame", "Start frame", proj.startFrame ?? 1, v => { proj.startFrame = v; renderAll(); }, 0, 99999) }
+  ], r.left, r.top - 72);
+};
+window.blendMenu = function (i, el) {
+  const l = proj.layers[i];
+  const r = el.getBoundingClientRect();
+  openTvMenu(E.BLEND_MODES.map(m => ({
+    label: m, checked: (l.blend || "Normal") === m,
+    action: () => { tvCommit(() => l.blend = m); toast("blending: " + m); }
+  })), r.left - 80, r.bottom + 2);
+};
+window.groupMenu = function (i, el) {
+  ensureGroups();
+  const l = proj.layers[i];
+  const r = el.getBoundingClientRect();
+  const items = proj.groups.map((g, gi) => ({
+    label: g.name, sw: g.color, checked: (l.group || 0) === gi,
+    action: () => { tvCommit(() => l.group = gi); toast("color group: " + g.name); }
+  }));
+  items.push({ sep: true });
+  items.push({ label: "Edit Groups…", action: () => { togglePane("color"); } });
+  openTvMenu(items, r.left, r.top - 220);
+};
+
+// ---- footer panes: Notes / Sound / Color Group (captured tabs) ----
+let paneOpen = null;
+let paneAudio = null;
+function syncPaneTabs() {
+  [["notes", "ftNotes"], ["sound", "ftSound"], ["color", "ftColor"]].forEach(([k, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("on", paneOpen === k);
+  });
+}
+window.togglePane = function (kind) {
+  const old = document.getElementById("tlPane");
+  if (old) old.remove();
+  if (paneOpen === kind) { paneOpen = null; syncPaneTabs(); return; }
+  paneOpen = kind;
+  const p = document.createElement("div");
+  p.id = "tlPane";
+  const title = { notes: "Notes", sound: "Sound", color: "Color Group" }[kind];
+  const sub = { notes: "Timeline notes", sound: "Sound track", color: "Groups edition" }[kind];
+  p.innerHTML = `<div class="ph"><b>${title}</b><span style="color:#8a8a90">${sub}</span><button id="paneX" title="Close">✕</button></div><div class="pb" id="paneBody"></div>`;
+  document.body.appendChild(p);
+  p.querySelector("#paneX").onclick = () => togglePane(kind);
+  const body = p.querySelector("#paneBody");
+  if (kind === "notes") {
+    body.innerHTML = `<textarea id="paneNotes" placeholder="Timeline notes">${(proj.notes || "").replace(/</g, "&lt;")}</textarea>
+      <div class="prow"><span>Size</span><input type="range" min="1" max="14" value="3">
+        <span>Grid</span><input type="range" min="0" max="20" value="0">
+        <button class="revbtn" id="paneNotesClear" style="font-size:10px;padding:1px 7px">Clear</button></div>`;
+    const ta = body.querySelector("#paneNotes");
+    ta.oninput = () => { proj.notes = ta.value; };
+    body.querySelector("#paneNotesClear").onclick = () => { proj.notes = ""; ta.value = ""; };
+  } else if (kind === "sound") {
+    body.innerHTML = `<div class="prow"><button class="revbtn" id="paneSndLoad" style="font-size:10px;padding:1px 7px">Load Sound…</button>
+        <span id="paneSndName" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${proj.sound ? proj.sound.name : "No sound loaded"}</span></div>
+      <canvas class="sndwave" width="352" height="64"></canvas>
+      <div class="prow"><span>Offset</span><input id="paneSndOffset" type="number" value="${proj.sound ? proj.sound.offset || 0 : 0}" style="width:64px"> frames
+        <button class="revbtn" id="paneSndPlay" style="font-size:10px;padding:1px 7px">Play</button>
+        <button class="revbtn" id="paneSndStop" style="font-size:10px;padding:1px 7px">Stop</button></div>`;
+    const drawWave = (peaks) => {
+      const cv = body.querySelector("canvas.sndwave"); if (!cv) return;
+      const c = cv.getContext("2d");
+      c.clearRect(0, 0, cv.width, cv.height);
+      c.strokeStyle = "#8fbf8f"; c.lineWidth = 1; c.beginPath();
+      const n = peaks.length || 1;
+      for (let x = 0; x < cv.width; x++) {
+        const i = Math.floor(x / cv.width * n);
+        const v = peaks[i] || 0;
+        c.moveTo(x + .5, cv.height / 2 - v * cv.height * .45);
+        c.lineTo(x + .5, cv.height / 2 + v * cv.height * .45);
+      }
+      c.stroke();
+    };
+    if (proj.sound && proj.sound.peaks) drawWave(proj.sound.peaks);
+    body.querySelector("#paneSndLoad").onclick = () => {
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = "audio/*";
+      inp.onchange = async () => {
+        const file = inp.files[0]; if (!file) return;
+        try {
+          const buf = await file.arrayBuffer();
+          const ac = new (window.AudioContext || window.webkitAudioContext)();
+          const audio = await ac.decodeAudioData(buf.slice(0));
+          const ch = audio.getChannelData(0);
+          const N = 352, peaks = new Array(N).fill(0);
+          const step = Math.max(1, Math.floor(ch.length / N));
+          for (let i = 0; i < N; i++) {
+            let m = 0;
+            for (let j = i * step; j < Math.min(ch.length, (i + 1) * step); j++) m = Math.max(m, Math.abs(ch[j]));
+            peaks[i] = m;
+          }
+          proj.sound = { name: file.name, duration: audio.duration, offset: 0, peaks };
+          body.querySelector("#paneSndName").textContent = file.name;
+          drawWave(peaks);
+          if (paneAudio) { paneAudio.pause(); paneAudio = null; }
+          paneAudio = new Audio(URL.createObjectURL(file));
+          try { ac.close(); } catch (e) {}
+          toast("sound loaded: " + file.name);
+        } catch (err) { toast("cannot decode this audio file"); }
+      };
+      inp.click();
+    };
+    body.querySelector("#paneSndOffset").onchange = (e) => {
+      if (proj.sound) proj.sound.offset = Math.round(+e.target.value || 0);
+    };
+    body.querySelector("#paneSndPlay").onclick = () => { if (paneAudio) { paneAudio.currentTime = 0; paneAudio.play(); } else toast("load a sound first"); };
+    body.querySelector("#paneSndStop").onclick = () => { if (paneAudio) paneAudio.pause(); };
+  } else {
+    ensureGroups();
+    body.innerHTML = `<div style="color:#898f96">Click a group to assign it to the current layer. Names are editable.</div>
+      <div id="paneGroups">${proj.groups.map((g, gi) => `
+        <div class="cgrow" data-g="${gi}"><i style="background:${g.color}"></i>
+          <span class="nm">${g.name}</span>
+          <button class="revbtn" data-use="${gi}" style="font-size:10px;padding:1px 6px">Use</button>
+        </div>`).join("")}</div>
+      <div class="prow"><button class="revbtn" id="paneGroupReset" style="font-size:10px;padding:1px 7px">Reset</button>
+        <span style="color:#898f96">current layer: ${tvCurrentLayer().name}</span></div>`;
+    body.querySelectorAll("[data-use]").forEach(b => {
+      b.onclick = () => { const gi = +b.dataset.use; tvCommit(() => { tvCurrentLayer().group = gi; }); toast("color group: " + proj.groups[gi].name); };
+    });
+    body.querySelectorAll(".cgrow").forEach(row => {
+      row.ondblclick = () => {
+        const gi = +row.dataset.g;
+        const nm = row.querySelector(".nm");
+        const inp = document.createElement("input");
+        inp.value = proj.groups[gi].name;
+        inp.style.cssText = "flex:1;background:#26262a;color:#c9c9cf;border:1px solid #4a4a51;border-radius:2px;font-size:11px";
+        nm.replaceWith(inp); inp.focus(); inp.select();
+        const done = () => { const v = inp.value.trim(); if (v) proj.groups[gi].name = v; togglePane("color"); };
+        inp.onkeydown = (e) => { if (e.key === "Enter") done(); if (e.key === "Escape") togglePane("color"); };
+        inp.onblur = done;
+      };
+    });
+    body.querySelector("#paneGroupReset").onclick = () => {
+      tvCommit(() => proj.groups.forEach((g, gi) => {
+        const def = [{ name: "Default", color: "#8f8f95" }, { name: "Dark Blue", color: "#2b3a67" },
+          { name: "Dark Green", color: "#2e5b3a" }, { name: "Dark Cyan", color: "#27585b" },
+          { name: "Dark Red", color: "#5b2a2a" }, { name: "Purple", color: "#4b2f5e" },
+          { name: "Brown", color: "#5e462f" }, { name: "Blue", color: "#3d5a9e" },
+          { name: "Green", color: "#3e8a56" }, { name: "Cyan", color: "#3ea0a6" },
+          { name: "Red", color: "#b04141" }, { name: "Magenta", color: "#a0418a" },
+          { name: "Orange", color: "#c07a3a" }][gi];
+        if (def) { g.name = def.name; g.color = def.color; }
+      }));
+      toast("color groups reset");
+    };
+  }
+  syncPaneTabs();
+};
+
 window.gotoFrame = (f, li) => {
   if (li !== undefined) proj.currentLayer = li;
   proj.currentFrame = Math.max(1, f);
@@ -1854,14 +2660,15 @@ window.xop = (op) => {
 let loop = true, playing = null, soundOn = true;
 window.remote = (cmd) => {
   if (cmd === "first") { proj.currentFrame = proj.inFrame; renderAll(); }
-  else if (cmd === "prev") stepPlay(proj.currentFrame - 1);
-  else if (cmd === "next") stepPlay(proj.currentFrame + 1);
+  else if (cmd === "prev") gotoFrame(Math.max(1, proj.currentFrame - 1));
+  else if (cmd === "next") gotoFrame(proj.currentFrame + 1);
   else if (cmd === "last") { proj.currentFrame = proj.outFrame; renderAll(); }
   else if (cmd === "play") togglePlay();
 };
 function stepPlay(f) {
-  if (f < proj.inFrame || f > proj.outFrame) {
-    if (loop && playing) f = f > proj.outFrame ? proj.inFrame : proj.outFrame;
+  const r = playRange();
+  if (f < r.a || f > r.b) {
+    if (loop && playing) f = f > r.b ? r.a : r.b;
     else return;
   }
   proj.currentFrame = f; renderAll();
@@ -1872,10 +2679,12 @@ window.togglePlay = function () {
     return;
   }
   setPlayIcon(true);
+  const r = playRange();
+  if (proj.currentFrame < r.a || proj.currentFrame > r.b) proj.currentFrame = r.a;
   playing = setInterval(() => {
     let f = proj.currentFrame + 1;
-    if (f > proj.outFrame) {
-      if (loop) f = proj.inFrame; else { stopPlayback(); return; }
+    if (f > r.b) {
+      if (loop) f = r.a; else { stopPlayback(); return; }
     }
     proj.currentFrame = f; renderAll();
   }, 1000 / proj.fps);
@@ -2383,6 +3192,11 @@ function buildTransport() {
         <span class="fpswrap"><select id="fpsSel" class="fps">
           ${[12, 24, 25, 30, 50, 60].map(f => `<option ${f === 24 ? "selected" : ""}>${f} fps</option>`).join("")}
         </select><span class="fpsarrow">▾</span></span>
+        <span class="tr-hand" title="Interactive zoom ratio">
+          <button class="arw" id="rZoomOut" title="Zoom out">◀</button>
+          <button class="tib" id="rHand" title="Hand — fit the drawing to the view"><img src="icons/Zoom-Hand-x20.png"></button>
+          <button class="arw" id="rZoomIn" title="Zoom in">▶</button>
+        </span>
         <button class="tib" id="rPlay" title="Play/Stop (Space)"><img src="icons/Remote-PlaySmall-x20.png"></button>
         <button class="tib" id="rStop" title="Stop"><img src="icons/Remote-Stop-x20.png"></button>
         <button class="tib" id="rFirst" title="First image"><img src="icons/Remote-Goto-FirstImage-x20.png"></button>
@@ -2416,6 +3230,9 @@ function buildTransport() {
   };
   $("rPlay").onclick = () => togglePlay();
   $("rPlayClip").onclick = () => togglePlay();
+  $("rZoomOut").onclick = () => { view.zoom = Math.max(0.05, view.zoom / 1.2); renderArtOnly(); updateZoomLbl(); };
+  $("rZoomIn").onclick = () => { view.zoom = Math.min(20, view.zoom * 1.2); renderArtOnly(); updateZoomLbl(); };
+  $("rHand").onclick = () => { fitView(); toast("fit to view"); };
   $("rStop").onclick = () => stopPlayback();
   $("rLoop").onclick = () => toggleLoop();
   $("rPin").onclick = () => {
@@ -2494,16 +3311,50 @@ window.addEventListener("keydown", (e) => {
   if (e.ctrlKey && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? uiRedo() : uiUndo(); return; }
   if (e.ctrlKey && e.key.toLowerCase() === "y") { e.preventDefault(); uiRedo(); return; }
   if (e.ctrlKey && e.key.toLowerCase() === "s") { e.preventDefault(); e.shiftKey ? uiSaveAs() : uiSave(); return; }
+  if (e.ctrlKey && e.key.toLowerCase() === "a") {
+    e.preventDefault();
+    proj.inFrame = 1;
+    proj.outFrame = Math.max(proj.outFrame, ...proj.layers.map(x => E.layerEnd(x) || 1));
+    renderAll(); toast("all images selected"); return;
+  }
+  if (e.ctrlKey && e.key.toLowerCase() === "c") { e.preventDefault(); cellOp("copy", proj.currentLayer, proj.currentFrame); return; }
+  if (e.ctrlKey && e.key.toLowerCase() === "x") { e.preventDefault(); cellOp("cut", proj.currentLayer, proj.currentFrame); return; }
+  if (e.ctrlKey && e.key.toLowerCase() === "v") {
+    e.preventDefault();
+    if (e.shiftKey) pasteLayerClip(); else pasteImageClip();
+    return;
+  }
+  if (e.shiftKey && e.key === "F5") { e.preventDefault(); cellOp("delete-project", proj.currentLayer, proj.currentFrame); return; }
   switch (e.key) {
     case " ": e.preventDefault(); togglePlay(); break;
     case "ArrowLeft": gotoFrame(Math.max(1, proj.currentFrame - 1)); break;
     case "ArrowRight": gotoFrame(proj.currentFrame + 1); break;
     case "ArrowUp": pickLayer(Math.max(0, proj.currentLayer - 1)); break;
     case "ArrowDown": pickLayer(Math.min(proj.layers.length - 1, proj.currentLayer + 1)); break;
+    case "Home": gotoFrame(1); break;
+    case "End": gotoFrame(Math.max(1, proj.outFrame)); break;
+    case "Insert": {
+      tvCommit(() => E.insertImages(proj.layers[proj.currentLayer], proj.currentFrame, 1, "after"));
+      toast("image inserted"); break;
+    }
+    case "+": case "=": {
+      const l = proj.layers[proj.currentLayer];
+      const k = E.effectiveFrameKey(l, proj.currentFrame);
+      if (k != null) { const cur = l.frames[k].exposure || 1; tvCommit(() => E.setExposureValue(l, k, cur + 1)); }
+      break;
+    }
+    case "-": {
+      const l = proj.layers[proj.currentLayer];
+      const k = E.effectiveFrameKey(l, proj.currentFrame);
+      if (k != null) { const cur = l.frames[k].exposure || 1; tvCommit(() => E.setExposureValue(l, k, cur - 1)); }
+      break;
+    }
     case "Enter": if (sel) applySelection(); break;
     case "Escape": if (sel) { sel = null; renderAll(); } else if (cutBrush) { clearBin(); selectToolQuiet("penbrush"); } break;
     case "Delete": case "Backspace":
-      if (sel) { sel = null; renderAll(); toast("selection discarded"); } break;
+      if (sel) { sel = null; renderAll(); toast("selection discarded"); }
+      else cellOp("delete-layer", proj.currentLayer, proj.currentFrame);
+      break;
   }
 });
 window.addEventListener("wheel", (e) => {

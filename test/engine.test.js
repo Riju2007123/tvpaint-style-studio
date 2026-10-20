@@ -255,6 +255,107 @@ test("layerLengthOp hold/repeat/stretch/instances", () => {
   assert.ok(sum > len0, "stretch grew total exposure");
 });
 
+// ---------- timeline cell commands (live-captured cell / layer menus) ----------
+test("timeline vocabularies: image roles + blend modes", () => {
+  assert.strictEqual(E.IMAGE_ROLES.length, 6);
+  assert.ok(E.IMAGE_ROLES.some(r => r.label === "Keyframe"));
+  assert.ok(E.BLEND_MODES.includes("Multiply"));
+  assert.ok(E.BLEND_MODES.includes("Luminosity"));
+  const p = E.newProject();
+  assert.strictEqual(p.background, "color");
+  assert.ok(Array.isArray(p.groups) && p.groups.length >= 13);
+  assert.strictEqual(p.startFrame, 1);
+  const l = p.layers[0];
+  assert.deepStrictEqual(l.marks, {});
+  assert.strictEqual(l.repeatMode, "Loop");
+  assert.strictEqual(l.repeatValue, 2);
+  assert.strictEqual(l.blend, "Normal");
+  assert.strictEqual(l.type, "anim");
+});
+
+test("insertImages before/after/duplicate", () => {
+  const p = E.newProject(); const l = p.layers[0];
+  l.frames = { 1: E.newFrame(), 5: E.newFrame() };
+  l.frames[1].canvas = { tag: "A" };
+  l.frames[5].canvas = { tag: "B" };
+  E.insertImages(l, 5, 1, "before");
+  assert.deepStrictEqual(E.layerKeys(l), [1, 5, 6]);
+  assert.strictEqual(l.frames[6].canvas.tag, "B", "source shifted right");
+  E.insertImages(l, 1, 2, "after");
+  assert.deepStrictEqual(E.layerKeys(l), [1, 2, 3, 7, 8]);
+  assert.strictEqual(l.frames[1].canvas.tag, "A");
+  const copied = E.insertImages(l, 8, 1, "duplicate", (cv) => ({ tag: cv.tag + "!" }));
+  assert.strictEqual(copied, 1);
+  assert.strictEqual(l.frames[9].canvas.tag, "B!", "duplicate uses the copy callback");
+  assert.strictEqual(l.frames[8].canvas.tag, "B", "source still intact");
+});
+
+test("deleteImageAt closes the gap", () => {
+  const p = E.newProject(); const l = p.layers[0];
+  l.frames = { 1: E.newFrame(), 4: E.newFrame(), 8: E.newFrame() };
+  E.deleteImageAt(l, 4);
+  assert.deepStrictEqual(E.layerKeys(l), [1, 7]);
+});
+
+test("deleteFrameColumn compacts every layer and holds", () => {
+  const p = E.newProject();
+  const a = E.newLayer("A"), b = E.newLayer("B");
+  a.frames = { 1: E.newFrame(), 5: E.newFrame() };
+  a.frames[1].exposure = 3;
+  b.frames = { 4: E.newFrame() };          // no drawing at the deleted column
+  p.layers = [a, b];
+  p.outFrame = 24;
+  E.deleteFrameColumn(p, 2);
+  assert.deepStrictEqual(E.layerKeys(a), [1, 4]);
+  assert.strictEqual(a.frames[1].exposure, 2, "hold shortened");
+  assert.deepStrictEqual(E.layerKeys(b), [3], "layer without a key at 2 still shifts");
+  assert.strictEqual(p.outFrame, 23);
+});
+
+test("setExposureValue clamps to the next key; removeExposures resets", () => {
+  const p = E.newProject(); const l = p.layers[0];
+  l.frames = { 1: E.newFrame(), 5: E.newFrame() };
+  E.setExposureValue(l, 1, 9);
+  assert.strictEqual(l.frames[1].exposure, 4, "cannot overlap the next drawing");
+  E.setExposureValue(l, 1, 2);
+  assert.strictEqual(l.frames[1].exposure, 2);
+  E.removeExposures(l, 1);
+  assert.strictEqual(l.frames[1].exposure, 1);
+});
+
+test("repeatImages duplicates the marked range", () => {
+  const p = E.newProject(); p.inFrame = 1; p.outFrame = 3;
+  const l = p.layers[0];
+  l.frames = { 1: E.newFrame(), 3: E.newFrame() };
+  const added = E.repeatImages(p, l, 3, "Loop");
+  assert.strictEqual(added, 4);
+  assert.deepStrictEqual(E.layerKeys(l), [1, 3, 4, 5, 6, 7]);
+  assert.strictEqual(E.layerEnd(l), 7);
+});
+
+test("slideLayer clamps at 1; alignLayer aligns to clip edges", () => {
+  const p = E.newProject(); p.outFrame = 10;
+  const l = p.layers[0];
+  l.frames = { 3: E.newFrame(), 5: E.newFrame() };
+  E.slideLayer(l, -9);
+  assert.deepStrictEqual(E.layerKeys(l), [1, 3], "cannot slide before frame 1");
+  E.alignLayer(p, l, "end");
+  assert.strictEqual(E.layerEnd(l), 10);
+  E.alignLayer(p, l, "start");
+  assert.deepStrictEqual(E.layerKeys(l), [1, 3]);
+});
+
+test("image marks: set, clear, navigate", () => {
+  const p = E.newProject(); const l = p.layers[0];
+  E.setImageMark(l, 2, true);
+  E.setImageMark(l, 5, true);
+  assert.strictEqual(E.nextImageMark(l, 2, 1), 5);
+  assert.strictEqual(E.nextImageMark(l, 5, -1), 2);
+  assert.strictEqual(E.nextImageMark(l, 5, 1), null);
+  E.setImageMark(l, 2, false);
+  assert.strictEqual(E.nextImageMark(l, 1, 1), 5);
+});
+
 test("resizeProject updates format (Modify Project)", () => {
   const p = E.newProject(320, 240);
   E.resizeProject(p, 640, 480);
