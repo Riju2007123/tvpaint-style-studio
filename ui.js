@@ -80,7 +80,8 @@ function resizeCanvases() {
 }
 function fitView() {
   resizeCanvases();
-  view.zoom = Math.min(art.width / proj.width, art.height / proj.height) * 0.95;
+  // TVPaint never fits above 100 %: a small project is shown 1:1
+  view.zoom = Math.min(1, Math.min(art.width / proj.width, art.height / proj.height) * 0.95);
   view.x = (art.width - proj.width * view.zoom) / 2;
   view.y = (art.height - proj.height * view.zoom) / 2;
   renderAll();
