@@ -1122,7 +1122,6 @@ function toggleCameraFrame() {
 }
 function drawCameraOverlay() {
   if (!proj.cameraKeys || !proj.cameraKeys.length) return;
-  const rects = proj.cameraKeys.map(k => ({ k, r: E.cameraRect(proj, k) }));
   const cur = E.cameraEvaluate(proj, proj.currentFrame);
   const curR = E.cameraRect(proj, cur);
   // in camera view mode the overlay follows the artwork (same transform)
@@ -1130,33 +1129,42 @@ function drawCameraOverlay() {
   octx.save();
   if (camMode) applyCameraViewTransform(octx, ovl.width, ovl.height);
   const z = camMode ? 1 : view.zoom;
-  // live TVPaint: the camera view frame is drawn in red, the camera profile
-  // (with its corner squares and the centre cross) in the camera profile colour
-  // 128,128,255 when the camera is being edited.
-  octx.lineWidth = 1.5 / z;
-  rects.forEach(({ k }) => {
-    octx.strokeStyle = k.frame === proj.currentFrame ? "#c04a4a" : "rgba(192,74,74,0.5)";
-    strokeRotRect(octx, E.cameraRect(proj, k));
-  });
-  if (tool === "camera") {
-    octx.strokeStyle = "#8080FF";
-    strokeRotRect(octx, curR);
-    // corner squares of the camera profile
-    const hw = curR.w / 2, hh = curR.h / 2;
-    octx.fillStyle = "#8080FF";
-    [[-hw, -hh], [hw, -hh], [-hw, hh], [hw, hh]].forEach(([dx, dy]) => {
-      octx.save();
-      octx.translate(curR.cx, curR.cy); octx.rotate((curR.rot || 0) * Math.PI / 180);
-      octx.fillRect(dx - 3 / z, dy - 3 / z, 6 / z, 6 / z);
-      octx.restore();
-    });
-    // the centre cross with its horizontal line
-    octx.strokeStyle = "#8080FF";
+  // Live TVPaint 12: the camera view is the final output, everything outside of
+  // it is covered with a solid grey (measured 126,126,126) and the camera
+  // profile is drawn in the camera profile colour 128,128,255 with its corner
+  // squares and the centre cross.
+  if (!camMode) {
     octx.beginPath();
-    octx.moveTo(curR.cx, curR.cy); octx.lineTo(curR.cx + curR.w / 2, curR.cy);
-    octx.stroke();
-    octx.strokeRect(curR.cx - 3 / z, curR.cy - 3 / z, 6 / z, 6 / z);
+    octx.rect(0, 0, proj.width, proj.height);
+    const rot = (curR.rot || 0) * Math.PI / 180;
+    const cs = Math.cos(rot), sn = Math.sin(rot);
+    const hw = curR.w / 2, hh = curR.h / 2;
+    const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]
+      .map(([dx, dy]) => [curR.cx + dx * cs - dy * sn, curR.cy + dx * sn + dy * cs]);
+    octx.moveTo(corners[0][0], corners[0][1]);
+    for (let i = 1; i < 4; i++) octx.lineTo(corners[i][0], corners[i][1]);
+    octx.closePath();
+    octx.fillStyle = "rgb(126,126,126)";
+    octx.fill("evenodd");
   }
+  octx.lineWidth = 1.5 / z;
+  octx.strokeStyle = "#8080FF";
+  strokeRotRect(octx, curR);
+  // the four corner squares of the camera profile
+  const hw = curR.w / 2, hh = curR.h / 2;
+  octx.fillStyle = "#8080FF";
+  [[-hw, -hh], [hw, -hh], [-hw, hh], [hw, hh]].forEach(([dx, dy]) => {
+    octx.save();
+    octx.translate(curR.cx, curR.cy); octx.rotate((curR.rot || 0) * Math.PI / 180);
+    octx.fillRect(dx - 3 / z, dy - 3 / z, 6 / z, 6 / z);
+    octx.restore();
+  });
+  // the centre square and the horizontal line to the right edge of the profile
+  octx.strokeStyle = "#8080FF";
+  octx.beginPath();
+  octx.moveTo(curR.cx, curR.cy); octx.lineTo(curR.cx + hw, curR.cy);
+  octx.stroke();
+  octx.strokeRect(curR.cx - 3 / z, curR.cy - 3 / z, 6 / z, 6 / z);
   // interpolation path between key centers with handle dots
   const kp = proj.cameraKeys.slice().sort((a, b) => a.frame - b.frame);
   if (kp.length > 1) {

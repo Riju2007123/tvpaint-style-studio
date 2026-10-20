@@ -93,12 +93,14 @@ Works from `file://` too — just open `index.html`.
   `Camera size`, `Movement Type`), `Adjust the layer to the animation` (bakes
   the camera movement into the drawings), `Cut keyframe` / `Copy keyframe` /
   `Paste keyframe` and `Invert all keys` (inverts the camera path).
-- The project window shows the **drawing area** with the camera frame drawn on
-  top of it (exactly like the live app: the whole 3840x2160 area at 27 % with
-  the 1920x1080 camera frame inside it); `View > Camera View` switches the
-  window to the camera view itself. `Project > Render Camera` renders the camera
-  view of every frame into a new project (`Into a New Project` / `Into a New
-  merged Project`).
+- The project window shows the **drawing area** with the camera view as the
+  visible output: everything outside the camera view is covered with the same
+  solid grey the live app uses (`rgb(126,126,126)`) and the camera profile is
+  drawn in the camera colour `#8080FF` with its four corner squares, the centre
+  square and the horizontal line to the right edge. `View > Camera View` shows
+  the camera view full-bleed. `Project > Render Camera` renders the camera view
+  of every frame into a new project (`Into a New Project` / `Into a New merged
+  Project`).
 - Layer order: the layer rows can be dragged onto each other to reorder them
   (with `Move Selected Layers` armed, the whole selection travels as a block),
   and the layer menu's `Move` submenu now carries the exact TVPaint 12 entries
