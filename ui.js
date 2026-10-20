@@ -173,8 +173,6 @@ function renderArtOnly() {
   actx.setTransform(1, 0, 0, 1, 0, 0);
   actx.fillStyle = "#313136";
   actx.fillRect(0, 0, art.width, art.height);
-  actx.translate(view.x, view.y);
-  actx.scale(view.zoom, view.zoom);
   actx.imageSmoothingEnabled = proj.antiAlias !== "None";
   // paper background (timeline footer: Background dropdown — loc 25300..25302)
   const bg = proj.background || "none";
@@ -199,18 +197,17 @@ function renderArtOnly() {
         if (((x / s) + (y / s)) % 2 === 0) actx.fillRect(x, y, s, s);
   }
   const camKeys = proj.cameraKeys && proj.cameraKeys.length;
-  // TVPaint: the camera IS the lens — with camera keys present the canvas always
-  // renders through the camera (the Camera View toggle only shows/hides the overlay).
-  if (camKeys) {
-    // render through the camera: fit the camera rect, apply rotate/zoom/flip
-    const cam = E.cameraEvaluate(proj, proj.currentFrame);
-    const r = E.cameraRect(proj, cam);
-    const s = Math.min(art.width / r.w, art.height / r.h) / view.zoom;
-    actx.save();
-    actx.translate(r.cx, r.cy);
-    actx.rotate(-(cam.rotation || 0) * Math.PI / 180);
-    actx.scale((cam.flipX ? -s : s), (cam.flipY ? -s : s));
-    actx.translate(-r.cx, -r.cy);
+  // Live TVPaint 12: the project window shows the DRAWING AREA (the live camera
+  // project showed the whole 3840x2160 area at 27.13% with the 1920x1080 camera
+  // frame drawn inside it). Only "View > Camera View" switches the window to
+  // the camera view itself.
+  let camSave = false;
+  if (camKeys && camView) {
+    applyCameraViewTransform(actx, art.width, art.height);
+    camSave = true;
+  } else {
+    actx.translate(view.x, view.y);
+    actx.scale(view.zoom, view.zoom);
   }
   const cur = proj.layers[proj.currentLayer];
   if (proj.onion.enabled) {
@@ -231,7 +228,7 @@ function renderArtOnly() {
     actx.globalCompositeOperation = "source-over";
     actx.globalAlpha = 1;
   });
-  if (camKeys) actx.restore();
+  if (camSave) actx.restore();
 }
 function renderOverlayOnly() {
   octx.setTransform(1, 0, 0, 1, 0, 0);
@@ -257,6 +254,20 @@ function renderOverlayOnly() {
     if (panelEls[2] && panelEls[2].querySelector(".pbody")._syncCamera)
       panelEls[2].querySelector(".pbody")._syncCamera();
   }
+}
+// The camera view mode uses the same transform as the artwork so the camera
+// frame, the path and the drawing stay aligned.
+function applyCameraViewTransform(ctx, w, h) {
+  const cam = E.cameraEvaluate(proj, proj.currentFrame);
+  const r = E.cameraRect(proj, cam);
+  const k = Math.min(w / r.w, h / r.h);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate(-(cam.rotation || 0) * Math.PI / 180);
+  ctx.scale(cam.flipX ? -k : k, cam.flipY ? -k : k);
+  ctx.translate(-r.cx, -r.cy);
+  return k;
 }
 function renderAll() {
   resizeCanvases();
@@ -497,8 +508,7 @@ const MENUS = [
   ["Project", [
     ["Duplicate Project", () => { proj.name = "Untitled_(" + (+(proj.name.match(/\d+/) || [0])[0] + 1) + ")"; renderTimelineStatus(); toast("project duplicated: " + proj.name); }],
     ["Modify Project…", () => dlgNewProject(true)],
-    null, ["Render Camera ▸", null, 1],
-    null, ["Load Sound…", () => togglePane("sound")],
+    null, ["Render Camera", (ev) => openTvMenu([{ label: "Into a New Project", action: () => renderCameraProject(false) }, { label: "Into a New merged Project", action: () => renderCameraProject(true) }], ev ? ev.clientX : 300, ev ? ev.clientY : 300)],    null, ["Load Sound…", () => togglePane("sound")],
     ["Add sound from library", () => togglePane("sound")],
     null, ["Project Information", () => alert(
       "Project: " + proj.name + "\nSize: " + proj.width + "x" + proj.height + "\nFrame rate: " + proj.fps +
@@ -593,7 +603,7 @@ function buildMenubar() {
         ev.stopPropagation();                       // don't bubble to the title's toggle
         t.classList.remove("open");
         if (action === "recent") { promptRecent(); return; }
-        action && action();
+        action && action(ev);
       };
       dd.appendChild(mi);
     });
@@ -1084,6 +1094,26 @@ function mkThirdPanel(title) {
   panelEls.push(p);
   return body;
 }
+// Project > Render Camera: the camera view of every frame becomes a new
+// project (live entries: "Into a New Project" / "Into a New merged Project").
+function renderCameraProject(merged) {
+  if (!(proj.cameraKeys || []).length) { toast("this project has no camera"); return; }
+  const out = E.renderCameraFrames(proj, merged);
+  if (!out) { toast("nothing to render"); return; }
+  proj = out;
+  proj.name = proj.name + " (camera)";
+  hist.clear();
+  ghostTmp = E.makeSurface(proj.width, proj.height);
+  sel = null; cutBrush = null;
+  fitView(); syncFpsSel(); syncToolPanel(); renderTimelineStatus(); renderAll();
+  toast("camera rendered into a new project");
+}
+// "Adjust the layer to the animation": the drawings follow the camera movement.
+function adjustLayersToCamera() {
+  if (!(proj.cameraKeys || []).length) { toast("this project has no camera"); return; }
+  const n = (() => { let c = 0; tvCommit(() => { c = E.bakeCameraIntoLayers(proj); }); return c; })();
+  toast(n ? n + " image(s) adjusted to the camera" : "the layers already follow the camera");
+}
 // The camera row's right hand button: show / hide the camera frame overlay.
 function toggleCameraFrame() {
   camFrame = !camFrame;
@@ -1095,21 +1125,42 @@ function drawCameraOverlay() {
   const rects = proj.cameraKeys.map(k => ({ k, r: E.cameraRect(proj, k) }));
   const cur = E.cameraEvaluate(proj, proj.currentFrame);
   const curR = E.cameraRect(proj, cur);
+  // in camera view mode the overlay follows the artwork (same transform)
+  const camMode = camView;
   octx.save();
-  // green = drawing area (fixed); camera rect = COLORSchemes mcameraprofile (128,128,255)
-  octx.lineWidth = 1.5 / view.zoom;
-  octx.strokeStyle = "#3fd25f";
-  octx.strokeRect(0, 0, proj.width, proj.height);
+  if (camMode) applyCameraViewTransform(octx, ovl.width, ovl.height);
+  const z = camMode ? 1 : view.zoom;
+  // live TVPaint: the camera view frame is drawn in red, the camera profile
+  // (with its corner squares and the centre cross) in the camera profile colour
+  // 128,128,255 when the camera is being edited.
+  octx.lineWidth = 1.5 / z;
   rects.forEach(({ k }) => {
-    octx.strokeStyle = k.frame === proj.currentFrame ? "#8080FF" : "rgba(128,128,255,0.45)";
+    octx.strokeStyle = k.frame === proj.currentFrame ? "#c04a4a" : "rgba(192,74,74,0.5)";
     strokeRotRect(octx, E.cameraRect(proj, k));
   });
-  octx.strokeStyle = "#8080FF";
-  strokeRotRect(octx, curR);
+  if (tool === "camera") {
+    octx.strokeStyle = "#8080FF";
+    strokeRotRect(octx, curR);
+    // corner squares of the camera profile
+    const hw = curR.w / 2, hh = curR.h / 2;
+    octx.fillStyle = "#8080FF";
+    [[-hw, -hh], [hw, -hh], [-hw, hh], [hw, hh]].forEach(([dx, dy]) => {
+      octx.save();
+      octx.translate(curR.cx, curR.cy); octx.rotate((curR.rot || 0) * Math.PI / 180);
+      octx.fillRect(dx - 3 / z, dy - 3 / z, 6 / z, 6 / z);
+      octx.restore();
+    });
+    // the centre cross with its horizontal line
+    octx.strokeStyle = "#8080FF";
+    octx.beginPath();
+    octx.moveTo(curR.cx, curR.cy); octx.lineTo(curR.cx + curR.w / 2, curR.cy);
+    octx.stroke();
+    octx.strokeRect(curR.cx - 3 / z, curR.cy - 3 / z, 6 / z, 6 / z);
+  }
   // interpolation path between key centers with handle dots
   const kp = proj.cameraKeys.slice().sort((a, b) => a.frame - b.frame);
   if (kp.length > 1) {
-    octx.strokeStyle = "#8080FF"; octx.setLineDash([6 / view.zoom, 4 / view.zoom]);
+    octx.strokeStyle = "#8080FF"; octx.setLineDash([6 / z, 4 / z]);
     octx.beginPath();
     for (let f = kp[0].frame; f <= kp[kp.length - 1].frame; f += 0.5) {
       const c = E.cameraEvaluate(proj, f);
@@ -1120,7 +1171,7 @@ function drawCameraOverlay() {
     kp.forEach(k => {
       const px = proj.width / 2 + k.x, py = proj.height / 2 + k.y;
       octx.fillStyle = "#fff"; octx.strokeStyle = "#4a8cff";
-      octx.beginPath(); octx.arc(px, py, 4 / view.zoom, 0, Math.PI * 2); octx.fill(); octx.stroke();
+      octx.beginPath(); octx.arc(px, py, 4 / z, 0, Math.PI * 2); octx.fill(); octx.stroke();
     });
   }
   octx.restore();
@@ -3216,7 +3267,7 @@ function cameraKeyMenu(f, mx, my) {
     { label: "Create keyframe", submenu: sub(true) },
     { label: "Delete keyframe", submenu: sub(false) },
     { sep: true },
-    { label: "Adjust the layer to the animation", action: () => toast("the layers follow the camera movement (not in this prototype)") },
+    { label: "Adjust the layer to the animation", action: () => adjustLayersToCamera() },
     { sep: true },
     { label: "Cut keyframe", disabled: !key, action: () => {
       cameraKeyClip = Object.assign({}, key);

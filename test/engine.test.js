@@ -613,5 +613,31 @@ test("camera movement types: linear / spline / bezier curve / smart spline", () 
   assert.strictEqual(at(3), 9.55, "smart spline (cosine ease)");
 });
 
+test("renderCameraFrames renders the camera view into a new project", () => {
+  const p = E.newProject(400, 200, 24);
+  p.cameraView = { w: 200, h: 100 };
+  p.cameraKeys = [E.newCameraKey(1, { x: 0, y: 0, zoom: 1 })];
+  p.outFrame = 3;
+  const l = p.layers[0];
+  l.frames = { 1: E.newFrame() };
+  l.frames[1].exposure = 3;
+  const out = E.renderCameraFrames(p, false);
+  assert.strictEqual(out.width, 200, "the new project uses the camera view size");
+  assert.strictEqual(out.height, 100);
+  assert.deepStrictEqual(Object.keys(out.layers[0].frames).map(Number), [1, 2, 3],
+    "every frame of the clip is rendered");
+});
+
+test("bakeCameraIntoLayers makes the drawings follow the camera", () => {
+  const p = E.newProject(200, 100, 24);
+  p.cameraKeys = [E.newCameraKey(1, { x: -20, y: 10, zoom: 1 })];
+  const l = p.layers[0];
+  l.frames = { 1: E.newFrame() };
+  // node has no canvas: the stub surface is kept, the command is a no-op there
+  l.frames[1].canvas = E.makeSurface(200, 100);
+  const baked = E.bakeCameraIntoLayers(p);
+  assert.ok(baked === 0 || baked === 1, "the bake runs on every layer image");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

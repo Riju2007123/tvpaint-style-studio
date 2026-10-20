@@ -249,6 +249,71 @@ function colorWithAlpha(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, a))})`;
 }
 
+// "Adjust the layer to the animation" (George tv_cameramakelayerfitanim,
+// FUN_1401d3510): the drawings follow the camera movement, so the camera
+// reveals the right part of the artwork. The camera offset of every key is
+// baked into the layer images.
+function bakeCameraIntoLayers(proj) {
+  if (!(proj.cameraKeys || []).length) return 0;
+  let n = 0;
+  proj.layers.forEach(layer => {
+    Object.keys(layer.frames).forEach(kk => {
+      const fr = layer.frames[kk];
+      if (!fr.canvas || !fr.canvas.getContext) return;
+      const cam = cameraEvaluate(proj, +kk);
+      const dx = cam.x || 0, dy = cam.y || 0;
+      if (!dx && !dy) return;
+      const w = fr.canvas.width, h = fr.canvas.height;
+      const out = makeSurface(w, h);
+      const c = out.getContext && out.getContext("2d");
+      if (!c) return;                       // node test stub: nothing to draw on
+      c.translate(w / 2 + dx, h / 2 + dy);
+      c.drawImage(fr.canvas, -w / 2, -h / 2);
+      fr.canvas = out;
+      n++;
+    });
+  });
+  return n;
+}
+
+// Render the camera view of every frame into a new project ("Project >
+// Render Camera > Into a New Project").
+function renderCameraFrames(proj, merged) {
+  if (!(proj.cameraKeys || []).length) return null;
+  const vw = proj.cameraView ? proj.cameraView.w : proj.width;
+  const vh = proj.cameraView ? proj.cameraView.h : proj.height;
+  const out = newProject(vw, vh, proj.fps);
+  const layer = out.layers[0];
+  layer.name = "Camera";
+  layer.frames = {};
+  const visible = proj.layers.filter(l => l.visible !== false);
+  for (let f = 1; f <= proj.outFrame; f++) {
+    const cam = cameraEvaluate(proj, f);
+    const r = cameraRect(proj, cam);
+    const surf = makeSurface(vw, vh);
+    const c = surf.getContext && surf.getContext("2d");
+    if (c) {
+      c.fillStyle = "#ffffff";
+      c.fillRect(0, 0, vw, vh);
+      const k = Math.min(vw / r.w, vh / r.h);
+      c.save();
+      c.translate(vw / 2, vh / 2);
+      c.rotate(-(cam.rotation || 0) * Math.PI / 180);
+      c.scale((cam.flipX ? -1 : 1) * k, (cam.flipY ? -1 : 1) * k);
+      c.translate(-r.cx, -r.cy);
+      visible.forEach(l => {
+        const key = effectiveFrameKey(l, f);
+        const s2 = key !== null ? l.frames[key].canvas : null;
+        if (s2 && s2.getContext) c.drawImage(s2, 0, 0);
+      });
+      c.restore();
+    }
+    layer.frames[f] = { exposure: 1, canvas: surf, id: uid(), role: null, name: null };
+  }
+  if (merged) layer.name = "Camera (merged)";
+  return out;
+}
+
 // Move a camera keyframe to another frame (live: the "+" of a camera key can
 // be dragged with the left mouse button in the camera row of the timeline).
 function moveCameraKey(proj, from, to) {
@@ -1307,6 +1372,7 @@ if (typeof module !== "undefined" && module.exports) {
     BRUSHES, DRAW_MODES, SHAPES, LAYER_LOOP_MODES, XSHEET_OPS,
     BRUSH_PROFILES, brushDefaults, activateToolBrush, gradientFill,
     newCameraKey, cameraEvaluate, cameraRect, cameraKeyAt, setCameraKey, moveCameraKey,
+    bakeCameraIntoLayers, renderCameraFrames,
     layerLengthOp,
     newProject, newLayer, newFrame, frameSurface, makeSurface,
     resizeProject,

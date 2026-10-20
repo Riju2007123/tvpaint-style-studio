@@ -90,9 +90,15 @@ Works from `file://` too — just open `index.html`.
   ratio, Rotation, Zoom, Flip X/Y, Parameters...). Right
   clicking the camera row opens the captured keyframe menu - `Create keyframe` /
   `Delete keyframe` (each with `All`, `Position`, `Rotation`, `Zoom`,
-  `Camera size`, `Movement Type`), `Adjust the layer to the animation`,
-  `Cut keyframe` / `Copy keyframe` / `Paste keyframe` and `Invert all keys`
-  (inverts the camera path).
+  `Camera size`, `Movement Type`), `Adjust the layer to the animation` (bakes
+  the camera movement into the drawings), `Cut keyframe` / `Copy keyframe` /
+  `Paste keyframe` and `Invert all keys` (inverts the camera path).
+- The project window shows the **drawing area** with the camera frame drawn on
+  top of it (exactly like the live app: the whole 3840x2160 area at 27 % with
+  the 1920x1080 camera frame inside it); `View > Camera View` switches the
+  window to the camera view itself. `Project > Render Camera` renders the camera
+  view of every frame into a new project (`Into a New Project` / `Into a New
+  merged Project`).
 - Layer order: the layer rows can be dragged onto each other to reorder them
   (with `Move Selected Layers` armed, the whole selection travels as a block),
   and the layer menu's `Move` submenu now carries the exact TVPaint 12 entries
@@ -134,10 +140,10 @@ Works from `file://` too — just open `index.html`.
   Color Group panes. Per-layer lock / light table / preserve-transparency /
   stencil dots, row collapse, global layer flags and image-mark ruler ticks.
 
-44 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
+46 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
 modes, add-exposure, layer order, selected-image reversal, camera
-interpolation, camera movement types and camera key moves, auto break/create
-flags and history (`npm test`).
+interpolation, camera movement types, camera key moves and the camera render,
+auto break/create flags and history (`npm test`).
 
 ## Tests
 
