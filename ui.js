@@ -933,13 +933,21 @@ let camLocks = { x: false, y: false, rotation: false, zoom: false };
 function buildCameraPanel() {
   const body = mkThirdPanel("Camera[Proj]");
   body.innerHTML = `
-    ${mrow("Command", `<select id="camCmd" style="flex:1"><option>Command</option><option> parameters</option></select>`)}
+    ${mrow("Command", `<select id="camCmd" style="flex:1">
+        <option value="">Command</option>
+        <option value="invert">Invert</option>
+        <option value="load">Load...</option>
+        <option value="save">Save...</option>
+        <option value="reset">Reset</option>
+        <option value="resetfit">Reset and Fit to project</option></select>`)}
     ${mrow("Lock All", `<input type="checkbox" id="camLockAll">`)}
     ${mrow("See bookmarks", `<input type="checkbox" id="camBookmarks">`)}
     ${mrow("Toggle all", `<button class="revbtn" id="camToggle" style="padding:1px 10px">🔑</button>`)}
     ${mrow("Mode", `<select id="camMode" style="flex:1">
-        <option value="hold">Hold</option><option value="linear" selected>Linear</option>
-        <option value="smooth">Smooth</option></select>`)}
+        <option value="linear" selected>Linear</option>
+        <option value="spline">Spline</option>
+        <option value="bezier">Bezier curve</option>
+        <option value="smart">Smart Spline</option></select>`)}
     ${mrow("Motion Blur", `<input type="number" id="camBlur" value="0.00" min="0" max="100" step="0.5"> %`)}
     ${mrow("X", `<button class="revbtn" id="camLockX" style="padding:0 4px">🔓</button>
         <input type="number" id="camX" step="1" style="flex:1">`)}
@@ -1028,7 +1036,34 @@ function buildCameraPanel() {
     });
     toast("camera locks toggled");
   };
-  $("camCmd").onchange = (e) => { e.target.value = "Command"; };
+  $("camCmd").onchange = (e) => {
+    const cmd = e.target.value;
+    e.target.value = "";
+    if (cmd === "invert") invertCameraPath();
+    else if (cmd === "save") {
+      try {
+        localStorage.setItem("tvpaint.camera", JSON.stringify(proj.cameraKeys || []));
+        toast("camera settings saved");
+      } catch (err) { toast("camera save failed"); }
+    } else if (cmd === "load") {
+      try {
+        const raw = localStorage.getItem("tvpaint.camera");
+        if (!raw) { toast("no saved camera settings"); return; }
+        proj.cameraKeys = JSON.parse(raw).map(k => E.newCameraKey(k.frame, k));
+        renderAll();
+        toast("camera settings loaded");
+      } catch (err) { toast("camera load failed"); }
+    } else if (cmd === "reset") {
+      proj.cameraKeys = [E.newCameraKey(1, {})];
+      renderAll();
+      toast("camera reset");
+    } else if (cmd === "resetfit") {
+      proj.cameraKeys = [E.newCameraKey(1, {})];
+      proj.cameraView = { w: proj.width, h: proj.height };
+      renderAll();
+      toast("camera reset and fitted to the project");
+    }
+  };
   body._syncCamera = sync;   // renderAll hooks this
   return body;
 }
@@ -3124,14 +3159,14 @@ function beginCamKeyDrag(e, frame) {
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
 }
-function camKeyPart(f, part, create) {
+function camKeyPart(f, part, create, value) {
   if (create) {
     const cur = E.cameraEvaluate(proj, f);
     const k = E.setCameraKey(proj, f, {});
     if (part === "All" || part === "Position") { k.x = cur.x; k.y = cur.y; }
     if (part === "All" || part === "Rotation") k.rotation = cur.rotation;
     if (part === "All" || part === "Zoom") k.zoom = cur.zoom;
-    if (part === "All" || part === "Movement Type") k.interp = cur.interp || "smooth";
+    if (part === "All" || part === "Movement Type") k.interp = value || cur.interp || "linear";
     toast("camera keyframe created");
   } else {
     const k = E.cameraKeyAt(proj, f);
@@ -3143,7 +3178,7 @@ function camKeyPart(f, part, create) {
       if (part === "Position") { k.x = 0; k.y = 0; }
       if (part === "Rotation") k.rotation = 0;
       if (part === "Zoom") k.zoom = 1;
-      if (part === "Movement Type") k.interp = "smooth";
+      if (part === "Movement Type") k.interp = value || "linear";
       toast("camera keyframe part removed");
     }
   }
@@ -3170,7 +3205,12 @@ function cameraKeyMenu(f, mx, my) {
     { label: "Rotation", action: () => camKeyPart(f, "Rotation", create) },
     { label: "Zoom", action: () => camKeyPart(f, "Zoom", create) },
     { label: "Camera size", action: () => camKeyPart(f, "Camera size", create) },
-    { label: "Movement Type", action: () => camKeyPart(f, "Movement Type", create) }
+    { label: "Movement Type", submenu: [
+      { label: "Linear", action: () => camKeyPart(f, "Movement Type", create, "linear") },
+      { label: "Spline", action: () => camKeyPart(f, "Movement Type", create, "spline") },
+      { label: "Bezier curve", action: () => camKeyPart(f, "Movement Type", create, "bezier") },
+      { label: "Smart Spline", action: () => camKeyPart(f, "Movement Type", create, "smart") }
+    ] }
   ]);
   openTvMenu([
     { label: "Create keyframe", submenu: sub(true) },

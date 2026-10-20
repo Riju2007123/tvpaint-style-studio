@@ -277,13 +277,15 @@ function cameraEvaluate(proj, frame) {
   for (const k of ks) { if (k.frame <= frame) prev = k; else break; }
   const next = ks.find(k => k.frame > frame) || prev;
   if (next === prev || next.frame === prev.frame) return { ...prev, frame: undefined };
-  // the movement type of the key the camera leaves governs the segment:
-  // "hold" keeps its value until the next key (the camera keyframe menu
-  // exposes the movement type per key).
+  // the movement type of the key the camera leaves governs the segment.
+  // Live TVPaint 12 offers: Linear / Spline / Bezier curve / Smart Spline.
   const mode = prev.interp || "linear";
   if (mode === "hold") return { ...prev, frame: undefined };
   let t = (frame - prev.frame) / (next.frame - prev.frame);
-  if (mode === "smooth") t = t * t * (3 - 2 * t);   // smooth-step interior (bezier-like)
+  if (mode === "spline") t = t * t * (3 - 2 * t);            // smooth step
+  else if (mode === "bezier") t = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  else if (mode === "smart") t = (1 - Math.cos(Math.PI * t)) / 2;
+  else if (mode === "smooth") t = t * t * (3 - 2 * t);      // legacy alias
   const L = (a, b) => a + (b - a) * t;
   const pick = (a, b) => (t < 1 ? a : b);
   return { x: L(prev.x, next.x), y: L(prev.y, next.y),

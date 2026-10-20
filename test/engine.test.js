@@ -599,5 +599,19 @@ test("moveCameraKey moves a camera keyframe to another frame", () => {
   assert.deepStrictEqual(p.cameraKeys.map(k => k.frame), [1, 13]);
 });
 
+test("camera movement types: linear / spline / bezier curve / smart spline", () => {
+  const p = E.newProject();
+  p.cameraKeys = [E.newCameraKey(1, { x: 0, interp: "linear" }),
+                  E.newCameraKey(11, { x: 100, interp: "linear" })];
+  const at = (f) => Math.round(E.cameraEvaluate(p, f).x * 100) / 100;
+  assert.strictEqual(at(3), 20, "linear");
+  p.cameraKeys[0].interp = "spline";
+  assert.strictEqual(at(3), 10.4, "spline (smooth step)");
+  p.cameraKeys[0].interp = "bezier";
+  assert.strictEqual(at(3), 3.2, "bezier curve (ease in out cubic)");
+  p.cameraKeys[0].interp = "smart";
+  assert.strictEqual(at(3), 9.55, "smart spline (cosine ease)");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

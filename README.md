@@ -84,8 +84,10 @@ Works from `file://` too — just open `index.html`.
   is a `+` glyph - yellow on the current image, grey elsewhere - and the `+`
   can be **dragged with the left mouse button to move the keyframe**), and
   switches the tool panel to `Tool : Camera[Pro]` with the camera options
-  (Command, Lock All, See bookmarks, Toggle all, Mode, Motion Blur, X/Y with
-  axis locks, Modify ratio, Rotation, Zoom, Flip X/Y, Parameters...). Right
+  (Command: `Invert`, `Load...`, `Save...`, `Reset`, `Reset and Fit to
+  project`; Lock All, See bookmarks, Toggle all, Mode: `Linear` / `Spline` /
+  `Bezier curve` / `Smart Spline`, Motion Blur, X/Y with axis locks, Modify
+  ratio, Rotation, Zoom, Flip X/Y, Parameters...). Right
   clicking the camera row opens the captured keyframe menu - `Create keyframe` /
   `Delete keyframe` (each with `All`, `Position`, `Rotation`, `Zoom`,
   `Camera size`, `Movement Type`), `Adjust the layer to the animation`,
@@ -132,10 +134,10 @@ Works from `file://` too — just open `index.html`.
   Color Group panes. Per-layer lock / light table / preserve-transparency /
   stencil dots, row collapse, global layer flags and image-mark ruler ticks.
 
-43 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
+44 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
 modes, add-exposure, layer order, selected-image reversal, camera
-interpolation and camera key moves, auto break/create flags and history
-(`npm test`).
+interpolation, camera movement types and camera key moves, auto break/create
+flags and history (`npm test`).
 
 ## Tests
 
