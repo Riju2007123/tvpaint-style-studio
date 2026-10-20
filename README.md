@@ -75,10 +75,18 @@ Works from `file://` too — just open `index.html`.
   drawing of the current frame using the layer's delete mode. Both are also in
   the Image menu (`Add Exposure`, `Delete Image`, `Delete Selection from
   Layer`, `Delete Selection from all Layers`).
-- Layer order: the layer rows can be dragged onto each other to reorder them,
+- Layer order: the layer rows can be dragged onto each other to reorder them
+  (with `Move Selected Layers` armed, the whole selection travels as a block),
   and the layer menu's `Move` submenu now carries the exact TVPaint 12 entries
   (`Move Selected Layers`, `Up`, `Down`, `Bring Selected Layers Together`,
   `Reverse All Layer Order`, `Reverse Selected Layer Order`).
+- Image drag and drop between layers, with the behaviour the shipped
+  preference describes (loc 011021204/011021205): dragging a drawing onto
+  another layer row **moves** it, **Ctrl** copies it and **Shift** inserts it
+  (pushing the target layer's later images). A horizontal drag inside one layer
+  still slides the whole layer, exactly as in the live app. The Image menu also
+  has `Modify > Flip Horizontally / Flip Vertically / Flip Horizontally &
+  Vertically` (loc 28612-28614).
 - Timeline zoom and fit: the timeline footer carries TVPaint's interactive
   zoom ratio (shipped `LayerZoomRatio` icon, drag left/right to change the frame
   width) and a `Fit` popup with the shipped loc entries `Fit to Clip`, `Fit to
@@ -108,7 +116,7 @@ Works from `file://` too — just open `index.html`.
   Color Group panes. Per-layer lock / light table / preserve-transparency /
   stencil dots, row collapse, global layer flags and image-mark ruler ticks.
 
-40 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
+41 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
 modes, add-exposure, layer order, selected-image reversal, auto break/create
 flags and history (`npm test`).
 

@@ -546,6 +546,9 @@ const MENUS = [
     ["Delete Image", () => deleteImageHere()],
     ["Delete Selection from Layer", () => deleteSelectionFromLayer()],
     ["Delete Selection from all Layers", () => deleteSelectionFromLayer(true)],
+    null, ["Flip Horizontally", () => flipCurrentImage("h")],
+    ["Flip Vertically", () => flipCurrentImage("v")],
+    ["Flip Horizontally & Vertically", () => flipCurrentImage("hv")],
     null, ["Increase Layer Length…", () => dlgLayerLength()]
   ]],
   ["Effects", [["(not in this prototype)", null, 1]]],
@@ -1301,7 +1304,7 @@ function beginCellSlide(e, cell) {
   if (k == null) return;                 // empty cell: click just moves the playhead
   const strip = cell.closest(".strip");
   if (!strip) return;
-  tlSlide = { l, strip, f, k, startX: e.clientX, delta: 0, moved: false,
+  tlSlide = { l, li, strip, f, k, startX: e.clientX, delta: 0, moved: false, mode: "slide",
     oldMax: E.projectMaxEnd(proj), oldOut: proj.outFrame };
   window.addEventListener("pointermove", cellSlideMove, { passive: false });
   window.addEventListener("pointerup", cellSlideUp, { once: true });
@@ -1311,6 +1314,24 @@ function cellSlideMove(ev) {
   const s = tlSlide;
   if (!s) return;
   const dx = ev.clientX - s.startX;
+  // Dragging an image onto another layer row is the image drag and drop
+  // (loc 011021204/011021205): Ctrl copies, Shift inserts, no key moves.
+  const el = document.elementFromPoint(ev.clientX, ev.clientY);
+  const over = el && el.closest ? el.closest(".cell[data-f][data-l]") : null;
+  if (over && over.dataset.l !== "cam" && +over.dataset.l !== s.li) {
+    s.mode = "image";
+    s.targetLayer = +over.dataset.l;
+    s.targetFrame = +over.dataset.f;
+    s.moved = true;
+    s.strip.style.transform = "";
+    s.strip.classList.remove("sliding");
+    if (s.dropEl && s.dropEl !== over) s.dropEl.classList.remove("droptarget");
+    s.dropEl = over;
+    over.classList.add("droptarget");
+    ev.preventDefault();
+    return;
+  }
+  if (s.mode === "image") return;
   if (!s.moved && Math.abs(dx) < 4) return;
   s.moved = true;
   const ks = E.layerKeys(s.l);
@@ -1324,7 +1345,32 @@ function cellSlideMove(ev) {
   }
   ev.preventDefault();
 }
-function cellSlideUp() {
+// Move / Copy / Insert an image from one layer into another one.
+function imageDragDrop(s, ev) {
+  const src = proj.layers[s.li], dst = proj.layers[s.targetLayer];
+  if (!src || !dst || src === dst) return false;
+  const fr = src.frames[s.k];
+  if (!fr) return false;
+  const copy = ev && (ev.ctrlKey || ev.metaKey);
+  const insert = ev && ev.shiftKey;
+  const at = Math.max(1, s.targetFrame);
+  const exp = fr.exposure || 1;
+  tvCommit(() => {
+    if (!copy) { delete src.frames[s.k]; src.emptyEnd = 0; }
+    if (insert) {
+      const ks = E.layerKeys(dst).filter(k => k >= at).sort((a, b) => b - a);
+      ks.forEach(k => { dst.frames[k + exp] = dst.frames[k]; delete dst.frames[k]; });
+    } else {
+      const ks = E.layerKeys(dst).filter(k => k >= at && k < at + exp);
+      ks.forEach(k => { delete dst.frames[k]; });
+    }
+    dst.frames[at] = { exposure: exp, role: fr.role || null, name: fr.name || null,
+      id: Math.random().toString(36).slice(2, 10), canvas: tvCloneSurface(fr.canvas) };
+  });
+  toast("image " + (copy ? "copied" : insert ? "inserted" : "moved") + " to " + dst.name + " @ " + at);
+  return true;
+}
+function cellSlideUp(ev) {
   window.removeEventListener("pointermove", cellSlideMove);
   window.removeEventListener("pointercancel", cellSlideUp);
   const s = tlSlide;
@@ -1332,8 +1378,10 @@ function cellSlideUp() {
   if (!s) return;
   s.strip.style.transform = "";
   s.strip.classList.remove("sliding");
+  document.querySelectorAll(".cell.droptarget").forEach(c => c.classList.remove("droptarget"));
   if (!s.moved) return;
   tlSuppressClickUntil = performance.now() + 350;
+  if (s.mode === "image") { imageDragDrop(s, ev); return; }
   if (!s.delta) return;
   hist.pushModel(proj);
   const actual = E.slideLayer(s.l, s.delta);
@@ -2422,6 +2470,10 @@ function beginLayerDrag(e, li) {
   e.preventDefault();
   e.stopPropagation();
   const rows = [...document.querySelectorAll(".llayer[data-layer]")];
+  // "Move Selected Layers" (loc 011025179): when the mode is armed the whole
+  // selection travels with the dragged layer.
+  const sel = (layerMoveMode && Array.isArray(proj.selectedLayers) && proj.selectedLayers.length > 1)
+    ? proj.selectedLayers.slice().sort((a, b) => a - b) : [li];
   let target = li;
   const move = (ev) => {
     const el = document.elementFromPoint(ev.clientX, ev.clientY);
@@ -2434,8 +2486,11 @@ function beginLayerDrag(e, li) {
     window.removeEventListener("pointerup", up);
     rows.forEach(r => r.classList.remove("droptarget"));
     if (target === li) return;
-    tvCommit(() => E.moveLayerTo(proj, li, target));
-    toast("layer moved");
+    tvCommit(() => {
+      if (sel.length > 1) E.moveLayersTo(proj, sel, target);
+      else E.moveLayerTo(proj, li, target);
+    });
+    toast(sel.length > 1 ? sel.length + " layers moved" : "layer moved");
   };
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
@@ -2852,6 +2907,24 @@ function deleteSelectionFromLayer(allLayers) {
   imageSelAnchor = null;
   renderAll();
   toast(keys.length + " image(s) deleted" + (allLayers ? " (all layers)" : ""));
+}
+// Modify > Flip (loc 28611..28614): mirror the drawing of the current image.
+function flipCurrentImage(mode) {
+  const l = tvCurrentLayer();
+  if (!l) return;
+  const k = E.effectiveFrameKey(l, proj.currentFrame);
+  if (k == null) { toast("no image at this frame"); return; }
+  const fr = l.frames[k];
+  if (!fr.canvas || !fr.canvas.getContext) { toast("the image is empty"); return; }
+  const s = fr.canvas;
+  const out = E.makeSurface(s.width, s.height);
+  const c = out.getContext("2d");
+  if (mode === "h") { c.translate(s.width, 0); c.scale(-1, 1); }
+  else if (mode === "v") { c.translate(0, s.height); c.scale(1, -1); }
+  else { c.translate(s.width, s.height); c.scale(-1, -1); }
+  c.drawImage(s, 0, 0);
+  tvCommit(() => { fr.canvas = out; });
+  toast("image flipped");
 }
 function cellOp(op, li, f, arg) {
   const { l } = cellFrame(li, f);

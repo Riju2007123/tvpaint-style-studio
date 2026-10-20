@@ -645,6 +645,27 @@ function moveLayerTo(proj, from, to) {
 function moveLayerBy(proj, index, delta) {
   return moveLayerTo(proj, index, index + delta);
 }
+// Move several layers at once ("Move Selected Layers"): they keep their
+// relative order and are dropped as a block on the target position.
+function moveLayersTo(proj, indices, to) {
+  const n = proj.layers.length;
+  const sel = (indices || []).filter(i => i >= 0 && i < n).sort((a, b) => a - b);
+  if (!sel.length) return false;
+  if (sel.length === 1) return moveLayerTo(proj, sel[0], to);
+  const at = Math.max(0, Math.min(sel.length ? n - sel.length : 0, to - sel.filter(s => s < to).length));
+  const moved = sel.map(i => proj.layers[i]);
+  const keep = proj.layers.filter((_, i) => !sel.includes(i));
+  const keepPos = (i) => i - sel.filter(s => s < i).length;
+  const map = (i) => {
+    if (sel.includes(i)) return at + sel.indexOf(i);
+    const p = keepPos(i);
+    return p >= at ? p + sel.length : p;
+  };
+  proj.layers = keep.slice(0, at).concat(moved, keep.slice(at));
+  if (typeof proj.currentLayer === "number") proj.currentLayer = map(proj.currentLayer);
+  if (Array.isArray(proj.selectedLayers)) proj.selectedLayers = proj.selectedLayers.map(map);
+  return true;
+}
 // "Bring Selected Layers Together" (loc 011025182): the selected layers are
 // gathered under the topmost selected one, keeping their relative order.
 function bringLayersTogether(proj, indices) {
@@ -1279,7 +1300,7 @@ if (typeof module !== "undefined" && module.exports) {
     IMAGE_ROLES, BLEND_MODES, frameEndOf, layerKeys, layerEnd, shiftKeys,
     insertImages, duplicateImages, deleteImageAt, deleteFrameColumn,
     setExposureValue, removeExposures, layerHasGaps, repeatImages, slideLayer, alignLayer,
-    reverseSelectedImages, addExposureAt, moveLayerTo, moveLayerBy,
+    reverseSelectedImages, addExposureAt, moveLayerTo, moveLayerBy, moveLayersTo,
     bringLayersTogether, reverseLayerOrder,
     setImageMark, nextImageMark
   };

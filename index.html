@@ -255,6 +255,7 @@
   .cell.hold::after { content: ""; position: absolute; left: 50%; top: 20px; width: 40%; max-width: 16px;
     height: 2px; transform: translate(-50%, -50%); background: #6a6a70; z-index: 1; }
   .cell.insel { box-shadow: inset 0 0 0 1px #6f8fe8; }
+  .cell.droptarget { box-shadow: inset 0 0 0 2px #5A66CC; background: #3E476B33; }
   .cell .knum { position: absolute; left: 2px; top: 40px; font-size: 10px; color: #b0b0b6; z-index: 3; }
   .cell .empin { position: absolute; left: 50%; top: 20px; transform: translate(-50%, -50%);
     color: #8a8a90; font-size: 15px; z-index: 2; }
@@ -512,7 +513,7 @@
   IMAGE_ROLES, BLEND_MODES, frameEndOf, layerKeys, layerEnd,
   shiftKeys, insertImages, duplicateImages, deleteImageAt, deleteFrameColumn,
   setExposureValue, removeExposures, layerHasGaps, repeatImages, slideLayer, alignLayer,
-  reverseSelectedImages, addExposureAt, moveLayerTo, moveLayerBy,
+  reverseSelectedImages, addExposureAt, moveLayerTo, moveLayerBy, moveLayersTo,
   bringLayersTogether, reverseLayerOrder,
   setImageMark, nextImageMark };</script>
 <script src="ui.js"></script>

@@ -558,5 +558,17 @@ test("layer order: move up/down, bring together, reverse", () => {
   assert.deepStrictEqual(p.layers.map(l => l.name), ["C", "B", "A"], "only the selected layers are reversed");
 });
 
+test("moveLayersTo moves a block of layers and keeps their order", () => {
+  const p = E.newProject();
+  p.layers = [E.newLayer("A"), E.newLayer("B"), E.newLayer("C"), E.newLayer("D")];
+  p.currentLayer = 0;
+  p.selectedLayers = [0, 2];
+  assert.strictEqual(E.moveLayersTo(p, [0, 2], 3), true);
+  assert.deepStrictEqual(p.layers.map(l => l.name), ["B", "A", "C", "D"],
+    "the dragged layers stay together and in order");
+  assert.strictEqual(p.currentLayer, 1, "the current layer follows the block");
+  assert.deepStrictEqual(p.selectedLayers, [1, 2]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
