@@ -5207,6 +5207,9 @@ ovl.addEventListener("pointercancel", (e) => {
 });
 
 // ================= files / recent =================
+// In the desktop shell (Electron) the real file dialogs are used; in the
+// browser the prototype falls back to the download / file input.
+const TV = (typeof window !== "undefined" && window.tv) ? window.tv : null;
 const RECENT_KEY = "my_v2_recent";
 function loadRecent() {
   try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch (e) { return []; }
@@ -5221,10 +5224,28 @@ window.uiClearRecent = () => { try { localStorage.removeItem(RECENT_KEY); } catc
 window.uiSave = function () {
   const data = E.serializeProject(proj);
   pushRecent(proj.name, data);
+  if (TV) {
+    TV.saveProject(data).then(file => {
+      if (file) { proj.name = file; toast("saved: " + file); renderTimelineStatus(); }
+    });
+    return;
+  }
   toast("saved: " + proj.name);
   renderTimelineStatus();
 };
 window.uiSaveAs = function () {
+  if (TV) {
+    const data = E.serializeProject(proj);
+    TV.saveProject(data).then(file => {
+      if (file) {
+        proj.name = file;
+        pushRecent(proj.name, data);
+        toast("saved as: " + file);
+        renderTimelineStatus();
+      }
+    });
+    return;
+  }
   const name = prompt("Save Project As:", proj.name);
   if (!name) return;
   proj.name = name.endsWith(".myproj") ? name : name + ".myproj";
@@ -5237,6 +5258,19 @@ window.uiSaveAs = function () {
   renderTimelineStatus();
 };
 window.uiOpen = function () {
+  if (TV) {
+    TV.openProject().then(async file => {
+      if (!file) return;
+      const json = await TV.readFile(file);
+      if (json === null) { toast("could not read " + file); return; }
+      try {
+        openProjectData(json);
+        proj.name = file; pushRecent(proj.name, json);
+        toast("opened " + file);
+      } catch (e) { toast("open failed: " + e.message); }
+    });
+    return;
+  }
   const inp = document.createElement("input");
   inp.type = "file"; inp.accept = ".myproj,application/json";
   inp.onchange = () => {
@@ -5290,6 +5324,11 @@ window.exportFrame = function () {
   const a = document.createElement("a");
   a.href = out.toDataURL("image/png");
   a.download = `frame_${String(proj.currentFrame).padStart(4, "0")}.png`;
+  if (TV) {
+    TV.exportFile(a.download, a.href, [{ name: "PNG image", extensions: ["png"] }])
+      .then(file => toast(file ? "exported " + file : "export cancelled"));
+    return;
+  }
   a.click();
   toast("exported " + a.download);
 };

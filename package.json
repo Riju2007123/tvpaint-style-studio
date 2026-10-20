@@ -2,7 +2,15 @@
   "name": "my-version",
   "version": "0.1.0",
   "description": "TVPaint-style animation studio prototype (rebuilt from REA evidence)",
+  "main": "main.js",
   "scripts": {
-    "test": "node test/engine.test.js"
+    "test": "node test/engine.test.js",
+    "start": "electron .",
+    "dist": "electron-packager . \"my-version\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --prune=true",
+    "dist:dir": "electron-packager . \"my-version\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --prune=true"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18",
+    "electron": "^44.9.2"
   }
 }

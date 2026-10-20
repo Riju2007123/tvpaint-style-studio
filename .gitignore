@@ -1,14 +1,6 @@
-# node
-node_modules/
+﻿node_modules/
+dist/
 npm-debug.log*
 package-lock.json
-
-# OS / editor
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-
-# local runtime junk
 *.log
 tmp/

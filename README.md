@@ -1,11 +1,30 @@
 # TVPaint-style Space — my-version
 
-A browser-based prototype of the TVPaint Animation 12 workflow: drawing engine,
+A desktop rebuild of the TVPaint Animation 12 workflow: drawing engine,
 timeline with TVPaint-accurate animation cells, camera system, George scripting —
 rebuilt feature-by-feature with reverse-engineering evidence (see REA notes in the
 project root documentation).
 
+It runs as a **native Windows application** (Electron shell) and, if you prefer,
+as a plain page in a browser.
+
 ## Run
+
+**As a desktop app** (the real thing — a native window, real file dialogs):
+
+```
+npm install
+npm start
+```
+
+**As a packaged executable** (a folder with `my-version.exe` you can copy and
+run anywhere):
+
+```
+BUILD_APP.bat
+```
+
+**As a web page** (still works, still the same code):
 
 Double-click `START_APP.bat` (starts the server and opens http://localhost:8471),
 or serve the folder any static way:
@@ -20,12 +39,15 @@ Works from `file://` too — just open `index.html`.
 
 | File | Role |
 |---|---|
+| `main.js` | the desktop shell: the 1936x1048 window, the real File dialogs, the PNG export dialog |
+| `preload.js` | the bridge between the page and the shell (`window.tv`) |
 | `index.html` | Shell: menubar, panels, timeline, transport, statusbar, CSS ported from TVPaint's shipped `colorschemes/Night.ini` values |
 | `engine.js` | Pure logic: frames/exposures, stroke engine, wet pickup, gradient flood, camera keys/paths, George handlers |
 | `ui.js` | Wiring: dialogs, panels, timeline render, live-paint stroke loop, selection/cut brush |
 | `serve.js` | Tiny static server (port 8471) |
 | `test/engine.test.js` | Node test suite (no dependencies) |
-| `icons/` | UI icon set |
+| `tools/make-icon.js` | Builds `build.ico` (16/32/48/256) for the executable |
+| `icons/` | UI icon set (TVPaint's own light resources) |
 
 ## Features (verified)
 
