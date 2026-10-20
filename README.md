@@ -80,15 +80,17 @@ Works from `file://` too — just open `index.html`.
   ratio and a larger *Drawing Area*) or by picking the **Camera** tool in the
   Main Panel, which adds the camera to the current project. The live app then
   shows a `Camera Layer` row and a `Speed curve` row above the layer list, a
-  camera row at the top of the timeline (green key marks in both rulers, a
-  yellow `+` on the current frame) and switches the tool panel to
-  `Tool : Camera[Pro]` with the camera options (Command, Lock All, See
-  bookmarks, Toggle all, Mode, Motion Blur, X/Y with axis locks, Modify ratio,
-  Rotation, Zoom, Flip X/Y, Parameters...). Right clicking the camera row opens
-  the captured keyframe menu - `Create keyframe` / `Delete keyframe` (each with
-  `All`, `Position`, `Rotation`, `Zoom`, `Camera size`, `Movement Type`),
-  `Adjust the layer to the animation`, `Cut keyframe` / `Copy keyframe` /
-  `Paste keyframe` and `Invert all keys` (inverts the camera path).
+  camera row at the top of the timeline (a thin strip where every camera key
+  is a `+` glyph - yellow on the current image, grey elsewhere - and the `+`
+  can be **dragged with the left mouse button to move the keyframe**), and
+  switches the tool panel to `Tool : Camera[Pro]` with the camera options
+  (Command, Lock All, See bookmarks, Toggle all, Mode, Motion Blur, X/Y with
+  axis locks, Modify ratio, Rotation, Zoom, Flip X/Y, Parameters...). Right
+  clicking the camera row opens the captured keyframe menu - `Create keyframe` /
+  `Delete keyframe` (each with `All`, `Position`, `Rotation`, `Zoom`,
+  `Camera size`, `Movement Type`), `Adjust the layer to the animation`,
+  `Cut keyframe` / `Copy keyframe` / `Paste keyframe` and `Invert all keys`
+  (inverts the camera path).
 - Layer order: the layer rows can be dragged onto each other to reorder them
   (with `Move Selected Layers` armed, the whole selection travels as a block),
   and the layer menu's `Move` submenu now carries the exact TVPaint 12 entries
@@ -130,9 +132,10 @@ Works from `file://` too — just open `index.html`.
   Color Group panes. Per-layer lock / light table / preserve-transparency /
   stencil dots, row collapse, global layer flags and image-mark ruler ticks.
 
-42 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
+43 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
 modes, add-exposure, layer order, selected-image reversal, camera
-interpolation, auto break/create flags and history (`npm test`).
+interpolation and camera key moves, auto break/create flags and history
+(`npm test`).
 
 ## Tests
 

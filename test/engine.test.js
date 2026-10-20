@@ -588,5 +588,16 @@ test("camera: keys interpolate between the camera layer range", () => {
   assert.strictEqual(r.cx, 960, "the camera is centred on the drawing area");
 });
 
+test("moveCameraKey moves a camera keyframe to another frame", () => {
+  const p = E.newProject();
+  p.cameraKeys = [E.newCameraKey(1, { x: 0 }), E.newCameraKey(9, { x: 100 })];
+  assert.strictEqual(E.moveCameraKey(p, 9, 13), true);
+  assert.deepStrictEqual(p.cameraKeys.map(k => k.frame), [1, 13], "the key moved and the list stays sorted");
+  assert.strictEqual(p.cameraKeys[1].x, 100, "the camera value travels with the key");
+  assert.strictEqual(E.moveCameraKey(p, 13, 1), false, "a key is never written over another one");
+  assert.strictEqual(E.moveCameraKey(p, 13, 13), false, "no move onto itself");
+  assert.deepStrictEqual(p.cameraKeys.map(k => k.frame), [1, 13]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -249,7 +249,20 @@ function colorWithAlpha(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, a))})`;
 }
 
-// ---------- camera (REA: reports/decomp_0x1403f1050.c — tv_camerainfo sets
+// Move a camera keyframe to another frame (live: the "+" of a camera key can
+// be dragged with the left mouse button in the camera row of the timeline).
+function moveCameraKey(proj, from, to) {
+  const k = cameraKeyAt(proj, from);
+  if (!k) return false;
+  const t = Math.max(1, Math.round(to));
+  if (t === from) return false;
+  if (cameraKeyAt(proj, t)) return false;      // never overwrite another key
+  k.frame = t;
+  proj.cameraKeys.sort((a, b) => a.frame - b.frame);
+  return true;
+}
+
+// ---------- camera (REA: reports/decomp_0x1403f1050.c - tv_camerainfo sets
 // width/height; camera points stride 0x380 at project+0x300 carry translationX/Y,
 // rotation, scale; interpolation modes hold/linear/smooth(=bezier-smoothed)) ----------
 function newCameraKey(frame, data) {
@@ -1291,7 +1304,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     BRUSHES, DRAW_MODES, SHAPES, LAYER_LOOP_MODES, XSHEET_OPS,
     BRUSH_PROFILES, brushDefaults, activateToolBrush, gradientFill,
-    newCameraKey, cameraEvaluate, cameraRect, cameraKeyAt, setCameraKey,
+    newCameraKey, cameraEvaluate, cameraRect, cameraKeyAt, setCameraKey, moveCameraKey,
     layerLengthOp,
     newProject, newLayer, newFrame, frameSurface, makeSurface,
     resizeProject,

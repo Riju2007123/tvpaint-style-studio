@@ -1178,35 +1178,77 @@ const CAM_PRESETS = {
 };
 function dlgNewProject(modify) {
   const isCam = !!(proj.cameraKeys || []).length;
+  // Live TVPaint 12 layout (captured): Template row, Project | Project with
+  // Camera tabs, then the size block on the left, the Ratio in the middle and
+  // the Drawing Area on the right. In the camera tab the first block is the
+  // "Camera View (Final Output)" and the ratio defaults to 200 %.
+  const npField = (id, value, step, w) => `<input type="number" id="${id}" value="${value}" step="${step || 1}" style="width:${w || 92}px;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc;padding:2px 4px">`;
   const m = openModal(modify ? "Modify Project" : "New Project", `
-    ${mrow("Template:", `<select id="npTemplate" style="flex:1"><option>None</option></select>
+    ${mrow("Template:", `<select id="npTemplate" style="flex:1;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc;padding:2px 4px"><option>None</option></select>
       <button class="revbtn" onclick="toast('templates — not in this prototype')">Remove</button>`)}
-    <div class="tabs" style="margin-top:8px">
+    <div class="tabs" style="margin:6px 0 10px">
       <div class="tab ${isCam ? "" : "on"}" id="npTabPlain">Project</div>
       <div class="tab ${isCam ? "on" : ""}" id="npTabCam">Project with Camera</div></div>
-    <div id="npCamRows">
-      ${mrow("Camera View (Final Output)", `<select id="npPreset" style="flex:1">${
-        Object.keys(CAM_PRESETS).map(k => `<option>${k}</option>`).join("")}</select>`)}
-      ${mrow("Camera View", `<input type="number" id="npCamW" value="1920" min="16"> ×
-        <input type="number" id="npCamH" value="1080" min="16">`)}
-      ${mrow("Ratio", `<input type="number" id="npRatioX" value="100.00" step="0.01"> % ×
-        <input type="number" id="npRatioY" value="100.00" step="0.01"> %`)}
+    <div style="display:grid;grid-template-columns:1fr 210px 1fr;gap:14px;align-items:start">
+      <div>
+        <div id="npSizeLabel" style="color:#b6b6bc;font-size:11px;margin-bottom:4px">${isCam ? "Camera View (Final Output)" : "Project Size"}</div>
+        <select id="npPreset" style="width:100%;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc;padding:3px 4px">${
+          Object.keys(CAM_PRESETS).map(k => `<option${k === "HDTV HD 1080p" ? " selected" : ""}>${k}</option>`).join("")}</select>
+        <div style="margin-top:10px;display:grid;grid-template-columns:auto 92px auto 96px;gap:4px;align-items:center">
+          <span style="color:#b6b6bc;font-size:11px">Width</span>${npField("npCamW", isCam ? 1920 : proj.width)}
+          <span style="color:#b6b6bc;font-size:11px">x</span>${npField("npCamH", isCam ? 1080 : proj.height)}
+        </div>
+        <div style="margin-top:8px;display:grid;grid-template-columns:auto 110px;gap:4px;align-items:center">
+          <span style="color:#b6b6bc;font-size:11px">Frame Rate</span>
+          <input type="number" id="npFps" value="${proj.fps}" min="1" max="120" style="width:110px;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc;padding:2px 4px">
+        </div>
+        <div style="margin-top:8px;display:grid;grid-template-columns:auto 110px;gap:4px;align-items:center">
+          <span style="color:#b6b6bc;font-size:11px">DPI Resolution</span>
+          <input type="number" id="npDpi" value="72" min="1" style="width:110px;background:#3a3a40;border:1px solid #4a4a51;border-radius:3px;color:#c8c8cc;padding:2px 4px">
+        </div>
+      </div>
+      <div>
+        <div style="color:#b6b6bc;font-size:11px;margin-bottom:4px">Ratio</div>
+        <div style="display:grid;grid-template-columns:auto 96px;gap:4px;align-items:center;margin-top:10px">
+          <span style="color:#b6b6bc;font-size:11px">Width</span>${npField("npRatioX", isCam ? 200 : 100, 0.01, 96)}
+        </div>
+        <div style="display:grid;grid-template-columns:auto 96px;gap:4px;align-items:center;margin-top:4px">
+          <span style="color:#b6b6bc;font-size:11px">Height</span>${npField("npRatioY", isCam ? 200 : 100, 0.01, 96)}
+        </div>
+        <div style="margin-top:10px;display:grid;grid-template-columns:auto 96px;gap:4px;align-items:center">
+          <span style="color:#b6b6bc;font-size:11px">Width</span>${npField("npDpiW", 677.33, 0.01, 96)}
+        </div>
+        <div style="display:grid;grid-template-columns:auto 96px;gap:4px;align-items:center;margin-top:4px">
+          <span style="color:#b6b6bc;font-size:11px">Height</span>${npField("npDpiH", 381.00, 0.01, 96)}
+        </div>
+        <div style="margin-top:6px;color:#b6b6bc;font-size:11px">mm</div>
+      </div>
+      <div>
+        <div style="color:#b6b6bc;font-size:11px;margin-bottom:4px">Drawing Area</div>
+        <div style="margin-top:10px;display:grid;grid-template-columns:auto 92px;gap:4px;align-items:center">
+          <span style="color:#b6b6bc;font-size:11px">Width</span>${npField("npW", isCam ? 3840 : proj.width)}
+        </div>
+        <div style="display:grid;grid-template-columns:auto 92px;gap:4px;align-items:center;margin-top:4px">
+          <span style="color:#b6b6bc;font-size:11px">Height</span>${npField("npH", isCam ? 2160 : proj.height)}
+        </div>
+        <div style="margin-top:14px;display:grid;grid-template-columns:auto 1fr;gap:6px;align-items:center">
+          <span style="color:#b6b6bc;font-size:11px">Load Library File</span>
+          <button class="revbtn" onclick="toast('libraries — not in this prototype')">Browse</button>
+        </div>
+      </div>
     </div>
-    ${mrow("Frame Rate", `<input type="number" id="npFps" value="${proj.fps}" min="1" max="120"> fps`)}
-    ${mrow("Drawing Area", `<input type="number" id="npW" value="${proj.width}" min="16">
-      × <input type="number" id="npH" value="${proj.height}" min="16"> px`)}
-    ${mrow("DPI Resolution", `<input type="number" id="npDpi" value="72" min="1"> dpi`)}
-    ${mrow("Load Library File", `<button class="revbtn" onclick="toast('libraries — not in this prototype')">Browse</button>`)}
   `, [[modify ? "Modify" : "New Project", () => {
-    const camTab = document.getElementById("npTabCam").classList.contains("on");
-    const w = Math.max(16, +document.getElementById("npW").value || 512);
-    const h = Math.max(16, +document.getElementById("npH").value || 512);
-    const fps = Math.max(1, +document.getElementById("npFps").value || 24);
+    const camTab = m.querySelector("#npTabCam").classList.contains("on");
+    const w = Math.max(16, +m.querySelector("#npW").value || 512);
+    const h = Math.max(16, +m.querySelector("#npH").value || 512);
+    const fps = Math.max(1, +m.querySelector("#npFps").value || 24);
+    const vw = Math.max(16, +m.querySelector("#npCamW").value || w);
+    const vh = Math.max(16, +m.querySelector("#npCamH").value || h);
     if (modify) {
       E.resizeProject(proj, w, h);
       proj.fps = fps;
       if (camTab) {
-        proj.cameraView = { w: +document.getElementById("npCamW").value || w / 2, h: +document.getElementById("npCamH").value || h / 2 };
+        proj.cameraView = { w: vw, h: vh };
         if (!proj.cameraKeys) proj.cameraKeys = [E.newCameraKey(1, {})];
       }
       ghostTmp = E.makeSurface(w, h);
@@ -1218,7 +1260,7 @@ function dlgNewProject(modify) {
     proj.name = "Untitled_(1)";
     proj.layers.forEach((l, i) => { l.name = "Anim_0" + (i + 1); });
     if (camTab) {
-      proj.cameraView = { w: +document.getElementById("npCamW").value || w / 2, h: +document.getElementById("npCamH").value || h / 2 };
+      proj.cameraView = { w: vw, h: vh };
       proj.cameraKeys = [E.newCameraKey(1, {})];   // camera layer present from frame 1
       toast("project with camera");
     } else { proj.cameraView = null; proj.cameraKeys = null; }
@@ -1226,20 +1268,46 @@ function dlgNewProject(modify) {
     sel = null; cutBrush = null;
     fitView(); syncFpsSel(); syncToolPanel(); renderTimelineStatus(); renderAll();
   }, true], ["Cancel", () => {}]]);
-  // preset select fills camera w/h
+  // preset select fills the camera view / project size
   m.querySelector("#npPreset").onchange = (e) => {
     const [w, h] = CAM_PRESETS[e.target.value];
-    if (w) { m.querySelector("#npCamW").value = w; m.querySelector("#npCamH").value = h; }
+    if (w) {
+      m.querySelector("#npCamW").value = w; m.querySelector("#npCamH").value = h;
+      if (m.querySelector("#npTabCam").classList.contains("on")) {
+        m.querySelector("#npW").value = w * 2; m.querySelector("#npH").value = h * 2;
+      } else {
+        m.querySelector("#npW").value = w; m.querySelector("#npH").value = h;
+      }
+    }
   };
+  // the ratio follows the drawing area / the view (200 % = a twice as large
+  // drawing area, exactly what the live camera tab shows)
   const syncRatio = () => {
+    const camTab = m.querySelector("#npTabCam").classList.contains("on");
     const cw = +m.querySelector("#npCamW").value || 1, ch = +m.querySelector("#npCamH").value || 1;
     const dw = +m.querySelector("#npW").value || 1, dh = +m.querySelector("#npH").value || 1;
-    m.querySelector("#npRatioX").value = (cw / dw * 100).toFixed(2);
-    m.querySelector("#npRatioY").value = (ch / dh * 100).toFixed(2);
+    m.querySelector("#npRatioX").value = (dw / cw * 100).toFixed(2);
+    m.querySelector("#npRatioY").value = (dh / ch * 100).toFixed(2);
+    m.querySelector("#npRatioX").readOnly = !camTab;
+    m.querySelector("#npRatioY").readOnly = !camTab;
   };
   ["#npCamW", "#npCamH", "#npW", "#npH"].forEach(sel2 => m.querySelector(sel2).oninput = syncRatio);
-  m.querySelector("#npTabPlain").onclick = () => { m.querySelector("#npTabCam").classList.remove("on"); m.querySelector("#npTabPlain").classList.add("on"); };
-  m.querySelector("#npTabCam").onclick = () => { m.querySelector("#npTabPlain").classList.remove("on"); m.querySelector("#npTabCam").classList.add("on"); };
+  const setTab = (cam) => {
+    m.querySelector("#npTabCam").classList.toggle("on", cam);
+    m.querySelector("#npTabPlain").classList.toggle("on", !cam);
+    m.querySelector("#npSizeLabel").textContent = cam ? "Camera View (Final Output)" : "Project Size";
+    if (cam) {
+      m.querySelector("#npCamW").value = 1920; m.querySelector("#npCamH").value = 1080;
+      m.querySelector("#npW").value = 3840; m.querySelector("#npH").value = 2160;
+    } else {
+      m.querySelector("#npCamW").value = proj.width; m.querySelector("#npCamH").value = proj.height;
+      m.querySelector("#npW").value = proj.width; m.querySelector("#npH").value = proj.height;
+    }
+    syncRatio();
+  };
+  m.querySelector("#npTabPlain").onclick = () => setTab(false);
+  m.querySelector("#npTabCam").onclick = () => setTab(true);
+  syncRatio();
 }
 
 // ---------- Increase Layer Length dialog (REA screenshot: Stretch / Interpolate
@@ -1807,16 +1875,26 @@ function renderTimeline() {
   let th = `<div class="ttopspacer" style="height:${topPad}px"></div><div class="ruler" id="rulerRow">${ticks}${mkBands}</div>`;
   // camera-layer strip: the "+" marks ARE the camera key frames (user-verified)
   if (camOn) {
+    // Live camera row: every camera key is a thin "+" glyph (yellow while it is
+    // the current image), the keys are framed by the camera layer range and the
+    // "+" can be dragged with the left mouse button to move the key.
     const camKeyFrames = new Set((proj.cameraKeys || []).map(k => Math.round(k.frame)));
+    const camFirst = Math.min(...(proj.cameraKeys || []).map(k => Math.round(k.frame)));
+    const camLast = Math.max(...(proj.cameraKeys || []).map(k => Math.round(k.frame)));
     let camCells = "";
     for (let f = 1; f <= maxF; f++) {
       const isKey = camKeyFrames.has(f);
-      // the yellow + sits on the current frame, the key frames carry a green mark
-      const plus = `<button class="plus${f === proj.currentFrame ? " always" : ""}" data-camf="${f}" title="${isKey ? "camera key frame" : "add camera key here"}">+</button>`;
-      const mark = isKey ? `<i class="camkeymark"></i>` : "";
-      camCells += `<div class="cell camcell${isKey ? " keyw" : ""}" data-f="${f}" data-l="cam">${mark}${plus}</div>`;
+      const cur = f === proj.currentFrame;
+      const glyph = isKey
+        ? `<i class="camplus${cur ? " cur" : ""}" data-camkey="${f}" title="camera key frame - drag to move">+</i>`
+        : "";
+      const add = (!isKey && cur)
+        ? `<button class="plus always" data-camf="${f}" title="add camera key here">+</button>` : "";
+      camCells += `<div class="cell camcell${isKey ? " keyw" : ""}" data-f="${f}" data-l="cam">${glyph}${add}</div>`;
     }
-    th += `<div class="strip cam"><div class="cells">${camCells}</div></div>`;
+    const range = (camKeyFrames.size && camLast > camFirst)
+      ? `<div class="camrange" style="left:${(camFirst - 1) * CW}px;width:${(camLast - camFirst + 1) * CW}px"></div>` : "";
+    th += `<div class="strip cam"><div class="cells">${camCells}</div>${range}</div>`;
   }
   proj.layers.forEach((l, li) => {
     const sel = li === proj.currentLayer;
@@ -1916,6 +1994,10 @@ function renderTimeline() {
   // clicking the camera row jumps the playhead to that frame
   track.querySelectorAll(".cell[data-l='cam']").forEach(c => {
     c.onclick = (ev) => { if (ev.button === 0) gotoFrame(+c.dataset.f, proj.currentLayer); };
+  });
+  // dragging the "+" of a camera key moves the keyframe (live behaviour)
+  track.querySelectorAll(".camplus").forEach(g => {
+    g.onpointerdown = (e) => beginCamKeyDrag(e, +g.dataset.camkey);
   });
   // ruler numbers are clickable in TVPaint: click a number to jump to that frame
   track.querySelectorAll(".ruler .tick").forEach(tk => {
@@ -3009,6 +3091,39 @@ function flipCurrentImage(mode) {
 }
 // ---- camera keyframe menu (captured live in TVPaint 12) ----
 let cameraKeyClip = null;
+// Drag the "+" of a camera key in the camera row: the keyframe moves to the
+// frame under the pointer (live TVPaint 12).
+function beginCamKeyDrag(e, frame) {
+  if (e.button !== 0 || e.pointerType === "touch") return;
+  e.preventDefault();
+  e.stopPropagation();
+  const startX = e.clientX;
+  let moved = false, target = frame;
+  const glyphs = [...document.querySelectorAll(".camplus")];
+  const move = (ev) => {
+    const dx = ev.clientX - startX;
+    if (!moved && Math.abs(dx) < 4) return;
+    moved = true;
+    target = Math.max(1, frame + Math.round(dx / CW));
+    glyphs.forEach(g => g.classList.toggle("drag", +g.dataset.camkey === frame));
+    const g = document.querySelector(`.camplus[data-camkey="${target}"]`);
+    if (g) g.classList.add("drop");
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    glyphs.forEach(g => g.classList.remove("drag", "drop"));
+    if (!moved || target === frame) return;
+    if (E.moveCameraKey(proj, frame, target)) {
+      renderAll();
+      toast("camera key moved to " + target);
+    } else {
+      toast("there is already a camera key at " + target);
+    }
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
 function camKeyPart(f, part, create) {
   if (create) {
     const cur = E.cameraEvaluate(proj, f);

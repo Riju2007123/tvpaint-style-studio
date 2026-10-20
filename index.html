@@ -230,7 +230,17 @@
   .camrow.speed .nm { color: #a8a8ae; }
   /* camera key frames: green mark in the rulers and in the camera row */
   .tick .camkeymark { position: absolute; left: 0; bottom: 0; width: 100%; height: 2px; background: #4f9a5a; }
-  .cell.camcell .camkeymark { position: absolute; left: 2px; top: 2px; width: 7px; height: 7px; background: #4f9a5a; }
+  /* live camera row: a thin "+" glyph per camera key, yellow on the current image */
+  .cell.camcell .camplus { position: absolute; left: 50%; top: 10px; transform: translate(-50%, -50%);
+    font-size: 15px; line-height: 1; font-style: normal; color: #c9c9cf; z-index: 3; cursor: grab; }
+  .cell.camcell .camplus.cur { color: #e3d24a; }
+  .cell.camcell .camplus.drag { color: #9fd0ff; }
+  .cell.camcell .camplus.drop { color: #e3d24a; }
+  .strip.cam { height: 20px; }
+  .strip.cam .cell { height: 20px; }
+  .strip.cam .cell .plus { color: #e3d24a; }
+  .strip.cam .camrange { position: absolute; top: 1px; bottom: 1px; border: 1px solid #5a5a61;
+    border-left-width: 0; border-right-width: 0; z-index: 1; pointer-events: none; }
   .cell.camcell.keyw::before { content: ""; position: absolute; left: 0; top: 0; width: var(--cw, 40px); height: 40px;
     background: linear-gradient(#2B2B30, #3A3A3F 42%, #3A3A3F 58%, #2B2B30); z-index: 0; }
   #tlTrack { overflow: auto; position: relative; display: flex; flex-direction: column;
@@ -372,6 +382,7 @@
   .tlfoot .ftfit { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 3px; color: #c9c9cf;
     font-size: 10px; height: 15px; padding: 0 5px; cursor: pointer; }
   .tlfoot .ftfit:hover { border-color: #6a8fae; color: #fff; }
+  input[readonly] { opacity: .45; }
   /* ---- status ---- */
   #statusbar { background: #2D2D32; display: flex; align-items: center; gap: 0;
     padding: 0 8px; color: #b0b0b6; font-size: 11px; border-top: 1px solid #2B2B30; }
@@ -524,7 +535,7 @@
   IMAGE_ROLES, BLEND_MODES, frameEndOf, layerKeys, layerEnd,
   shiftKeys, insertImages, duplicateImages, deleteImageAt, deleteFrameColumn,
   setExposureValue, removeExposures, layerHasGaps, repeatImages, slideLayer, alignLayer,
-  reverseSelectedImages, addExposureAt, moveLayerTo, moveLayerBy, moveLayersTo,
+  reverseSelectedImages, addExposureAt, moveLayerTo, moveLayerBy, moveLayersTo, moveCameraKey,
   bringLayersTogether, reverseLayerOrder,
   setImageMark, nextImageMark };</script>
 <script src="ui.js"></script>
