@@ -80,6 +80,7 @@ function newProject(w, h, fps) {
       { name: "Orange", color: "#c07a3a" }
     ],
     showRoles: false, roleLayerOnly: false,
+    timelineTC: false,
     loopLimits: { mode: "mark", start: 1, end: null },
     selectedLayers: [0]
   };

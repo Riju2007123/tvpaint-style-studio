@@ -227,9 +227,10 @@
     z-index: 6; border-bottom: 1px solid #2B2B30; }
   .ruler.bot { border-bottom: 0; border-top: 1px solid #2B2B30; position: sticky; bottom: 0;
     top: auto; z-index: 6; }
-  .ruler .tick { width: 40px; min-width: 40px; flex: none; font-size: 11px; color: #a4a4aa;
-    position: relative; padding: 1px 0 0 4px; box-sizing: border-box; }
+  .ruler .tick { width: var(--cw, 40px); min-width: var(--cw, 40px); flex: none; font-size: 11px;
+    color: #a4a4aa; position: relative; padding: 1px 0 0 4px; box-sizing: border-box; }
   .ruler .tick.cur { background: #3E476B; color: #fff; }
+  .ruler .tick.tc { font-size: 9px; padding-left: 2px; letter-spacing: -.2px; overflow: hidden; }
   .ruler .tick.in { color: #7fae7f; }
   .ruler .band { position: absolute; bottom: 0; height: 2px; background: #3d6fd9; pointer-events: none; }
   .ruler .band.green { background: #4f7a4a; }
@@ -239,18 +240,18 @@
     border-bottom: 1px solid #2B2B30; box-sizing: border-box; }
   .strip.sel { background: #3C3C43; }
   .strip .cells { display: flex; height: 40px; flex: none; }
-  .cell { width: 40px; min-width: 40px; flex: none; height: 40px; position: relative;
+  .cell { width: var(--cw, 40px); min-width: var(--cw, 40px); flex: none; height: 40px; position: relative;
     cursor: pointer; background: transparent; border: 0; }
-  .cell.keyw::before { content: ""; position: absolute; left: 0; top: 0; width: 40px; height: 40px;
+  .cell.keyw::before { content: ""; position: absolute; left: 0; top: 0; width: var(--cw, 40px); height: 40px;
     background: linear-gradient(#2B2B30, #3A3A3F 42%, #3A3A3F 58%, #2B2B30);
     box-shadow: inset 0 1px 0 #77777d; z-index: 0; }
-  .cell .cellimg { position: absolute; left: 0; top: 9px; width: 40px; height: 22px;
+  .cell .cellimg { position: absolute; left: 0; top: 9px; width: var(--cw, 40px); height: 22px;
     background: #fff; border-top: 1px solid #C9C9CE; border-bottom: 1px solid #C9C9CE;
     box-sizing: border-box; z-index: 2; }
   .cell .cellimg.empty { background: repeating-conic-gradient(#cfcfcf 0% 25%, #f2f2f2 0% 50%) 0 0 / 8px 8px; }
-  .cell .cellimg canvas { display: block; width: 40px; height: 22px; }
-  .cell.hold::after { content: ""; position: absolute; left: 50%; top: 20px; width: 16px; height: 2px;
-    transform: translate(-50%, -50%); background: #6a6a70; z-index: 1; }
+  .cell .cellimg canvas { display: block; width: var(--cw, 40px); height: 22px; }
+  .cell.hold::after { content: ""; position: absolute; left: 50%; top: 20px; width: 40%; max-width: 16px;
+    height: 2px; transform: translate(-50%, -50%); background: #6a6a70; z-index: 1; }
   .cell.insel { box-shadow: inset 0 0 0 1px #6f8fe8; }
   .cell .knum { position: absolute; left: 2px; top: 40px; font-size: 10px; color: #b0b0b6; z-index: 3; }
   .cell .empin { position: absolute; left: 50%; top: 20px; transform: translate(-50%, -50%);
@@ -351,6 +352,12 @@
     color: #b6b6bc; font-size: 11px; padding: 0 4px; width: 160px; height: 18px; box-sizing: border-box; }
   .tlfoot .ftresize { margin-left: 9px; width: 15px; height: 15px; opacity: .8; cursor: ns-resize;
     filter: invert(.4); }
+  .tlfoot .ftright { margin-left: auto; display: flex; align-items: center; gap: 5px; padding-right: 3px; }
+  .tlfoot .ftzoom { width: 16px; height: 16px; cursor: ew-resize; opacity: .85; }
+  .tlfoot .ftzoom:hover { opacity: 1; }
+  .tlfoot .ftfit { background: #3a3a40; border: 1px solid #4a4a51; border-radius: 3px; color: #c9c9cf;
+    font-size: 10px; height: 15px; padding: 0 5px; cursor: pointer; }
+  .tlfoot .ftfit:hover { border-color: #6a8fae; color: #fff; }
   /* ---- status ---- */
   #statusbar { background: #2D2D32; display: flex; align-items: center; gap: 0;
     padding: 0 8px; color: #b0b0b6; font-size: 11px; border-top: 1px solid #2B2B30; }

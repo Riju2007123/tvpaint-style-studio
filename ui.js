@@ -3,8 +3,11 @@
    status bar. Same engine + stylus-safe input as v3. */
 "use strict";
 const E = window.Engine;
-// timeline cell width in px (TVPaint's timeline at 1920px shows ~40px frames)
-const CW = 40;
+// timeline cell width in px (TVPaint's timeline at 1920px shows ~40px frames).
+// The footer's interactive zoom ratio and Fit popup change this at runtime; the
+// CSS reads the same value through the --cw custom property on #tlTrack.
+let CW = 40;
+const TL_CW_MIN = 8, TL_CW_MAX = 120;
 
 let proj = E.newProject(512, 512, 24);
 proj.name = "Untitled_(1)";
@@ -1333,8 +1336,117 @@ function cellSlideUp() {
   renderAll();
   toast("layer shifted " + (actual > 0 ? "+" : "") + actual);
 }
+// ---- timeline zoom ratio + Fit popup ----
+// Time code for a frame (the timeline ruler can switch between frame numbers
+// and time code; loc 25317).
+function frameTimeCode(f) {
+  const fps = Math.max(1, proj.fps || 24);
+  const n = Math.max(0, Math.round(f) - 1);
+  const ff = n % fps;
+  const total = Math.floor(n / fps);
+  const p = (v, w) => String(v).padStart(w, "0");
+  return `${p(Math.floor(total / 3600), 2)}:${p(Math.floor(total / 60) % 60, 2)}:${p(total % 60, 2)}:${p(ff, 2)}`;
+}
+// loc 25331 "Interactive Zoom Ratio - Click and drag on this icon to
+// interactively change the zoom level on the timeline." and loc 25330
+// "Fit popup - Allows user to fit the clip to the timeline window. Also allows
+// for fitting to keys and selections." The popup entries are the loc strings
+// 25001..25008 (Fit to Clip / Layer / Selection / Frames / Keys / Sound /
+// View All / Exposures) plus the v12 "Fit to Mark In-Mark Out".
+function setTimelineZoom(px, centerFrame) {
+  const track = $("tlTrack");
+  const next = Math.max(TL_CW_MIN, Math.min(TL_CW_MAX, Math.round(px)));
+  const changed = next !== CW;
+  CW = next;
+  if (track) track.style.setProperty("--cw", CW + "px");
+  if (changed) renderAll();
+  if (track) {
+    const f = centerFrame || proj.currentFrame;
+    track.scrollLeft = Math.max(0, (f - 1) * CW - track.clientWidth / 2 + CW / 2);
+  }
+}
+function startTimelineZoomDrag(e) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const startX = e.clientX, startCW = CW;
+  let raf = 0, next = CW;
+  const move = (ev) => {
+    next = startCW + (ev.clientX - startX) * 0.4;
+    if (raf) return;
+    raf = requestAnimationFrame(() => { raf = 0; setTimelineZoom(next, proj.currentFrame); });
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    setTimelineZoom(next, proj.currentFrame);
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+function timelineZoomStep(dir) {
+  setTimelineZoom(dir > 0 ? CW * 1.25 : CW / 1.25, proj.currentFrame);
+}
+function fitTimelineRange(a, b, pad) {
+  const track = $("tlTrack");
+  const avail = Math.max(120, ((track && track.clientWidth) || 800) - 12);
+  a = Math.max(1, Math.round(a));
+  b = Math.max(a, Math.round(b));
+  const frames = (b - a + 1) + 2 * (pad == null ? 1 : pad);
+  const cw = Math.max(TL_CW_MIN, Math.min(TL_CW_MAX, Math.floor(avail / frames)));
+  setTimelineZoom(cw, Math.round((a + b) / 2));
+}
+function fitMenuItems() {
+  const l = tvCurrentLayer();
+  const keys = l ? E.layerKeys(l) : [];
+  const selKeys = l ? selectedImageKeys(l) : [];
+  const layerEnd = l ? E.layerEnd(l) : 1;
+  const viewAll = Math.max(1, ...proj.layers.map(x => E.layerEnd(x)));
+  const marks = [proj.inFrame, Math.max(proj.outFrame, proj.inFrame)];
+  return [
+    { label: "Fit to Clip", action: () => fitTimelineRange(1, Math.max(proj.outFrame, 1)) },
+    { label: "Fit to Layer", action: () => fitTimelineRange(keys[0] || 1, layerEnd) },
+    { label: "Fit to Selection", disabled: !selKeys.length,
+      action: () => fitTimelineRange(selKeys[0], selKeys[selKeys.length - 1]) },
+    { label: "Fit to Frames", action: () => fitTimelineRange(marks[0], marks[1]) },
+    { label: "Fit to Keys", action: () => fitTimelineRange(keys[0] || 1, keys[keys.length - 1] || 1) },
+    { label: "Fit to Sound", disabled: true, action: () => {} },
+    { sep: true },
+    { label: "Fit to View All", action: () => fitTimelineRange(1, viewAll) },
+    { label: "Fit to Exposures", action: () => fitTimelineRange(keys[0] || 1, layerEnd) },
+    { sep: true },
+    { label: "Fit to Mark In-Mark Out", action: () => fitTimelineRange(marks[0], marks[1]) }
+  ];
+}
+function openFitPopup(anchor) {
+  const r = anchor.getBoundingClientRect();
+  openTvMenu(fitMenuItems(), r.left, r.top);
+}
+// Right-click on the timeline ruler / strip background: the "Timeline: ..."
+// command family from the shipped loc (Zoom In/Out, the Fit popup entries,
+// role visibility, expand/collapse and the frame-number / time-code switch).
+function timelineMenu(mx, my) {
+  const l = tvCurrentLayer();
+  openTvMenu([
+    { label: "Zoom In", action: () => timelineZoomStep(1) },
+    { label: "Zoom Out", action: () => timelineZoomStep(-1) },
+    { sep: true },
+    ...fitMenuItems(),
+    { sep: true },
+    { label: "Show-Hide Roles on Timeline", checked: !!proj.showRoles,
+      action: () => { proj.showRoles = !proj.showRoles; renderAll(); } },
+    { label: "Show-Hide Roles on Current Layer only", checked: !!proj.roleLayerOnly,
+      action: () => { proj.roleLayerOnly = !proj.roleLayerOnly; renderAll(); } },
+    { sep: true },
+    { label: l && l.collapsed ? "Expand Current Layer" : "Collapse Current Layer",
+      action: () => collapseLayer(proj.currentLayer) },
+    { label: "Toggle Frames/Time Code", checked: !!proj.timelineTC,
+      action: () => { proj.timelineTC = !proj.timelineTC; renderAll(); } }
+  ], mx, my);
+}
 function renderTimeline() {
   const left = $("tlLeft"), track = $("tlTrack");
+  if (track) track.style.setProperty("--cw", CW + "px");
   // the ruler always fills the visible track (TVPaint shows empty frames past the
   // clip end), then grows with the project or the playhead
   const visFrames = Math.max(2, 2 * Math.floor(((track && track.clientWidth) || 800) / (2 * CW)));
@@ -1441,7 +1553,15 @@ function renderTimeline() {
   };
   track.oncontextmenu = (e) => {
     const c = e.target.closest(".cell[data-f]");
-    if (!c) return;
+    if (!c) {
+      // right-click on the ruler or on a layer strip (not on a cell): the
+      // timeline command menu (loc "Timeline: ..." command family)
+      if (e.target.closest(".ruler") || e.target.closest(".strip") || e.target.closest(".tlspacer")) {
+        e.preventDefault();
+        timelineMenu(e.clientX, e.clientY);
+      }
+      return;
+    }
     const li = +c.dataset.l;
     if (isNaN(li)) return;
     e.preventDefault();
@@ -1460,12 +1580,16 @@ function renderTimeline() {
   // track: top ruler + one 64 px row per layer + flexible filler + bottom ruler
   const lastUsed = Math.max(1, ...proj.layers.map(l => E.layerEnd(l)));
   const inF = proj.inFrame, outF = Math.max(proj.outFrame, inF);
-  // one tick per frame (40 px); numbers on odd frames like TVPaint; current frame = blue tick
+  // one tick per frame; numbers on odd frames like TVPaint; current frame = blue tick
+  // (loc 25317 "Display number/Time Code - Click here to switch display between
+  // number of fields or frames and Time Code.")
+  const tcMode = !!proj.timelineTC && CW >= 56;
   let ticks = "";
   for (let f = 1; f <= maxF; f++) {
     const mk = proj.showMarks !== false && proj.layers.some(l => l.marks && l.marks[f]);
     const cls = [f === proj.currentFrame ? "cur" : "", f === proj.inFrame ? "in" : "", mk ? "mark" : ""].join(" ");
-    ticks += `<div class="tick ${cls}" data-tf="${f}">${f % 2 === 1 ? f : ""}</div>`;
+    const label = tcMode ? frameTimeCode(f) : (f % 2 === 1 ? f : "");
+    ticks += `<div class="tick ${cls}${tcMode ? " tc" : ""}" data-tf="${f}" title="go to image ${f} (${frameTimeCode(f)})">${label}</div>`;
   }
   // info row (REA/status format): Project / Clip / Layer-count includes camera / Current Image
   const info = $("tlInfoRow");
@@ -1754,7 +1878,7 @@ function renderTimeline() {
     const surf = k !== null ? l.frames[k].canvas : null;
     if (surf && surf.getContext) c.drawImage(surf, 0, 0, 52, 26);
   });
-  // key-cell thumbnails: 40 x 22 beveled drawing previews (checkerboard when empty)
+  // key-cell thumbnails: beveled drawing previews (checkerboard when empty)
   track.querySelectorAll(".cell.keyw").forEach(cell => {
     const f = +cell.dataset.f, li = +cell.dataset.l;
     const l = proj.layers[li];
@@ -1763,10 +1887,11 @@ function renderTimeline() {
     const surf = l.frames[f] && l.frames[f].canvas;
     if (!surf || !surf.getContext || frameIsEmpty(l.frames[f])) { img.classList.add("empty"); return; }
     const c = document.createElement("canvas");
-    c.width = 40; c.height = 22;
+    const tw = Math.max(8, Math.round(CW)), th = 22;
+    c.width = tw; c.height = th;
     const cc = c.getContext("2d");
-    cc.fillStyle = "#fff"; cc.fillRect(0, 0, 40, 22);
-    cc.drawImage(surf, 0, 0, 40, 22);
+    cc.fillStyle = "#fff"; cc.fillRect(0, 0, tw, th);
+    cc.drawImage(surf, 0, 0, tw, th);
     img.appendChild(c);
   });
   // footer: Notes/Sound/Color Group sit in the left column on the same row as the
@@ -1780,6 +1905,11 @@ function renderTimeline() {
       <input id="ftStartVal" class="ftnum" type="number" min="0" value="${proj.startFrame ?? 1}">
       <span class="ftclock" title="Start frame of the project">◷</span>
       <img class="ftresize" src="icons/Timeline-Resize-x20.png" title="drag up/down to resize the timeline">
+      <span class="ftright">
+        <img id="ftZoom" class="ftzoom" src="icons/LayerZoomRatio-x20.png"
+          title="Interactive Zoom Ratio&#10;Click and drag on this icon to interactively&#10;change the zoom level on the timeline.">
+        <button id="ftFit" class="ftfit" title="Fit popup&#10;Allows user to fit the clip to the timeline window.&#10;Also allows for fitting to keys and selections.">Fit</button>
+      </span>
     </div>`;
   const leftFoot = document.createElement("div");
   leftFoot.className = "lfrow1";
@@ -1804,6 +1934,10 @@ function renderTimeline() {
     const clk = foot.querySelector(".ftclock");
     if (clk) clk.onclick = () => startFrameMenu();
     foot.querySelector(".ftresize").onpointerdown = (e) => startTlResize(e);
+    const zoomIcon = foot.querySelector("#ftZoom");
+    if (zoomIcon) zoomIcon.onpointerdown = (e) => startTimelineZoomDrag(e);
+    const fitBtn = foot.querySelector("#ftFit");
+    if (fitBtn) fitBtn.onclick = (e) => openFitPopup(e.currentTarget);
     syncPaneTabs();
   }
   // in/out scrub bar (real: clip 1..outFrame, per-frame tick lines, blue current

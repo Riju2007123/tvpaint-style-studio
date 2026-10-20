@@ -62,6 +62,16 @@ Works from `file://` too — just open `index.html`.
   restored `Define Loop Limits` entry at the bottom. `Select Image from Key` is
   grayed at a key start, matching the live menu; it is enabled on a hold and
   selects the held image at its key start.
+- Timeline zoom and fit: the timeline footer carries TVPaint's interactive
+  zoom ratio (shipped `LayerZoomRatio` icon, drag left/right to change the frame
+  width) and a `Fit` popup with the shipped loc entries `Fit to Clip`, `Fit to
+  Layer`, `Fit to Selection`, `Fit to Frames`, `Fit to Keys`, `Fit to Sound`,
+  `Fit to View All`, `Fit to Exposures` and `Fit to Mark In-Mark Out`. Right
+  clicking the ruler or a layer strip opens the `Timeline:` command menu
+  (zoom in/out, the fit entries, role visibility, expand/collapse and the
+  frame-number / time-code switch). The ruler can display SMPTE-style time code
+  (`00:00:00:00` at frame 1). Cell width is a live CSS variable, so every
+  timeline gesture (exposure ripple, trim, slide, selection) follows the zoom.
 - Image selection and multi-image clipboard: plain cell clicks clear the
   selection, Shift-click extends a key range from the anchor, Ctrl-click toggles
   one key, `Select All` (Ctrl A) selects every key on the current layer, and a
