@@ -100,7 +100,11 @@ Works from `file://` too — just open `index.html`.
   with its four corner squares, the centre square and the horizontal line to the
   right edge. `Project > Render Camera` renders the camera view of every frame
   into a new project (`Into a New Project` / `Into a New merged Project`).
-- **Canvas display options**: the `Display ▾` popup of the status bar carries
+- **Canvas footer** (live layout): `Rotate the view` (LMB drag turns the view,
+  RMB opens the rotation menu), a fit button, the zoom percentage field, a
+  zoom-fit button, `−` / `+` and the `Display ▾` popup. The view can be rotated
+  and the artwork, the overlays and the camera follow it.
+- **Canvas display options**: the `Display ▾` popup of the canvas footer carries
   the live TVPaint 12 entries and their live states - `Show Stencil`,
   `Show Paper`, `Show Selection` (on), `Show Animator Disk` (on), `Show Camera`
   (on), `Follow Camera`, `Show Timeline Notes` - and they really switch the

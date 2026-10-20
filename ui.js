@@ -13,7 +13,7 @@ let proj = E.newProject(512, 512, 24);
 proj.name = "Untitled_(1)";
 proj.layers.forEach((l, i) => { l.name = "Anim_0" + (i + 1); });
 const hist = E.makeHistory(50);
-let view = { zoom: 1, x: 0, y: 0 };
+let view = { zoom: 1, x: 0, y: 0, rotate: 0 };
 let tool = "penbrush";
 let shapePts = [];
 let preview = null;
@@ -4355,6 +4355,15 @@ function buildTransport() {
         <button class="tib" id="rNext" title="Next image"><img src="icons/Remote-Goto-NextImage-x20.png"></button>
         <button class="tib" id="rPin" title="Recenter timeline"><img src="icons/Remote-Recenter-Timeline-x20.png"></button>
         <button class="tib" id="rResize" title="Drag up/down to resize the timeline"><img src="icons/Timeline-Resize-x20.png"></button>
+        <span class="tr-zoom">
+          <button class="tib" id="rRotate" title="Rotate the view&#10;Click with LMB and drag to modify view angle.&#10;Click with RMB to display rotation menu">&#8709;</button>
+          <button class="tib" id="rFitView" title="Fit the view to the window">&#8707;</button>
+          <input id="zoomField" class="zfield" value="100.00%">
+          <button class="tib" id="rZoomFit" title="Fit the zoom to the window">&#9664;&#9654;</button>
+          <button class="tib" id="rZoomOut" title="Decrease the zoom factor&#10;Zooms out on the image in the project window.">&#8722;</button>
+          <button class="tib" id="rZoomIn" title="Increase the zoom factor&#10;Zooms in on the image in the project window.">+</button>
+          <button class="minib" id="displayBtn" title="Canvas display options">Display &#9662;</button>
+        </span>
       </div>
     </div>
     <div class="tr-mark right">
@@ -4390,6 +4399,47 @@ function buildTransport() {
     if (tr) tr.scrollLeft = Math.max(0, (proj.currentFrame - 1) * CW - tr.clientWidth / 2 + CW);
   };
   $("rResize").onpointerdown = (e) => startTlResize(e);
+  const disp = $("displayBtn");
+  if (disp) disp.onclick = (e) => { e.stopPropagation(); openDisplayMenu(disp); };
+  const zf = $("zoomField");
+  if (zf) zf.onchange = (e) => {
+    const v = parseFloat(String(e.target.value).replace("%", ""));
+    if (v > 0) { view.zoom = v / 100; renderAll(); }
+    syncTransport();
+  };
+  const zi = $("rZoomIn"), zo = $("rZoomOut");
+  if (zi) zi.onclick = () => { view.zoom = Math.min(16, view.zoom * 1.25); renderAll(); syncTransport(); };
+  if (zo) zo.onclick = () => { view.zoom = Math.max(0.01, view.zoom / 1.25); renderAll(); syncTransport(); };
+  const zfit = $("rZoomFit"), vfit = $("rFitView");
+  if (zfit) zfit.onclick = () => { fitView(); syncTransport(); };
+  if (vfit) vfit.onclick = () => { fitView(); syncTransport(); };
+  const rot = $("rRotate");
+  if (rot) {
+    rot.onpointerdown = (e) => {
+      if (e.button === 2) return;
+      e.preventDefault();
+      const sx = e.clientX, sr = view.rotate || 0;
+      const mv = (ev) => { view.rotate = sr + (ev.clientX - sx) * 0.006; renderAll(); };
+      const up = () => {
+        window.removeEventListener("pointermove", mv);
+        window.removeEventListener("pointerup", up);
+        renderAll();
+      };
+      window.addEventListener("pointermove", mv);
+      window.addEventListener("pointerup", up);
+    };
+    rot.oncontextmenu = (e) => {
+      e.preventDefault();
+      const r = rot.getBoundingClientRect();
+      openTvMenu([
+        { label: "Reset", action: () => { view.rotate = 0; renderAll(); } },
+        { label: "0", action: () => { view.rotate = 0; renderAll(); } },
+        { label: "90", action: () => { view.rotate = Math.PI / 2; renderAll(); } },
+        { label: "180", action: () => { view.rotate = Math.PI; renderAll(); } },
+        { label: "270", action: () => { view.rotate = Math.PI * 1.5; renderAll(); } }
+      ], r.left, r.bottom + 2);
+    };
+  }
   const thumb = $("tsThumb");
   if (thumb) thumb.onpointerdown = (e) => startTlScroll(e);
   $("rSound").onclick = () => {
@@ -4424,6 +4474,8 @@ function syncTransport() {
   if (mo && document.activeElement !== mo) mo.value = proj.outFrame;
   if (fps && document.activeElement !== fps) fps.value = proj.fps + ' fps';
   if (z) z.textContent = (view.zoom * 100).toFixed(2) + '%';
+  const zf = $("zoomField");
+  if (zf && document.activeElement !== zf) zf.value = (view.zoom * 100).toFixed(2) + '%';
 }
 // ================= status bar (TVPaint: coords / RGBA / proxy / project info / room) =================
 function buildStatusbar() {
@@ -4431,7 +4483,7 @@ function buildStatusbar() {
     `<span id="statusXY">X:0 Y:0</span>
      <span id="rgbaLbl">R:000 G:000 B:000 A:000</span>
      <span id="proxyLbl">Proxy: 100%</span>
-     <button id="displayBtn" class="minib" title="Canvas display options">Display &#9662;</button>
+
      <span id="sbInfo"></span>
      <span class="right">
        <span id="zoomLbl2" style="display:none"></span>
@@ -4440,8 +4492,6 @@ function buildStatusbar() {
      </span>`;
   const room = $("roomSel");
   if (room) room.onchange = (e) => toast(e.target.value + " — rooms are not in this prototype");
-  const disp = $("displayBtn");
-  if (disp) disp.onclick = (e) => { e.stopPropagation(); openDisplayMenu(disp); };
   buildGeorgeWin();
   renderTimelineStatus();
 }
