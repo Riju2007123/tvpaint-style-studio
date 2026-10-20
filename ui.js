@@ -609,6 +609,111 @@ function doFill(p, color, tol) {
 }
 
 // ================= menu bar =================
+// The menus that carry submenus are opened with the TVPaint style popup menu.
+// Their contents were captured live on TVPaint Animation 12.1.0 Pro Demo.
+const fx = (name) => () => toast(name + " — not in this prototype");
+const TV_MENUS = {
+  "Effects": [
+    { label: "Blur", submenu: [
+      { label: "Cubic Blur", action: fx("Cubic Blur") },
+      { label: "Gaussian Blur", action: fx("Gaussian Blur") },
+      { sep: true },
+      { label: "Directional Blur", action: fx("Directional Blur") },
+      { label: "Center Blur", action: fx("Center Blur") },
+      { label: "Radial Blur", action: fx("Radial Blur") },
+      { label: "Motion Blur", action: fx("Motion Blur") },
+      { sep: true },
+      { label: "Chroma Blur", action: fx("Chroma Blur") },
+      { label: "Median Blur", action: fx("Median Blur") }
+    ] },
+    { label: "Color", submenu: [
+      { label: "Black And White Converter", action: fx("Black And White Converter") },
+      { label: "Color Replacer", action: fx("Color Replacer") },
+      { label: "Multi Color Replacer", action: fx("Multi Color Replacer") },
+      { label: "Color Adjust", action: fx("Color Adjust") },
+      { label: "Curves", action: fx("Curves") },
+      { sep: true },
+      { label: "Color Desaturator", action: fx("Color Desaturator") }
+    ] },
+    { label: "Distortion", submenu: [
+      { label: "Perspective : 4 Points", action: fx("Perspective : 4 Points") },
+      { label: "Warp Grid", action: fx("Warp Grid") },
+      { label: "Optical Flow", action: fx("Optical Flow") },
+      { sep: true },
+      { label: "Tornado", action: fx("Tornado") },
+      { label: "Wave", action: fx("Wave") }
+    ] },
+    { label: "Keying", submenu: [
+      { label: "Color Keyer", action: fx("Color Keyer") },
+      { label: "Cross Keyer", action: fx("Cross Keyer") },
+      { sep: true },
+      { label: "Chroma Keyer", action: fx("Chroma Keyer") },
+      { label: "Advanced Keyer", action: fx("Advanced Keyer") }
+    ] },
+    { label: "Motion", submenu: [
+      { label: "KeyFramer", action: fx("KeyFramer") },
+      { sep: true },
+      { label: "Multi Plane Camera", action: fx("Multi Plane Camera") }
+    ] },
+    { label: "Rendering", submenu: [
+      { label: "Auto Paint", action: fx("Auto Paint") },
+      { sep: true },
+      { label: "Brush Spreading", action: fx("Brush Spreading") }
+    ] },
+    { label: "Stylize", submenu: [
+      { label: "Drop Shadow", action: fx("Drop Shadow") },
+      { label: "Toon Shading", action: fx("Toon Shading") }
+    ] },
+    { label: "Transition", submenu: [
+      { label: "Blind", action: fx("Blind") }
+    ] }
+  ],
+  "Windows": [
+    { label: "Main", checked: () => panelEls[0] && panelEls[0].style.display !== "none", action: () => togglePanel(0) },
+    { label: "Color Panel", checked: true, action: () => togglePane("color") },
+    { label: "Tools", shortcut: "Shift A", checked: () => panelEls[1] && panelEls[1].style.display !== "none", action: () => togglePanel(1) },
+    { label: "Timeline", checked: true, action: () => togglePane("timeline") },
+    { sep: true },
+    { label: "Animation", submenu: [{ label: "Animation", action: fx("Animation window") }] },
+    { label: "Drawing", submenu: [{ label: "Drawing", action: fx("Drawing window") }] },
+    { label: "Show", submenu: [{ label: "Show", action: fx("Show window") }] },
+    { label: "FX Tools", submenu: [{ label: "FX Tools", action: fx("FX Tools window") }] },
+    { label: "Others", submenu: [
+      { label: "FX Stack", action: fx("FX Stack") },
+      { label: "Path Recorder", action: fx("Path Recorder") },
+      { label: "Pixel Tracker", action: fx("Pixel Tracker") },
+      { label: "Path Manager", action: fx("Path Manager") }
+    ] },
+    { sep: true },
+    { label: "Plugins", submenu: [{ label: "Plugins", action: fx("Plugins") }] },
+    { label: "Scripts", submenu: [{ label: "Scripts", action: fx("Scripts") }] }
+  ],
+  "Custom Panels": [
+    { label: "Animator Panel", checked: true, action: () => togglePane("animator") },
+    { label: "Chalks", checked: true, action: () => togglePane("chalks") },
+    { label: "Correction", action: () => togglePane("correction") },
+    { label: "Grab Tools Panel", action: () => togglePane("grab") },
+    { label: "Howard Wimshurst Brushes", checked: true, action: () => togglePane("howard") },
+    { label: "Nature", checked: true, action: () => togglePane("nature") },
+    { label: "Paintbrushes", checked: true, action: () => togglePane("paintbrushes") },
+    { label: "Paintbrushs", checked: true, action: () => togglePane("paintbrushs") },
+    { label: "Pencils", checked: true, action: () => togglePane("pencils") },
+    { label: "Pens", checked: true, action: () => togglePane("pens") },
+    { label: "Shading", checked: true, action: () => togglePane("shading") },
+    { label: "Sketch Panel", checked: true, action: () => togglePane("sketch") },
+    { label: "Smudge & Spread", checked: true, action: () => togglePane("smudge") },
+    { label: "Timesheet", action: () => togglePane("timesheet") },
+    { label: "Tool Presets Legacy", action: () => togglePane("toolpresets") },
+    { label: "Tutorial Recorder", action: () => togglePane("tutorial") },
+    { sep: true },
+    { label: "New Custom Panel", action: () => toast("new custom panel — not in this prototype") },
+    { label: "New Embedded Custom Panel", action: () => toast("new embedded custom panel — not in this prototype") },
+    { label: "Load a Custom Panel...", action: () => toast("load a custom panel — not in this prototype") },
+    { sep: true },
+    { label: "Open All", action: () => toast("all custom panels opened") },
+    { label: "Hide All", action: () => toast("all custom panels hidden") }
+  ]
+};
 const MENUS = [
   ["File", [
     ["New Project…", () => dlgNewProject()], ["Open Project…", () => uiOpen()],
@@ -688,7 +793,7 @@ const MENUS = [
     ["Flip Horizontally & Vertically", () => flipCurrentImage("hv")],
     null, ["Increase Layer Length…", () => dlgLayerLength()]
   ]],
-  ["Effects", [["(not in this prototype)", null, 1]]],
+  ["Effects", null],
   ["View", [
     ["Onion Skin", () => toggleOnion()],
     ["Grid", () => toggleGuide("grid", !proj.guidelines.grid)],
@@ -699,7 +804,8 @@ const MENUS = [
     null, ["Attenuate other layers", () => { proj.layerAttenuation = !proj.layerAttenuation; toast("layer attenuation " + (proj.layerAttenuation ? "on" : "off")); renderAll(); }],
     null, ["Fit View", () => fitView()], ["Zoom 100%", () => zoomTo()]
   ]],
-  ["Windows", [["Main Panel", () => togglePanel(0)], ["Tool Panel", () => togglePanel(1)], ["Camera Panel", () => togglePanel(2)], ["Timeline", null, 1]]],
+  ["Windows", null],
+  ["Custom Panels", null],
   ["Help", [
     ["George Console…", () => {
       const w = $("georgeWin");
@@ -720,6 +826,21 @@ function buildMenubar() {
   MENUS.forEach(([name, items]) => {
     const t = document.createElement("div");
     t.className = "menu-t"; t.textContent = name;
+    if (!items) {
+      // the menus that carry submenus use the TVPaint style popup menu
+      t.onclick = (e) => {
+        e.stopPropagation();
+        const was = t.classList.contains("open");
+        closeMenus();
+        if (was) return;
+        t.classList.add("open");
+        const r = t.getBoundingClientRect();
+        openTvMenu(TV_MENUS[name] || [], r.left, r.bottom + 2);
+        t.classList.remove("open");
+      };
+      mb.appendChild(t);
+      return;
+    }
     const dd = document.createElement("div");
     dd.className = "menu-dd";
     items.forEach(it => {
@@ -1062,6 +1183,14 @@ function renderBin() {
   }
 }
 function togglePanel(i) { panelEls[i].style.display = panelEls[i].style.display === "none" ? "" : "none"; }
+// The Windows / Custom Panels menus toggle the dockable windows of TVPaint.
+// The prototype only has the main, tool, camera and timeline panes, the other
+// windows are reported instead of silently doing nothing.
+function togglePane(name) {
+  const map = { "Main": 0, "Tools": 1, "Camera Panel": 2, "Timeline": 3, "color": 1 };
+  if (map[name] !== undefined) { togglePanel(map[name]); return; }
+  toast("the " + name + " window is not in this prototype");
+}
 
 // ---------- Camera[Pro] panel ----------
 // The panel structure is taken from TVPaint 12's own localisation file
@@ -2846,7 +2975,8 @@ function buildTvMenu(items) {
     const d = document.createElement("div");
     d.className = "tvmi" + (it.disabled ? " dis" : "") + (it.danger ? " danger" : "") +
       (it.arrows ? " modes" + (it.active ? " act" : "") : "");
-    const lead = it.arrows ? it.arrows[0] : (it.checked ? "✓" : "");
+    const lead = it.arrows ? it.arrows[0]
+      : ((typeof it.checked === "function" ? it.checked() : it.checked) ? "✓" : "");
     d.innerHTML = `<span class="chk">${lead}</span>` +
       (it.sw ? `<span class="sw" style="background:${it.sw}"></span>` : "") +
       `<span class="lbl">${it.label}</span>` +

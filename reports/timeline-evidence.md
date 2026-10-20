@@ -970,6 +970,56 @@ runs from the centre handle to the right edge of the frame and ends in a small
 triangle.  The prototype draws exactly that (and only the frame plus the centre
 plus when the Camera tool is not active, which is what the live app shows).
 
+### v27 pass - the TVPaint window layout and the top menus
+
+**The window frame** (sampled pixel by pixel from a 1936x1048 capture of
+`TVPaint Animation 12.1.0 Pro Demo`):
+
+| row | y | background | content |
+|---|---|---|---|
+| document tab bar | 0..7 | dark tab strip | the MDI tabs |
+| title bar | 8..30 | `244,241,249` | the OS title bar |
+| **menu bar** | 31..47 | `45,45,50` | File Edit Project Clip Layer Image Effects View Windows Custom Panels Help |
+| **tool bar** | 48..80 | `49,49,54` | the tool icons, the selected one on `62,71,107` |
+| **panel header / info bar** | 83..107 | `49,49,54` | the panel tab, its buttons and the information bar |
+
+The menu items start at x = 13 (File), 49 (Edit), 86 (Project), 141 (Clip),
+179 (Layer), 225 (Image), 273 (Effects), 325 (View), 368 (Windows),
+435 (Custom Panels), 532 (Help).  The information bar reads
+
+```
+Project: "Untitled_(3)"  Clip: "Clip_001"  20.00%  0°  Current Layer: "Anim_01"  Current Image: 1
+```
+in the muted blue grey `99,125,137` (`#637D89`).
+
+**The Effects menu** (captured live, with its submenus):
+- **Blur** - Cubic Blur, Gaussian Blur, |, Directional Blur, Center Blur, Radial
+  Blur, Motion Blur, |, Chroma Blur, Median Blur
+- **Color** - Black And White Converter, Color Replacer, Multi Color Replacer,
+  Color Adjust, Curves, |, Color Desaturator
+- **Distortion** - Perspective : 4 Points, Warp Grid, Optical Flow, |, Tornado, Wave
+- **Keying** - Color Keyer, Cross Keyer, |, Chroma Keyer, Advanced Keyer
+- **Motion** - KeyFramer, |, Multi Plane Camera
+- **Rendering** - Auto Paint, |, Brush Spreading
+- **Stylize** - Drop Shadow, Toon Shading
+- **Transition** - Blind
+
+**The Windows menu** (captured live): `Main` / `Color Panel` (P) / `Tools`
+(Shift A) / `Timeline` / | / `Animation` / `Drawing` / `Show` / `FX Tools` /
+`Others` (FX Stack, Path Recorder, Pixel Tracker, Path Manager) / | / `Plugins`
+/ `Scripts`.
+
+**The Custom Panels menu** (captured live): Animator Panel, Chalks, Correction,
+Grab Tools Panel, Howard Wimshurst Brushes, Nature, Paintbrushes, Paintbrushs,
+Pencils, Pens, Shading, Sketch Panel, Smudge & Spread, Timesheet, Tool Presets
+Legacy, Tutorial Recorder, |, New Custom Panel, New Embedded Custom Panel, Load
+a Custom Panel..., |, Open All, Hide All.
+
+The prototype now draws the menu bar with the TVPaint background (`#2d2d32`),
+the 18 px metrics, the same menus in the same order, the same submenus with
+the same separators and the same ticks, the project window information bar and
+the TVPaint panel header (25 px, background `#313136`, title in `#637D89`).
+
 ### Still not captured
 - Exact Role submenu appearance/order. The labels are known from the loc's role
   assignment commands: `Keyframe`, `Breakdown`, `Inbetween (To Do)`,
