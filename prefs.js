@@ -213,6 +213,20 @@
     toastMsg._t = setTimeout(() => s.classList.remove("show"), 2200);
   }
 
+  /* the panels of the live close with Escape (like their Cancel button) */
+  function tvWinEscape(dlg) {
+    const h = (e) => {
+      if (e.key !== "Escape") return;
+      const wins = [].slice.call(doc.querySelectorAll(".tvwin"));
+      if (wins[wins.length - 1] !== dlg) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dlg.remove();
+      doc.removeEventListener("keydown", h, true);
+    };
+    doc.addEventListener("keydown", h, true);
+  }
+
   /* ---------------- Edit > Shortcuts... ---------------- */
   window.tvShortcutsDialog = function () {
     const W = 1148, H = 663;
@@ -225,6 +239,15 @@
     const b = dlg.querySelector(".tvwin-b");
     b.style.cssText += ";padding:0;overflow:hidden;position:relative";
     dlg.querySelector(".tvwin-x").onclick = () => dlg.remove();
+    tvWinEscape(dlg);
+    const thin = doc.createElement("style");
+    thin.textContent = ".tvwin-b ::-webkit-scrollbar{width:9px;height:9px;background:var(--tv-gadget-border)}" +
+      ".tvwin-b ::-webkit-scrollbar-thumb{background:var(--tv-stat);border-radius:4px}" +
+      ".tvwin-b ::-webkit-scrollbar-track{background:var(--tv-gadget-border)}" +
+      "input[type=range]{-webkit-appearance:none;appearance:none;height:14px;background:transparent;outline:none}" +
+      "input[type=range]::-webkit-slider-runnable-track{height:3px;background:#5f5f66}" +
+      "input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:7px;height:13px;background:#8fabb6;margin-top:-5px;border-radius:1px}";
+    dlg.appendChild(thin);
 
     const km = loadKeymap();
     const cmds = allCommands();
@@ -233,7 +256,7 @@
     /* the File combo (load / save a key map) */
     const fileC = el("div", "tvcombo", "");
     fileC.innerHTML = `<span class="v">File</span><span class="a">\u25BC</span>`;
-    at(fileC, 8, 4, 100, 17);
+    at(fileC, 8, 3, 97, 17);
     b.appendChild(fileC);
     fileC.onmousedown = (e) => {
       e.preventDefault();
@@ -247,25 +270,24 @@
 
     /* the search field */
     const sLbl = el("div", "tvlbl", "Search");
-    at(sLbl, 517, 8, 50, 14);
+    at(sLbl, 517, 7, 50, 14);
     b.appendChild(sLbl);
     const sFld = el("input", "tvf");
-    at(sFld, 570, 5, 550, 17);
+    at(sFld, 570, 3, 550, 17);
     b.appendChild(sFld);
 
     /* the two columns */
     const left = el("div");
-    at(left, 8, 26, 547, 570);
-    left.style.cssText += ";background:#46464d;overflow:auto;padding:2px 0";
+    at(left, 8, 25, 544, 556);
+    left.style.cssText += ";background:#46464d;overflow:auto;padding:0 0 2px 0";
     b.appendChild(left);
     const right = el("div");
-    at(right, 570, 26, 550, 570);
-    right.style.cssText += ";background:#46464d;overflow:auto;padding:2px 0";
+    at(right, 570, 25, 550, 556);
+    right.style.cssText += ";background:#46464d;overflow:auto;padding:0 0 2px 0";
     b.appendChild(right);
 
     const keyRow = el("div");
-    keyRow.style.cssText = "display:flex;height:17px;align-items:center;padding:0 6px;font:11px 'Segoe UI',Tahoma,sans-serif;cursor:default";
-    left.appendChild(keyRow);
+    keyRow.style.cssText = "display:flex;height:19px;align-items:center;padding:0 6px 4px 60px;font:11px 'Segoe UI',Tahoma,sans-serif;cursor:default";
     const keyName = el("span");
     keyName.style.cssText = "width:95px;color:#b6b6b6;flex:0 0 95px";
     keyRow.appendChild(keyName);
@@ -274,10 +296,9 @@
     keyRow.appendChild(keyFn);
 
     const catRow = el("div");
-    catRow.style.cssText = "display:flex;height:17px;align-items:center;padding:0 6px;font:11px 'Segoe UI',Tahoma,sans-serif;cursor:pointer";
-    right.appendChild(catRow);
+    catRow.style.cssText = "display:flex;height:19px;align-items:center;padding:0 6px 4px 8px;font:11px 'Segoe UI',Tahoma,sans-serif;cursor:pointer";
     const catPlus = el("span", "", "\u2295");
-    catPlus.style.cssText = "width:14px;color:#467398;text-align:center;flex:0 0 14px";
+    catPlus.style.cssText = "width:22px;color:#787878;text-align:left;flex:0 0 22px;font-size:11px;line-height:19px";
     catRow.appendChild(catPlus);
     const catName = el("span");
     catName.style.color = "#b6b6b6";
@@ -288,17 +309,15 @@
     function refresh() {
       const q = (sFld.value || "").trim().toLowerCase();
       // left: the keys
-      keyRow.remove();
-      left.appendChild(keyRow);
       keyName.textContent = "";
       keyFn.textContent = "";
       const rows = KEY_ROWS.map(k => {
         const r = el("div");
-        r.style.cssText = "display:flex;height:17px;align-items:center;padding:0 6px;font:11px 'Segoe UI',Tahoma,sans-serif;cursor:default";
+        r.style.cssText = "display:flex;height:19px;align-items:center;padding:0 6px 4px 60px;font:11px 'Segoe UI',Tahoma,sans-serif;cursor:default";
         const a = el("span", "", k);
-        a.style.cssText = "width:95px;flex:0 0 95px;color:var(--tv-key-text)";
+        a.style.cssText = "width:71px;flex:0 0 71px;text-align:right;color:var(--tv-key-text)";
         const f = el("span", "", km[k] ? labelOf(km[k]) : "");
-        f.style.color = "var(--tv-shortcut)";
+        f.style.cssText = "margin-left:14px;color:var(--tv-key-text)";
         r.append(a, f);
         if (q && (k.toLowerCase().indexOf(q) >= 0 || (km[k] && labelOf(km[k]).toLowerCase().indexOf(q) >= 0))) {
           r.style.background = "var(--tv-key-found)";   // mShortcutKeyFoundResult
@@ -309,16 +328,14 @@
       });
       rows.forEach(r => left.appendChild(r));
       // right: the categories
-      catRow.remove();
-      right.appendChild(catRow);
       catName.textContent = "";
       catPlus.textContent = "\u2295";
       const cats = CATEGORIES.filter(c => !q || c.toLowerCase().indexOf(q) >= 0);
       cats.forEach(c => {
         const r = el("div");
-        r.style.cssText = "display:flex;height:17px;align-items:center;padding:0 6px;font:11px 'Segoe UI',Tahoma,sans-serif;cursor:pointer";
+        r.style.cssText = "display:flex;height:19px;align-items:center;padding:0 6px 4px 8px;font:11px 'Segoe UI',Tahoma,sans-serif;cursor:pointer";
         const p = el("span", "", "\u2295");
-        p.style.cssText = "width:14px;color:#467398;text-align:center;flex:0 0 14px";
+        p.style.cssText = "width:22px;color:#787878;text-align:left;flex:0 0 22px;font-size:11px;line-height:19px";
         const n = el("span", "", c);
         n.style.color = "var(--tv-key-text)";
         r.append(p, n);
@@ -328,9 +345,9 @@
         if (expanded && selCat === c) {
           cmds.filter(x => x.cat === c).forEach(x => {
             const fr = el("div");
-            fr.style.cssText = "display:flex;height:17px;align-items:center;padding:0 6px 0 22px;font:11px 'Segoe UI',Tahoma,sans-serif;cursor:default";
+            fr.style.cssText = "display:flex;height:19px;align-items:center;padding:0 6px 4px 22px;font:11px 'Segoe UI',Tahoma,sans-serif;cursor:default";
             const t = el("span", "", x.label);
-            t.style.color = "var(--tv-shortcut)";
+            t.style.color = "var(--tv-key-text)";
             fr.appendChild(t);
             if (selFn === x.cmd) fr.style.background = "#5f5f66";
             fr.onclick = () => { selFn = x.cmd; refresh(); };
@@ -344,27 +361,35 @@
 
     /* Assign / Unassign */
     const bar = el("div");
-    at(bar, 8, 604, 1132, 22);
-    bar.style.cssText += ";display:flex;align-items:center;background:#46464d;padding:0 8px";
+    at(bar, 8, 594, 1132, 17);
+    bar.style.cssText += ";display:flex;align-items:center;background:#46464d;padding:0 0";
     b.appendChild(bar);
     const assign = el("button", "tvbtn", "Assign");
-    assign.style.cssText += ";height:19px;width:90px";
+    assign.style.cssText += ";height:17px;width:100px";
     const unassign = el("button", "tvbtn", "Unassign");
-    unassign.style.cssText += ";height:19px;width:90px;margin-left:6px";
+    unassign.style.cssText += ";height:17px;width:100px;margin-left:4px";
     bar.append(assign, unassign);
-    const legend = el("div");
-    legend.style.cssText = "margin-left:auto;display:flex;align-items:center;gap:6px;font:11px 'Segoe UI',Tahoma,sans-serif;color:#b6b6b6";
-    const legColors = el("span", "", "Colors:");
-    const legSearch = el("span", "", "Search Results");
-    legSearch.style.color = "var(--tv-key-found)";
-    const legBound = el("span", "", "Shortcut Function Bound to Key");
-    legBound.style.color = "var(--tv-shortcut)";
+    /* the second row of the live: the colour legend, OK and Cancel */
+    const legColors = el("div", "tvlbl", "Colors:");
+    at(legColors, 654, 618, 45, 15);
+    legColors.style.color = "#b6b6b6";
+    b.appendChild(legColors);
+    const legSearch = el("button", "tvbtn", "Search Results");
+    at(legSearch, 703, 618, 86, 15);
+    legSearch.style.cssText += ";height:15px;width:86px;padding:0 2px;color:var(--tv-key-text);font:11px 'Segoe UI',Tahoma,sans-serif";
+    b.appendChild(legSearch);
+    const legBound = el("div", "tvlbl", "Shortcut Function Bound to Key");
+    at(legBound, 797, 618, 160, 15);
+    legBound.style.color = "var(--tv-key-inuse)";
+    b.appendChild(legBound);
     const ok = el("button", "tvbtn", "OK");
-    ok.style.cssText += ";height:19px;width:90px;margin-left:10px";
+    at(ok, 992, 617, 50, 17);
+    ok.style.cssText += ";height:17px;width:50px";
+    b.appendChild(ok);
     const cancel = el("button", "tvbtn", "Cancel");
-    cancel.style.cssText += ";height:19px;width:90px;margin-left:6px";
-    legend.append(legColors, legSearch, legBound, ok, cancel);
-    bar.appendChild(legend);
+    at(cancel, 1065, 617, 60, 17);
+    cancel.style.cssText += ";height:17px;width:60px";
+    b.appendChild(cancel);
 
     assign.onclick = () => {
       if (!selKey) return toastMsg("select a key first");
@@ -389,7 +414,7 @@
   };
 
   /* ---------------- Edit > Preferences... ---------------- */
-  window.tvPreferencesDialog = function () {
+  window.tvPreferencesDialog = async function () {
     const W = 957, H = 472;
     const dlg = el("div", "tvwin");
     dlg.style.width = W + "px"; dlg.style.height = H + "px";
@@ -400,9 +425,26 @@
     const b = dlg.querySelector(".tvwin-b");
     b.style.cssText += ";padding:0;overflow:hidden;position:relative";
     dlg.querySelector(".tvwin-x").onclick = () => dlg.remove();
+    tvWinEscape(dlg);
+    const thin = doc.createElement("style");
+    thin.textContent = ".tvwin-b ::-webkit-scrollbar{width:9px;height:9px;background:var(--tv-gadget-border)}" +
+      ".tvwin-b ::-webkit-scrollbar-thumb{background:var(--tv-stat);border-radius:4px}" +
+      ".tvwin-b ::-webkit-scrollbar-track{background:var(--tv-gadget-border)}" +
+      "input[type=range]{-webkit-appearance:none;appearance:none;height:14px;background:transparent;outline:none}" +
+      "input[type=range]::-webkit-slider-runnable-track{height:3px;background:#5f5f66}" +
+      "input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:7px;height:13px;background:#8fabb6;margin-top:-5px;border-radius:1px}";
+    dlg.appendChild(thin);
     const p = loadPrefs();
-    if (!p.physicalMemory) {
-      p.physicalMemory = navigator.deviceMemory ? Math.round(navigator.deviceMemory * 1024) : 4096;
+    // the live shows the real physical memory of the machine, every time
+    {
+      let mb = navigator.deviceMemory ? Math.round(navigator.deviceMemory * 1024) : 4096;
+      if (window.tv && window.tv.appInfo) {
+        try {
+          const info = await window.tv.appInfo();
+          if (info && info.physicalMemoryMB) mb = info.physicalMemoryMB;
+        } catch (e) { /* keep the estimate */ }
+      }
+      p.physicalMemory = mb;
     }
 
     /* the tree of pages (live: General / Save / Drawing / Timeline /
@@ -426,22 +468,22 @@
       { name: "Paths", page: "paths" }
     ];
     const tree = el("div");
-    at(tree, 6, 26, 120, 400);
-    tree.style.cssText += ";background:#46464d;overflow:auto;padding:4px 0";
+    at(tree, 6, 6, 120, 429);
+    tree.style.cssText += ";background:#46464d;overflow:auto;padding:0";
     b.appendChild(tree);
     const page = el("div");
-    at(page, 130, 26, 820, 400);
-    page.style.cssText += ";overflow:auto;padding:6px 8px";
+    at(page, 0, 0, W, 434);
+    page.style.cssText += ";overflow:auto;padding:0";
     b.appendChild(page);
     const pageTitle = el("div", "tvlbl", "");
-    at(pageTitle, 400, 2, 160, 16);
+    at(pageTitle, 458, 9, 160, 16);
     pageTitle.style.textAlign = "center";
     b.appendChild(pageTitle);
 
     let current = "general";
     const rowOf = (label, depth) => {
       const r = el("div", "", label);
-      r.style.cssText = "height:17px;line-height:17px;padding:0 6px 0 " + (6 + depth * 12) + "px;font:11px 'Segoe UI',Tahoma,sans-serif;color:#b6b6b6;cursor:pointer;white-space:nowrap";
+      r.style.cssText = "height:19px;line-height:19px;padding:0 4px 0 " + (4 + depth * 14) + "px;font:11px 'Segoe UI',Tahoma,sans-serif;color:#b6b6b6;cursor:pointer;white-space:nowrap;box-sizing:border-box;width:100%";
       return r;
     };
     function buildTree() {
@@ -449,6 +491,13 @@
       const add = (nodes, depth) => {
         nodes.forEach(n => {
           const r = rowOf(n.name, depth);
+          if (n.children) {
+            // the live marks the branches with a circle
+            const mark = el("span", "", "\u2299");
+            mark.style.color = "#787878";
+            mark.style.marginLeft = "4px";
+            r.appendChild(mark);
+          }
           if (current === n.page) { r.style.background = "#3e476b"; r.style.color = "#e9e9ec"; }
           r.onclick = () => { current = n.page; buildTree(); buildPage(); };
           tree.appendChild(r);
@@ -457,9 +506,9 @@
       };
       add(TREE, 0);
     }
-    function label(t, y) {
+    function label(t, y, x) {
       const l = el("div", "tvlbl", t);
-      at(l, 136, y, 200, 15);
+      at(l, x == null ? 136 : x, y, 260, 15);
       page.appendChild(l);
       return l;
     }
@@ -509,10 +558,16 @@
       page.appendChild(s);
       return s;
     }
+    /* the little horizontal arrow the live draws before a slider */
+    function arrow(x, y, text) {
+      const l = el("div", "tvlbl", text);
+      at(l, x, y, 120, 15);
+      page.appendChild(l);
+      return l;
+    }
 
     function buildPage() {
       page.innerHTML = "";
-      const t = TREE;
       const find = (nodes, page_id) => {
         for (const n of nodes) {
           if (n.page === page_id) return n;
@@ -523,96 +578,92 @@
       const node = find(TREE, current) || TREE[0];
       pageTitle.textContent = node.name;
       if (current === "general") {
-        label("Language", 8);
-        combo(340, 6, 380, p.language, ["English", "French", "German", "Spanish", "Italian", "Chinese", "Japanese"],
+        label("Language", 55);
+        combo(406, 50, 390, p.language, ["English", "French", "German", "Spanish", "Italian", "Chinese", "Japanese"],
           v => { p.language = v; savePrefs(p); toastMsg("language: " + v); });
-        label("Keyboard Shortcuts", 28);
-        button(340, 26, 380, "Configure...", () => { window.tvShortcutsDialog(); });
-        label("Temp Directory", 48);
-        button(340, 46, 380, "Set...", () => toastMsg("temp directory: " + (p.tempDir || "system default")));
-        field(340, 66, 380, p.tempDir || "C:\\Users\\riju\\AppData\\Local\\Temp", true);
-        label("Physical Memory", 92);
+        label("Keyboard Shortcuts", 79);
+        button(406, 73, 390, "Configure...", () => { window.tvShortcutsDialog(); });
+        label("Temp Directory", 103);
+        button(406, 96, 390, "Set...", () => toastMsg("temp directory: " + (p.tempDir || "system default")));
+        field(407, 116, 388, p.tempDir || "C:\\Users\\riju\\AppData\\Local\\Temp", true);
+        label("Physical Memory", 165);
         const mem = el("div", "tvlbl", p.physicalMemory + "MB");
-        at(mem, 340, 90, 200, 15);
+        at(mem, 406, 161, 200, 15);
         page.appendChild(mem);
-        label("Undo", 114);
-        const uf = field(340, 112, 80, p.undoSize + "MB");
+        label("Undo", 189);
+        const uf = field(406, 185, 64, p.undoSize + "MB");
         uf.addEventListener("input", () => { p.undoSize = parseInt(uf.value, 10) || 512; savePrefs(p); });
-        slider(438, 112, 80, p.undoSize, 64, 4096, v => { p.undoSize = parseInt(v, 10); uf.value = v + "MB"; savePrefs(p); });
-        const ul = el("div", "tvlbl", "\u2194  Undo Size");
-        at(ul, 520, 112, 120, 15);
-        page.appendChild(ul);
-        label("Cache usage", 136);
-        check(340, 134, p.cacheUsage === "Automatic", on => { p.cacheUsage = on ? "Automatic" : "Manual"; savePrefs(p); manualBtn.disabled = on; });
-        const manualBtn = button(340, 152, 80, "Manual", () => { p.cacheUsage = "Manual"; savePrefs(p); toastMsg("cache usage: manual"); });
+        slider(478, 186, 80, p.undoSize, 64, 4096, v => { p.undoSize = parseInt(v, 10); uf.value = v + "MB"; savePrefs(p); });
+        arrow(562, 189, "\u2194  Undo Size");
+        label("Cache usage", 213);
+        check(406, 210, p.cacheUsage === "Automatic", on => { p.cacheUsage = on ? "Automatic" : "Manual"; savePrefs(p); manualBtn.disabled = on; });
+        const autoLbl = el("div", "tvlbl", "Automatic");
+        at(autoLbl, 424, 210, 80, 15);
+        page.appendChild(autoLbl);
+        const manualBtn = button(406, 230, 64, "Manual", () => { p.cacheUsage = "Manual"; savePrefs(p); toastMsg("cache usage: manual"); });
         manualBtn.disabled = p.cacheUsage === "Automatic";
-        const autoBtn = button(426, 152, 50, "Auto", () => { p.cacheUsage = "Automatic"; savePrefs(p); toastMsg("cache usage: automatic"); });
-        const cl = el("div", "tvlbl", "\u2194  Cache size");
-        at(cl, 492, 152, 120, 15);
-        page.appendChild(cl);
-        slider(340, 170, 80, p.cacheSize, 64, 4096, v => { p.cacheSize = parseInt(v, 10); savePrefs(p); });
-        label("Startup configuration", 196);
-        combo(340, 194, 380, p.startup, ["Remember last used configuration", "Always start with the default configuration"],
+        const autoBtn = button(478, 230, 40, "Auto", () => { p.cacheUsage = "Automatic"; savePrefs(p); toastMsg("cache usage: automatic"); });
+        arrow(524, 230, "\u2194  Cache size");
+        slider(478, 248, 80, p.cacheSize, 64, 4096, v => { p.cacheSize = parseInt(v, 10); savePrefs(p); });
+        label("Startup configuration", 269);
+        combo(406, 260, 390, p.startup, ["Remember last used configuration", "Always start with the default configuration"],
           v => { p.startup = v; savePrefs(p); });
-        button(340, 214, 380, "Reset configuration", () => {
+        button(406, 279, 390, "Reset configuration", () => {
           const d = defaultPrefs(); d.physicalMemory = p.physicalMemory;
           Object.assign(p, d); savePrefs(p); buildPage(); toastMsg("configuration reset");
         });
-        label("Open last project on startup", 236);
-        check(340, 234, p.openLastProject, on => { p.openLastProject = on; savePrefs(p); });
-        label("Export All Custom Settings", 264);
-        button(340, 262, 380, "Export Settings", () => toastMsg("settings exported"));
-        label("Import Custom Settings", 284);
-        button(340, 282, 380, "Import Settings", () => toastMsg("no settings file to import"));
-        const alertRow = el("div", "tvlbl", "George Alert: tv_WriteTextFile");
-        at(alertRow, 136, 306, 240, 15);
-        page.appendChild(alertRow);
-        check(340, 304, true, () => { });
+        label("Open last project on startup", 313);
+        check(406, 310, p.openLastProject, on => { p.openLastProject = on; savePrefs(p); });
+        label("Export All Custom Settings", 345);
+        button(406, 342, 390, "Export Settings", () => toastMsg("settings exported"));
+        label("Import Custom Settings", 365);
+        button(406, 361, 390, "Import Settings", () => toastMsg("no settings file to import"));
+        label("George Alert: tv_WriteTextFile", 413);
+        check(406, 410, true, () => { });
       } else if (current === "paths") {
-        label("Temp Directory", 8);
-        field(340, 6, 380, p.tempDir || "C:\\Users\\riju\\AppData\\Local\\Temp", true);
-        label("Papers Directory", 28);
-        field(340, 26, 380, "C:\\Program Files\\TVPaint\\Resources\\papers", true);
-        label("Plugins Directory", 48);
-        field(340, 46, 380, "C:\\Program Files\\TVPaint\\Resources\\plugins", true);
-        label("Mixers Directory", 68);
-        field(340, 66, 380, "C:\\Program Files\\TVPaint\\Resources\\mixers", true);
-        label("Brush Directory", 88);
-        field(340, 86, 380, "C:\\Program Files\\TVPaint\\Resources\\brushes", true);
+        label("Temp Directory", 55);
+        field(406, 51, 390, p.tempDir || "C:\\Users\\riju\\AppData\\Local\\Temp", true);
+        label("Papers Directory", 79);
+        field(406, 75, 390, "C:\\Program Files\\TVPaint\\Resources\\papers", true);
+        label("Plugins Directory", 103);
+        field(406, 99, 390, "C:\\Program Files\\TVPaint\\Resources\\plugins", true);
+        label("Mixers Directory", 127);
+        field(406, 123, 390, "C:\\Program Files\\TVPaint\\Resources\\mixers", true);
+        label("Brush Directory", 151);
+        field(406, 147, 390, "C:\\Program Files\\TVPaint\\Resources\\brushes", true);
       } else if (current === "interface" || current === "theme" || current === "panels") {
-        label("Display", 8);
-        check(340, 6, true, () => { });
-        label("Theme", 28);
-        combo(340, 26, 380, "TVPaint dark", ["TVPaint dark", "Light", "System"], v => toastMsg("theme: " + v));
-        label("Panels", 48);
-        check(340, 46, true, () => { });
+        label("Display", 55);
+        check(406, 51, true, () => { });
+        label("Theme", 79);
+        combo(406, 75, 390, "TVPaint dark", ["TVPaint dark", "Light", "System"], v => toastMsg("theme: " + v));
+        label("Panels", 103);
+        check(406, 99, true, () => { });
       } else if (current === "sound") {
-        label("Audio", 8);
-        check(340, 6, true, () => { });
-        label("Enable sound on playback", 28);
-        check(340, 26, true, () => { });
-      } else if (current === "save" || current === "drawing" || current === "timeline" || current === "timelineClip" || current === "timelineThumb" || current === "timelineDefault") {
-        label("Auto save", 8);
-        check(340, 6, true, () => { });
-        label("Save the project on exit", 28);
-        check(340, 26, true, () => { });
-        label("Large Timeline", 48);
-        check(340, 46, false, () => { });
-        label("Vertical Timeline", 68);
-        check(340, 66, false, () => { });
+        label("Audio", 55);
+        check(406, 51, true, () => { });
+        label("Enable sound on playback", 79);
+        check(406, 75, true, () => { });
+      } else {
+        label("Auto save", 55);
+        check(406, 51, true, () => { });
+        label("Save the project on exit", 79);
+        check(406, 75, true, () => { });
+        label("Large Timeline", 103);
+        check(406, 99, false, () => { });
+        label("Vertical Timeline", 127);
+        check(406, 123, false, () => { });
       }
     }
 
-    /* the bottom bar: OK on the left, Cancel on the right (live) */
-    const bar = el("div");
-    at(bar, 6, 432, 945, 26);
-    bar.style.cssText += ";display:flex;align-items:center;background:#313136;padding:0 10px";
-    b.appendChild(bar);
+    /* the bottom of the live: OK at the left, Cancel at the right */
     const ok = el("button", "tvbtn", "OK");
-    ok.style.cssText += ";height:19px;width:90px";
+    at(ok, 132, 427, 75, 17);
+    ok.style.height = "17px";
+    b.appendChild(ok);
     const cancel = el("button", "tvbtn", "Cancel");
-    cancel.style.cssText += ";height:19px;width:90px;margin-left:auto";
-    bar.append(ok, cancel);
+    at(cancel, 874, 427, 75, 17);
+    cancel.style.height = "17px";
+    b.appendChild(cancel);
     ok.onclick = () => { savePrefs(p); dlg.remove(); toastMsg("preferences saved"); };
     cancel.onclick = () => dlg.remove();
 

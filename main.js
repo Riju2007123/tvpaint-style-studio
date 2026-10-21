@@ -9,6 +9,7 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 
 let win = null;
 
@@ -193,7 +194,8 @@ ipcMain.handle("tv:appInfo", async () => ({
   version: app.getVersion(),
   platform: process.platform,
   electron: process.versions.electron,
-  documents: app.getPath("documents")
+  documents: app.getPath("documents"),
+  physicalMemoryMB: Math.round(os.totalmem() / 1048576)
 }));
 
 app.whenReady().then(() => {
