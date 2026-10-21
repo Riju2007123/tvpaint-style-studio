@@ -2083,3 +2083,32 @@ really changes language**, with the wording of TVPaint itself.
 
 So the two things that were "documented as not honourable" before are now
 honoured with the resources of the application itself.
+
+### v51 pass - the technique of reading and patching a binary, proved end to end
+
+To be able to rebuild the panels of the live exactly, the technique of
+locating something in the binary and changing it was proved on a **copy**
+of the installation (the installed demo is never touched, and nothing
+that unlocks a licensed function is touched either):
+
+1. **REA finds the string** - `search_strings` for the text, then
+   `address_to_file_offset` for its place in the file:
+   `" Demo"` lives at `0x140a6b02c`, file offset **10 918 956**.
+2. **The copy is prepared** - the exe of the demo is copied to a scratch
+   folder, `Resources` is junctioned to the original one and the Qt
+   libraries (`Qt6Core.dll`, `Qt6Gui.dll`, `Qt6Widgets.dll`,
+   `Loader.dll` - the real code of TVPaint) are copied next to it, so the
+   copy starts exactly like the original.
+3. **The patch** - the five bytes at the offset are replaced by
+   `" DEMO"` (the same length, so nothing else moves).
+4. **The result** - the running application shows
+   `TVPaint Animation 12.1.0 Pro DEMO` in its title bar: the change is
+   visible in the live window, which proves the whole chain
+   (string -> reference -> offset -> bytes -> process).
+
+What this gives us for the rebuild: the same chain, used in the other
+direction, is how the internals are read - the writer of the `.tvpp`
+project (the string `.tvpp` and `_tvpp_backup` are in the binary), the
+place where the recent files are stored, and the exact behaviour of the
+export.  No file of the installation is modified: the experiments happen
+on copies, and the demonstration above was reverted with the copy.
