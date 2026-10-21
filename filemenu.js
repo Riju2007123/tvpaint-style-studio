@@ -2058,7 +2058,8 @@
     if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
     if (window.tvKeymap) {
       const km = window.tvKeymap.load();
-      if (km[window.tvKeymap.signature(e)]) return;   // the key map handles it
+      const sig = window.tvKeymap.signature(e);
+      if (km[sig] || (window.tvKeymap.menu && window.tvKeymap.menu[sig])) return;  // the key map handles it
     }
     const k = e.key.toLowerCase();
     if (e.ctrlKey && e.shiftKey && k === "e") { e.preventDefault(); tvExportDialog(); return; }
@@ -2072,6 +2073,8 @@
   }, true);
 
   /* ---------------- expose a few helpers for tests ---------------- */
+  window.tvList = tvList;
+  window.tvList = tvList;
   window.tvFileMenu = {
     newProject: tvNewProjectDialog,
     exportDialog: tvExportDialog,

@@ -1463,59 +1463,548 @@ the real `Toggle*Panel` commands, so the prototype has TVPaint's own windows
   live; the prototype implements the documented modifier behaviour for a cross
   layer drag.
 
-## v38 — the full menu bar (all 11 menus, transcribed live)
+### v37 pass - the whole File menu, option by option
 
-Captured from the running TVPaint 12.1.0 Pro Demo on 2026-10-21, window
-1936 x 1048, one screenshot per menu with the popup open:
+The File menu is now a working chain: every entry opens either a live TVPaint
+dialog (rebuilt from measurements), the native Windows file dialog TVPaint
+uses, or an honest refusal where the format is not implemented.
 
-| menu | popup x | notes |
-|---|---|---|
-| File | 8..220 | Recent projects/folders/files are disabled headers |
-| Edit | 47..215 | image-mark palette, ClipBoard, Spare Image |
-| Project | 100..245 | Render Camera, Project Information, Go to |
-| Clip | 145..330 | All layers, Background, Send to |
-| Layer | 185..400 | Delete All Layers, Move, Align, Reverse Order, Merge |
-| Image | 230..420 | Modify, Instances, Exposure |
-| Effects | 265..350 | 8 filter families, 91 filters |
-| View | 330..500 | Flip, Workspaces |
-| Windows | 355..465 | 4 panels + 5 groups + Plugins + Scripts |
-| Custom Panels | 430..560 | 16 shipped panels + 5 commands |
-| Help | 535..760 | Tooltips, Online Tutorials, Social networks |
+**Captured live (TVPaint 12 Pro Demo, 2x pixel probes):**
+- `File > Export to...` / `Publish...` -> **Export Footage**, 1008x569.  The
+  four tabs are 104 / 87 / 132 / 139 px at x=7, with the active tab colour
+  repeated as a 1 px baseline under the whole strip; Browse is 116 px at x=7
+  and the path field runs 127..999; the preview is a 627x366 dark (#2d2d32)
+  letterbox at x=374 with the footage fitted inside; the *All Frames* row is
+  a bare check + label (no bar) with a 112 px frame field at x=630; Export
+  848..922 and Cancel 926..1000 are 74x17 at y=110.  The settings column uses
+  combos 177..340 plus the format gear at 344, rows on a 19 px pitch, and the
+  read-only source values are dark boxes 178..246.
+  `shots/file12-export-dialog.png`, `shots/file12-export-brush.png`.
+- Export is **tab dependant**: *Project: Display* and *Clip: Display* show
+  Format+gear / Mode / Alpha / Compression / View / Convert to /
+  Width-Height-FPS-DPI-PAR / Background / Notes / Slate / Lock / Stretch /
+  Time / Split; *Clip: Layers structure* replaces them with Structure /
+  Visible Layers / View / Create folder for layers; *Custom Brush: Display*
+  shows the live warning "Please create a custom brush before trying to
+  export one." and hides the footer.
+- The option sets come from `english.tvpaint.loc` (As = Single Image /
+  Sequence / Animation; Mode = Palette / Greyscale / RGB / RGBA / Alpha Only;
+  Alpha = PreMult. / No PreMult.; Structure = PSD / JSON / CSV / Flix).
+- `File > Configure printer...` -> **Printer Config** 288x415 (*Single*) and
+  288x495 (*Anim*), measured from `shots/file12-print.png` and
+  `shots/file12-print-anim.png`: printer combo 8..225 + Setup 230..280, two
+  40 px tabs at x=7, Scale/arrows row at y=71, Center 78..152, black preview
+  7..280 with the white 210x272 page, Print 7..280.  The Anim tab adds Rows /
+  Step / Image nbr, the 1/1 + arrows strip and the captured hover tooltip
+  ("Select : Anim or Single ... or an animation storyboard.").
+- `File > New Project...` (Shift N) remains the 664x328 dialog of v17; the
+  bottom button now sits 10 px above the edge and the tabs are 198 / 200 px
+  as in the live capture.
+- Save / Save As / Close / recents use the TVPaint 11 reference because the
+  12 Demo blocks saving: native *Save Project* dialog, name pre-filled
+  (`Untitled_(1).tvpp`) and the `All Files (*.*)` filter
+  (`shots/cdp-saveas2.png`); *Open Project* uses
+  `TVPaint Project (*.tvpp)` + `All Files (*)` (`shots/cdp-open-dialog.png`).
 
-Measured title centres (px from the window's left edge):
-`File 24, Edit 60, Project 106, Clip 152, Layer 194, Image 241, Effects 290,
-View 338, Windows 392, Custom Panels 475, Help 544`.
+**Verified in the running app** (Electron, driven through CDP so the clicks
+are exact):
+- New Project -> created a 512x512 project; tabs, preset combo, ratio and
+  print rows all follow the project.
+- Save Project as Template -> template stored, listed in the New Project
+  Template combo and applied on pick.
+- Export Footage, *Project: Display*: As = Single Image -> wrote
+  `Documents/Untitled_(1).png` (512x512, 7 109 bytes); As = Animation ->
+  honest "Animation export is not implemented" box.
+- Export Footage, *Clip: Layers structure*: Structure = JSON ->
+  `Documents/Untitled_(1).json` (364 bytes, layer manifest) plus
+  `Documents/Untitled_(1)_layers/001_Anim_01.png` (7 109 bytes).
+- Custom Brush tab -> the live warning box; footer hidden.
+- `Save As` (Ctrl Shift S) -> native dialog with `Untitled_(1).tvpp`;
+  `Open / Import` (Shift L) -> native dialog with the TVPaint filter;
+  recents submenu -> re-opened the saved project ("opened ...tvpp").
+- Configure printer -> the rebuilt dialog; Print -> Chromium print preview.
+- Open Multi-Backup directory -> created and opened
+  `Documents/TV Paint Multi-Backup`.
+- Quit -> asks to save when dirty, then quits.
 
-Popup metrics measured from the captures: **17 px row pitch**, 11 px text,
-popup background `#313136`, separator = 1 px line with an 6/5 px gap, first
-text column at 22 px (check column 6..17 px), accelerators right aligned,
-submenu arrow `›` at the right edge. The open menu title is drawn as a light
-box `#d4d4d8` with dark text — not the blue selection colour.
+**Deviations, stated honestly:**
+- Printing goes through Electron's print preview, not TVPaint's native
+  Windows print dialog (Electron exposes no Win32 print dialog).
+- Animated formats (AVI / QuickTime / MPEG-4), TIFF / TGA / PSD / BMP / EXR
+  and the PSD / Flix layer structures refuse instead of writing an
+  approximation; PNG / JPG / WebP (single and sequence) and the JSON / CSV
+  layer structures are real.
+- The *Project* tab header of New Project reads "Project Size"; the captured
+  capture with the camera tab reads "Camera View (Final Output)" and that one
+  is reproduced, the plain project tab header is still an inference.
 
-### What was built
-- `menus.js` — the whole tree as data: 11 menus, 1 100+ items, every shortcut,
-  tick, greyed state and nested submenu (3 levels deep in places, e.g.
-  Image ▸ Exposure ▸ Repeat Images).
-- `ui.js` — the menu bar now renders from `TV_MENU_TREE`; a resolver maps
-  command ids to the prototype's implementations (`MENU_ACTIONS`), the
-  Windows entries toggle the real dock panels, the Custom Panels entries open
-  the shipped `.bin` panels, and anything not implemented yet says so.
-- `index.html` — popup metrics (17 px rows, `#313136`, 120 px minimum width),
-  light "open menu" title box.
-- `test/menus.test.js` — 11 structural tests (menu order, separators, every
-  item has a destination, panel group inventories, filter counts, palette).
+### v38 pass - the two dialogs re-measured pixel by pixel, and a stub registry
 
-### Captured vs inferred
-- **Captured:** every label, separator position, shortcut, tick, greyed row,
-  submenu nesting and the 31 palette swatch colours (`#fa0000` … `#f2f5a9`).
-- **Inferred:** the five palette letters after `Z` (`AA..AE`) — the capture
-  crops at `AE`'s row; the letters follow from the 17 px pitch.
-- **Not reproduced:** `Effects ▸ Color` is drawn by TVPaint as a **two-column**
-  popup (6 rows of two); ours draws it as one column. Flagged as a gap.
-- **Unconfirmed:** `Project ▸ Project Information` shows an arrow but hovering
-  it produced no popup in 3 attempts (it may open a panel rather than a menu).
-- Save greying: capture shows `Save Project`, `Save Project As...` and
-  `Save Project as Template...` are disabled on a freshly opened, unmodified
-  project (same grey as the `Recent ...` headers).  The prototype now tracks
-  `proj.dirty` (set by any history push or undo/redo, cleared on save) and
-  greys the same three items.
+Both remaining File-menu dialogs were rebuilt from new pixel probes of the
+live captures instead of from the earlier estimates, and the differences
+were large enough to matter.
+
+**Printer Config** (`shots/file12-print.png` 288x415, `file12-print-anim.png`
+288x495).  The dialog used to overflow its body and show scroll bars.  It is
+now laid out absolutely: printer combo 8..225 + `Setup` 230..280, the two
+40 px tabs at x=7, the `Scale` row at y=71 with the two arrows at 133..152,
+`Center` 78..152, a black preview 7..280 with the white 210x272 page, and
+the full width `Print` button at 7..280 (y=393 in the Single tab, y=473 in
+the Anim tab).  The Anim tab adds `Rows` / `Step` / `Image nbr`, the
+`1/1` + arrows strip and the hover tooltip of the live app, reproduced word
+for word: *"Select : Anim or Single ... to print a single image or an
+animation storyboard."*  The tab switches between the two measured sizes
+(288x415 / 288x495) without reflowing.
+
+**Export Footage.**  The first build used the coordinates of an earlier,
+looser measurement; re-reading the capture with pixel probes moved a dozen
+widgets: the tabs are 104 / 87 / 132 / 139 px at x=7 with the active tab
+colour repeated as a 1 px baseline, `Browse` is 116 px at x=7 and the path
+field runs 127..999, the `As` combo keeps 240 px but sits at y=117, `Export`
+and `Cancel` are 74x17 at 848..922 / 926..1000 and y=110, the settings
+combos are 177..340 with the format gear at 344, every settings row is on a
+19 px pitch, the read-only source values are dark (#2d2d32) boxes 178..246
+and the transfer arrow is a bare glyph, the preview is a 627x366 dark
+letterbox at x=374 with the footage fitted inside, and the *All Frames* row
+has no bar - just a check and a label - with a 112 px frame field at x=630.
+The flags block (Background / Notes / Slate / Lock / Stretch / Time /
+Split) now uses 20x17 controls on the same 19 px pitch as the live, and the
+Slate button carries the live's crossed-out gear.
+
+**A stub registry.**  `menus.js` now exports `STUB_COMMANDS`: the 49
+commands of the tree that exist in the live app but whose behaviour is not
+built yet (the Help links, the Clip / Scene commands, several Windows
+panels, the workspaces, the Animator and Timesheet scripts...).  A new test
+in `test/menus.test.js` walks the whole tree and asserts that every command
+either has a real action in `ui.js` / `filemenu.js`, is an `fx.` filter, is
+handled by a panel or submenu, or is registered as a stub - and that the
+stub list never grows.  67 tests pass (55 engine + 12 menu).
+
+### v39 pass - the seven export flags of the Export Footage panel, working
+
+The flags at the bottom of *Export Footage* were drawn but inert.  A pixel
+probe of the live capture showed that all seven of them are check boxes
+(the off state is a flat 21x18 #414146 box, the on state a bare tick - the
+Notes row is a check box as well, not a text field), so the panel was
+rebuilt to that and every option now changes the exported file.  The
+tooltips are the live strings (`english.tvpaint.loc`): "Export Content with
+Layer Background", "Add notes at bottom of the file", "Add a black border
+around the content with the current frame, the name of the project and
+clip, and the date.", "Preserve Width / Height ratio", "TimeStretch
+Exported Footage to respect new Frame Rate", "Perform TimeStretch by
+creating new frame instead of duplicating frame", "Split Scenes/Clip in
+different files", and the slate button "Set some parameters of the slate."
+
+**What each option does now**
+- **Background** - on: the project background colour is written under the
+  drawing; off: nothing is written, the file keeps its alpha channel
+  (checked: the centre of the exported PNG is A0 with the option off and
+  opaque white with it on).
+- **Notes** - the project notes (the timeline Notes pane) are drawn at the
+  bottom of the file, on a light strip so they stay readable.
+- **Slate** - a black border around the content with the clip name, the
+  project name, the current frame and the date.  The button next to it is
+  crossed out while the option is off and opens the *Slate* parameters
+  (Layout: Overlay / Resize within Border, Border size in %) with the live
+  hint text.
+- **Lock aspect ratio** - editing the width updates the height and the
+  other way round, keeping the source ratio; the padlock on the left of
+  the Width/Height rows toggles the same option.
+- **Stretch to Frame Rate** - the exported footage respects the new frame
+  rate and keeps the duration of the source: 24 frames at 24 fps exported
+  at 12 fps give 12 files, at 30 fps give 30 files.
+- **Time Interpolation** - with the stretch on, the frames in between are
+  created by blending the two source frames instead of duplicating one
+  (checked at 30 fps: frame 2 holds the vertical stroke of frame 1 *and*
+  the horizontal stroke of frame 2 when the option is on, and only the
+  first one when it is off).
+- **Split Scenes** - one file (or one folder) per scene.  Scenes are
+  markers in the project, and `Clip > New Scene` / `Duplicate Scene` /
+  `Delete Scene` now create them (they were stubs), so the option has
+  something to split: a marker at frame 5 gave 4 files in the first part
+  and 20 files in `frame_Scene 1`.
+
+The preview of the panel follows the options (background, slate and notes
+are drawn in it), and the two TVPAINT 12 watermarks of the preview are
+gone.
+
+### v40 pass - the Export Footage panel against a fresh capture of the live app
+
+TVPaint 12.1.0 Pro Demo was running again, so the *Export Footage* panel was
+captured live (window class `_117`, 1008x569, `shots/live-export-fresh.png`)
+and the panel was rebuilt from that capture instead of from the older
+estimate.  The differences were real and are now gone:
+
+- **The check boxes are the live's own widget.**  A pixel probe shows the
+  off state is a flat 21x18 #414146 box and the on state a bare tick drawn
+  at x 279..290 / y 399..406 - not the Unicode check mark.  The tick is now
+  the live's own 12x9 bitmap, and the *Replace existing file(s)* box uses
+  the same 21x18 widget (it was a 13x13 box before).
+- **The slate button is the live's picture**: 21x17 at (298,433) with the
+  crossed gear while the option is off and the plain gear once it is on.
+  Both states are the live's own bitmaps.
+- **The live draws a recessed #2d2d32 band** (dialog y 48..77, full width)
+  behind the clip name; the panel had none.
+- **Rows that were 3 to 7 px off** are now on the live's pixels: the
+  Browse button and the path field at y=79, the Export and Cancel buttons
+  at y=117 (they sat on the As row, not above it), the tab strip 30..45
+  with its 2 px #3e476b baseline at 46..47, and the preview widget
+  374,136 627x370.
+- **The widgets of the live have no light border**: the buttons are flat
+  #46464d (17 px high), the combos carry a 1 px #3d3d43 border, the text
+  fields a 1 px #2b2b30 border, and the combo drop-down is a 13 px circle.
+  Our styles had a #5a5a62 border everywhere and 19 px high buttons.
+- **The text colour is the live's**: every string of the live panel peaks
+  at #b6b6b6 (the title bar at #898989).  Our labels, fields, combos, tabs
+  and messages were between #c8c8cc and #e9e9ec and are now #b6b6b6.
+
+The tick, the crossed gear and the plain gear are the live app's own
+pixels, copied out of the capture - not redrawn by eye.
+
+### v41 pass - the slate, its settings and the frame slider, taken from the live app
+
+TVPaint 12.1.0 Pro Demo was running again, so the *Export Footage* panel was
+opened in the live app, the slate was switched on and everything was
+measured on the screen (window class `_125`, 1008x569,
+`shots/live-slate-on.png`).
+
+**The slate, drawn the way the live draws it.**  The live does not put a
+frame around the picture: it burns a band at the top and one at the bottom,
+the band being the *Ratio* percent of the image height (10 % by default).
+The top band carries `<project> - <clip> - (<position>/<total>)` on a black
+box at the left and the frame number on a black box at the right; the
+bottom band carries the date (`Day Month Year`), the logo on a grey
+(#505057) band and the author.  Measured on the live: the title box
+374..672, the frame box 918..999, the date box 374..530, the logo band
+531..885, the author box 887..999, the band 35 px high on a 351 px image
+(= 10 %).  Our exporter now draws exactly that, with the text size and
+the padding following the band, and the real TVPaint logo
+(`Resources/tvpaint_logo_wider.png`, shipped with the app) in the middle.
+The author is empty by default - the live demo writes "Demo" there, our
+app must not invent a name - and the author box only appears when a name
+is set.
+
+**The slate settings** (the button next to the Slate option) is the live's
+own panel, 386x228 with no title bar: Layout (Overlay / Resize Image
+within Border), Ratio, Color (text and background), Font Name, Style,
+Script, Title, Frame/Time, Date Format, Logo and Author, each with its
+live tooltip (`.loc` 011003249..011003265) and the live's own geometry -
+the labels right aligned at x=118, the check boxes at 139, the widgets at
+158, the "..." buttons at 360, one row every 18 px.  It opens over the
+export panel, at +116 / +206 from its corner, like the live.
+
+**The small line at the bottom of the panel** is the frame slider of the
+live (a #2d2d32 track 376..998, 15 px high, with a 5 px white handle).
+Dragging it scrubs through the animation: the preview follows the frame
+and the frame field is updated - and with the slate on, the caption in the
+slate changes with it, exactly as in the live.
+
+**The notes** are written on their own band at the very bottom of the
+exported file, under the slate, so the two never overlap.
+
+**REA on the live binary** confirmed the internal names: the export panel
+is `ExportFootage`, its options are `Export_CorrectAspect` (the lock) and
+`Export_StretchToProjectRate` (the stretch), the slate is the class
+`cSlate` with its preference keys `_logovisible`, `_logovalue`,
+`_authorvisible`, `_authorvalue`, the logo pictures are
+`tvpaint_logo.png` / `tvpaint_logo_wider.png`, and the padlock of the
+panel is `ExportAspectLock.png` / `ExportAspectUnlock.png`.
+
+### v42 pass - the slate, corrected against the reference picture
+
+The first slate was close but not the live one.  Comparing with the live
+panel and the reference picture:
+
+- **no grey band and no watermark in the band.**  The grey band was the
+  *demo's* logo picture (`tvpaint_logo.bmp` of the demo build).  A normal
+  TVPaint has no logo there - the live shows a tiny broken-image mark
+  because its logo file is missing - so the band is now drawn only when a
+  logo is actually set.  Our app draws nothing there by default.
+- **no "Demo"**: that word is the author of the *demo* build.  The author
+  is empty by default, exactly like a normal install, and the author box
+  is still drawn (as the live draws it) so the bottom right corner looks
+  the same.
+- **the real names**: the title is now `<project> - <clip> - (<position>/
+  <total>)` with the project's own name and the project's own clip name
+  (`proj.clipName`, the same value the status bar shows), and the frame
+  number is the current frame.
+- the title box ends where the text ends, the frame box hugs the right
+  edge, the date box hugs the left edge - measured on the live: the title
+  box 374..650, the frame box 918..999, the date box 374..532, the
+  author box 887..999, the band 35 px on a 351 px image (10 %).
+
+The exported file now shows the same picture as the reference: the title
+and the frame number on black boxes at the top, the date on a black box at
+the bottom left, the empty author box at the bottom right and the image
+untouched in between.
+
+### v43 pass - the slate panel closes on a click outside, and the Ratio works
+
+Two things the live does and our rebuild did not:
+
+- **A settings panel is dismissed by clicking anywhere outside it.**  The
+  live's slate panel is a floating panel with no title bar and no close
+  button: the moment the user clicks outside, it goes away.  Our panel now
+  does the same (a capture-phase mousedown listener that removes the
+  panel when the click is not inside it), and the panel is only removed by
+  that listener, so it never closes by accident while it is being used.
+- **The Ratio was dead.**  The spin widget of the live writes its value
+  and calls its `onInput` callback, but it does not fire an `input` event,
+  so our listener never saw the value the arrows produced: the ratio stayed
+  at 10 % whatever the user did.  The same bug hit the Width, Height and
+  Compression spins of the panel - their arrows changed the number but the
+  preview never followed.  All of them now go through `onInput`.
+
+The live was checked again to confirm what the Ratio does: it is the
+percentage of the image height taken by the slate band, and the text
+inside the band grows with it (at 20 % the band is 70 px on the 350 px
+preview and the title is drawn twice as big).  With the layout *Resize
+Image within Border* the content is squeezed between the two bands, with
+*Overlay* the bands are drawn over the picture.  Our exporter does
+exactly that (`shots/live-ratio20.png` is the live at 20 %).
+
+### v44 pass - the slate panel behaves like the live one
+
+Three things the user compared with the live app and found different:
+
+- **The panel closed every time a setting was changed.**  Our combo pop-ups
+  are drawn outside the panel (they are floating lists), so the click that
+  picked a value was seen by the "click outside closes the panel" handler
+  and the panel went away.  The handler now ignores the clicks that land
+  in a pop-up: the panel only closes on a real click outside, exactly like
+  the live.
+- **The Font Name list was four fonts.**  The live lists *every installed
+  font* (Agency FB, Algerian, Arial, Cascadia Code, Castellar, Centaur,
+  ... - 452 entries on this machine).  The panel now asks the system for
+  the font list (`queryLocalFonts`) and shows it, sorted; the Script list
+  carries the 25 writing systems of the live and the Style list the GDI
+  styles, and the chosen style really changes the drawn text.
+- **The spacing of the slate was wrong.**  Measured on the live panel
+  (3840 project, 10 % ratio): the band is 10 % of the image height, the
+  title text is 233 px wide in the preview, the left padding is 32 px and
+  the text is 17 px high.  From those numbers the font is **0.514 x the
+  band** and the padding **1.78 x the font**; we were using 0.68 and 1.3,
+  which is why our text was too big and sat too close to the edge of its
+  box.  The two constants are now the measured ones, so an exported slate
+  has the same band, the same text and the same padding as the live.
+
+### v45 pass - the export panel follows the camera
+
+The user showed the live panel with the View set to **Camera**: the preview
+shows what the camera sees and the size fields carry the size of the
+camera (1920x1080 for a 3840x2160 project), not the size of the project.
+In our rebuild the camera view came out empty.
+
+Two things were wrong:
+
+- **The camera rectangle was read with the wrong fields.**
+  `cameraRect()` returns the camera by its **centre** (`cx` / `cy`) and its
+  size (`w` / `h`); the export was reading `r.x` / `r.y`, which do not
+  exist, so the picture was drawn from nowhere and the preview was empty.
+  It now takes the rectangle from the centre and the size, exactly like the
+  camera overlay of the project window, so the panel shows the very same
+  framing as the main view.  A turned camera is applied as a rotation of
+  the drawn picture.
+- **The size fields did not follow the View.**  REA on the live binary
+  shows why: next to `Export_Width`, `Export_Height`, `Export_FieldOrder`,
+  `Export_FrameRate` and `Export_PixelAspectRatio` the binary carries
+  `Export_CameraWidth`, `Export_CameraHeight`, `Export_CameraFieldOrder`,
+  `Export_CameraFrameRate` and `Export_CameraPixelAspectRatio` - the panel
+  reads a second set of values when the View is the camera.  Ours now
+  shows the size of the camera in the source *and* the target fields
+  (256x256 for a 512x512 project) and goes back to the size of the project
+  when the View is Project or Clip.
+
+Note for the next test: a project without any camera shows an empty
+camera view because the camera looks at an empty part of the drawing - the
+same happens in the live app.
+
+### v46 pass - Edit > Shortcuts... and Edit > Preferences..., rebuilt from the live
+
+Both panels were opened in the running TVPaint 12 and captured
+(`shots/live-shortcuts-dialog.png`, 1148x663, and
+`shots/live-preferences-dialog.png`, 957x472), and the strings come from the
+shipped `english.tvpaint.loc` (000021129-000021159 for the preferences,
+000019901/2 for the key map, 010019919 "Export Shortcuts").
+
+**Configure Keyboard Shortcuts** - the live's own layout: the "File" combo
+and the "Search" field on the first line, the key column on the left (A to Z
+and Shift A to D, the function bound to each key in the shortcut colour), the
+function tree on the right with its ⊕ buttons, Assign / Unassign at the
+bottom left and the colour legend - "Colors: Search Results" and "Shortcut
+Function Bound to Key" - with OK / Cancel at the bottom right.  The colours
+are the ones the live uses and that TVPaint's own Night scheme already
+carries: `--tv-key-text` (182,182,182), `--tv-key-found` (129,170,201),
+`--tv-key-inuse` (240,208,146), `--tv-key-selected` (62,71,107) and
+`--tv-shortcut` (112,121,157) for the bound function.
+
+**The key map is real.**  What is assigned there is what the application
+answers to: the key handler reads the map, and the File menu accelerators
+(Ctrl Shift E, Ctrl Shift S, Ctrl P, Ctrl Q, Shift N / L / W / S and the
+bookmarks) are entries of that map, so Edit > Shortcuts... really changes
+the keyboard.  The letters the live binds (A Zoom: Shake, B Brush: Toggle
+CutBrush, ... Shift D Interface: Open Preferences Panel) are seeded with the
+commands this rebuild really has - the first candidate that exists wins.
+
+**Preferences** - the live's tree (General, Save, Drawing, Timeline >
+General / Clip / Thumbnail / Default config, Interface > General / Theme /
+Panels, Sound, Paths) on the left, the page on the right with the title
+centred on top, OK at the bottom left and Cancel at the bottom right.  The
+General page carries the live's rows: Language, Keyboard Shortcuts
+("Configure..." opens the key map panel), Temp Directory ("Set..." plus the
+path), Physical Memory, Undo (the size and its slider), Cache usage
+(Automatic / Manual, Auto, the cache size), Startup configuration (the combo
+and "Reset configuration"), Open last project on startup, Export All
+Custom Settings, Import Custom Settings and the "George Alert:
+tv_WriteTextFile" line.  The settings are stored with the rest of the
+preferences.
+
+REA on the live binary gave the names behind both panels: `tv_loadkeymap`
+and `tv_savekeymap` with the `keymaps` folder, the styles
+`mShortcutKeyNormalText`, `mShortcutKeySelected`, `mShortcutKeyFoundResult`
+and `mShortcutKeyInUse`, the preference class `nBase.nPreferences` with
+"Write Preference" / "Read Preference", and the preference key
+`_keyboardshortcut`.
+
+### v47 pass - the two Edit panels measured against the live, pixel by pixel
+
+The first rebuild of the panels was close in structure but not in geometry.
+Both were re-measured on the captures of the running TVPaint 12
+(`shots/live-shortcuts-dialog.png`, 1148x663, and
+`shots/live-preferences-dialog.png`, 957x472) and every value below is a
+measured pixel, not an estimate.
+
+**Configure Keyboard Shortcuts** (live coordinates, window origin):
+
+* the "File" combo at x=8, y=26, 97 px wide, the "Search" label at x=517
+  and the search field at x=570, y=26, 550 px wide;
+* the two frames start at y=48 - the key column at x=8 (544 px) and the
+  function tree at x=570 (550 px);
+* the rows are **19 px** apart, the key is written **right aligned at x=139**
+  (so "Shift A" starts at x=106) and the function of the key starts at
+  **x=153**; the tree writes its circled plus at **x=578** and the name of
+  the category at **x=600**;
+* the colours, sampled on the live: the key and the function are both
+  `#b6b6b6` (`--tv-key-text`), the circled plus is `#787878`, the search
+  result is `--tv-key-found` and the legend "Shortcut Function Bound to
+  Key" is `#f0d092` (`--tv-key-inuse`);
+* the bottom of the live has **two** rows: the strip with Assign (x=8,
+  100 px) and Unassign (x=112, 100 px) at y=617, and **below** it the
+  colour legend with OK and Cancel at y=640 (the legend text at x=662,
+  "Search Results" at x=711, "Shortcut Function Bound to Key" at x=805,
+  OK at x=1000, Cancel at x=1073).
+
+After the correction the measurements of our panel are identical to the
+live's: the key glyphs at 52..59, 71..78, 90..97, 109..116 (the same
+19 px pitch), the Assign text at 624..631 and the OK text at 645..652.
+
+**Preferences** (957x472):
+
+* the tree at x=6 (120 px wide), its first row at y=29 and a 19 px pitch,
+  the branches marked with the circle of the live;
+* the title of the page centred on x=538;
+* the labels at x=136 and the **widgets at x=406**, 390 px wide - the
+  Language combo at y=73, "Configure..." at y=96, "Set..." at y=119 and
+  the path at y=139, the Undo field at y=208, the cache line at y=236,
+  the startup combo at y=283 and "Reset configuration" at y=302, the
+  export and import buttons at y=365 and y=384, the "George Alert:
+  tv_WriteTextFile" line at y=436;
+* OK at x=132 (75 px) and Cancel at x=874 (75 px) at y=450;
+* the sliders are drawn as the thin bars of the live, and the physical
+  memory now reads the real value of the machine (16223 MB, the same
+  number as the live) through the new `physicalMemoryMB` of `tv:appInfo`.
+
+**Behaviour**: both panels open from the Edit menu and from their
+accelerators (Ctrl K and Shift D), and they close with **Escape**, like
+the live - the key map of the panel is what the application answers to.
+
+### v48 pass - every control of the two Edit panels, from the shipped resources
+
+The live app could not be clicked (another program was holding the input),
+so this pass was made from the sources TVPaint itself ships and from the
+decompilation, and every string is the real one of the application.
+
+**The inventory of the strings** - `tools/parse-loc.js` parses the shipped
+`Resources/data/english.tvpaint.loc` (9196 entries), `tools/gen-report.js`
+writes `reports/prefs-strings.md` (a complete block by block inventory of
+the Preferences and the Shortcuts panel, every entry with its id, its role
+and its tooltip) and `tools/verify.js` checks the report row by row against
+the source (525 + 883 rows, byte exact).
+
+What the inventory gives:
+
+* the tree of the 12.1.0 panel: `General` (000021111), `Save` (011021118),
+  `Drawing` (011021120), `Timeline` (011021123) with `General` /
+  `Clip` / `Thumbnail` / `Default config` (011021127 / 124 / 125 / 126),
+  `Interface` with `General` / `Theme` / `Panels` (011021122 / 128 / 129),
+  `Sound` (000021114) and `Paths` (012104312).  `Network` (011021119) has no
+  node in the 12.1.0 tree - the live capture agrees, so the rebuild does not
+  show it either (its proxy page is kept in the code).
+* the tooltip convention of TVPaint: `Caption§\n\nbody` - the `§` is the
+  separator between the title and the body of the help, and many captions
+  exist twice (once bare, once with the help).  All of them are used now.
+* the Shortcuts panel: `Assign` (000019901), `Unassign` (000019902), the
+  popup of the key map file `Clear KeyMap` (000019903), `Default KeyMap`
+  (000019904), `Load KeyMap` (000019905), `Save KeyMap` (000019906),
+  `Export to a text file` (000019919), the caption `File` (000019907),
+  `Cannot open KeyMap` (000019908), the `Search` field (000019909) and the
+  tooltips `Keymap File popup`, `Result`, `Keyboard keys` and
+  `TVPaint Animation Function`.
+* the colour rows of the Theme page (000060150 - 000060196 and
+  011060150 - 011060154) and the four colours of the Shortcuts panel
+  (011060183 - 011060186) - the four last ones are the colours the live
+  uses in the key list, and they are the variables of our own scheme.
+
+**The decompilation** (REA on `TVPaint Animation 12 Pro Demo.exe`):
+
+* the class `nBase.nPreferences` is registered at 0x140030ab0 with the
+  callback 0x14080a8e0, and the panel it belongs to is built by
+  0x14080a060 - the same function that owns the strings "Write Preference"
+  and "Read Preference" and the script ids 1001 / 1002 (0x3e9 / 0x3ea);
+* the styles of the Shortcuts panel in the binary are
+  `mShortcutKeyNormalText`, `mShortcutKeySelected`,
+  `mShortcutKeyFoundResult` and `mShortcutKeyInUse` - the four colours of
+  the legend, and the four variables of our scheme.
+
+**What was rebuilt**
+
+*Preferences* is now driven by a table: every page of the tree is there
+(General, Save, Drawing, Timeline > General / Clip / Thumbnail / Default
+config, Interface > General / Theme / Panels, Sound, Paths) and every page
+carries the captions of the live with their real tooltips.  The controls
+are the ones of the live: combos, check boxes, fields, buttons, sliders
+and the colour plates of the Theme page.  The values are stored with the
+other settings, the sliders and the check boxes work, and the Theme page
+really recolours the interface - each plate writes its CSS variable
+(`--tv-desktop`, `--tv-gadget`, `--tv-key-text`, ...) and the choice is
+kept.
+
+*Shortcuts* now has the popup of the live with its five entries (Clear
+KeyMap, Default KeyMap, Load KeyMap, Save KeyMap, Export to a text file),
+the search really filters the two lists and marks the hits with the colour
+of the search results, the categories of the tree open and close, Assign
+and Unassign work (the key and the function are chosen independently, as in
+the live), and the key map has exactly the 30 rows of the live
+(A to Z, Shift A to D).
+
+**Bugs found and fixed on the way**
+
+* the page of the Preferences panel covered the tree and ate its clicks -
+  the tree was dead; the page now lets the clicks through;
+* the popup list (`tvList`) was private to the closure of filemenu.js, so
+  no combo of the panels opened; it is exported now;
+* a key that was unassigned came back with the next start, because the
+  stored map was merged over the default map; a saved map is now the truth;
+* the accelerators of the menus and the functions of the key map are two
+  different things in TVPaint (the theme has a colour for `Menu Shortcut`),
+  so the accelerators moved to their own table - the panel shows the 30
+  function keys of the live and the accelerators keep working.
+
+**Honest deltas**: the function tree of the Shortcuts panel lists the
+commands of this rebuild under the category names of the live (the live
+lists several hundred functions of TVPaint itself, and the toolbox names
+like `Animator Panel` or `Paintbrushes` are not even in the localisation
+file - they live in the custom panels).  The rows of the pages other than
+General use the regular 24 px pitch of the live: only the General page was
+measured pixel by pixel, the other pages were not reachable while the
+input was held by another program.
