@@ -2008,3 +2008,52 @@ file - they live in the custom panels).  The rows of the pages other than
 General use the regular 24 px pitch of the live: only the General page was
 measured pixel by pixel, the other pages were not reachable while the
 input was held by another program.
+
+### v49 pass - the settings of the panel now drive the application
+
+The controls of the pages were there but inert: the check boxes and the
+combos changed the stored value and nothing else happened.  Every setting
+this rebuild can honour is now applied to the application, live, while the
+panel is open and again when it starts.
+
+**The bridge**: `prefs.js` keeps one shared cache of the values
+(`window.tvPrefGet` / `window.tvPrefSet`) and every change is given to
+`window.tvApplyPref` in ui.js, which does the work.  The panel is the only
+place a setting is written, so the panel and the application can never
+disagree.
+
+**What a setting does now**
+
+* *Color scheme* (Interface) - the four schemes TVPaint ships (Night, Day,
+  Dusk, Dawn) are read from `Resources/colorschemes` and applied to the
+  interface; *Apply* re-applies, *Reset* goes back to Night.  Measured:
+  `--tv-desktop` went from rgb(49,49,54) to rgb(210,214,214).
+* *Large Timeline* (Timeline) - the left drawer of the timeline is hidden
+  and the timeline takes the whole width.
+* *Display Time Code* (Timeline) - the ruler switches to the time code
+  (as the live does when there is room for it).
+* *Instance Handle Size* (Timeline) - the size of the exposure handles of
+  the instances (`--tl-handle`).
+* *Undo Size* (General) - the depth of the undo stack follows the memory
+  that is given to it.
+* *Open last project on startup* (General) - the project that was open
+  last is opened when the application starts.
+* *Save Alarm* (Save) - the project warns when it stayed unsaved for the
+  given number of minutes; *Auto Save* saves it instead of warning.
+* *Multi-Backup* (Save) - the previous file is kept in the backup folder
+  (the count and the folder follow the settings).
+* *Export / Import Custom Settings* (General) - the settings and the key
+  map are written to a `.tvpsettings` file and read back.
+* *Theme* (Interface) - every colour plate writes its CSS variable, as
+  before.
+* the two rows that decide the life of the key map (*Clear KeyMap*,
+  *Default KeyMap*, *Load KeyMap*, *Save KeyMap*, *Export to a text file*)
+  work on the key map of the application.
+
+**What cannot be honoured** and is left as a stored value: the language
+(only English is shipped), the sound of the scrub and the sampling rate
+(there is no audio engine yet), the tablet and the Wintab options (no
+tablet in this build), the resampling algorithm and the Barbecue option
+(the drawing does not resample), the XSheet tab and the drag and drop pop
+up (there is no XSheet), and the TVPP compression (our project file is
+JSON, not the TVPaint format).

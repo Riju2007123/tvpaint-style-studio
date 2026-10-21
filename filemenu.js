@@ -690,6 +690,26 @@
       file = await TVP.saveProjectDialog(projectFileName());
       if (!file) return false;
     }
+    // "Multi-Backup": the previous file is kept in the backup folder
+    if (window.tvPrefGet && window.tvPrefGet("multiBackup", false) && proj.filePath) {
+      try {
+        const count = Math.max(1, parseInt(window.tvPrefGet("multiBackupCount", 3), 10) || 3);
+        const dirMode = window.tvPrefGet("multiBackupDir", "Same folder as project file");
+        const folder = dirMode.indexOf("Sub-folder") === 0
+          ? dirName(proj.filePath) + "\\Backup"
+          : (dirMode.indexOf("Custom") === 0 ? (window.tvPrefGet("multiBackupPath", "") || dirName(proj.filePath)) : dirName(proj.filePath));
+        const old = await TVP.readFile(proj.filePath);
+        if (old != null) {
+          for (let i = count; i >= 1; i--) {
+            const from = folder + "\\" + baseName(proj.filePath) + "." + i + ".bak";
+            const to = folder + "\\" + baseName(proj.filePath) + "." + (i + 1) + ".bak";
+            const prev = await TVP.readFile(from);
+            if (prev != null) await TVP.writeFile(to, prev);
+          }
+          await TVP.writeFile(folder + "\\" + baseName(proj.filePath) + ".1.bak", old);
+        }
+      } catch (e) { /* a failed backup never stops the save */ }
+    }
     const ok = await TVP.writeFile(file, data);
     if (!ok) { toast("could not write " + file); return false; }
     proj.filePath = file;
@@ -702,6 +722,35 @@
     return true;
   }
   function tvSaveProjectAs() { return tvSaveProject(true); }
+
+  /* the "Save Alarm" of the live: the project warns when it stayed unsaved */
+  let saveAlarmTimer = null;
+  function tvSaveAlarm() {
+    if (saveAlarmTimer) { clearInterval(saveAlarmTimer); saveAlarmTimer = null; }
+    if (!window.tvPrefGet || !window.tvPrefGet("saveAlarm", false)) return;
+    const mode = window.tvPrefGet("saveAlarmMode", "Warn me!");
+    if (mode === "Deactivate") return;
+    const mins = Math.max(1, parseInt(window.tvPrefGet("saveAlarmMinutes", 10), 10) || 10);
+    const started = Date.now();
+    saveAlarmTimer = setInterval(() => {
+      if (!proj || proj.closed || !proj.dirty) return;
+      if (Date.now() - started < mins * 60000) return;
+      if (mode === "Auto Save") { tvSaveProject(false); return; }
+      toast("this project has not been saved for " + mins + " minutes");
+    }, 30000);
+  }
+
+  /* the "Open last project on startup" of the live */
+  async function tvOpenLastProject() {
+    try {
+      const list = recents()["projects"] || [];
+      const file = list[0];
+      if (!file) return;
+      await openRecentPath(file);
+    } catch (e) { /* ignore */ }
+  }
+  window.tvOpenLastProject = tvOpenLastProject;
+  window.tvSaveAlarm = tvSaveAlarm;
 
   function tvSaveTemplate() {
     const dlg = tvWin("Template name", 150, 92);

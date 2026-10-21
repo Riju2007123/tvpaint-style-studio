@@ -13,6 +13,48 @@ let proj = E.newProject(512, 512, 24);
 proj.name = "Untitled_(1)";
 proj.layers.forEach((l, i) => { l.name = "Anim_0" + (i + 1); });
 const hist = E.makeHistory(50);
+
+/* ------------------------------------------------------------------
+   The preferences of the panel (prefs.js) drive the application.
+   Every setting that this rebuild can honour is applied here - the
+   colour scheme, the time code in the ruler, the large timeline, the
+   size of the instance handles, the depth of the undo stack, the
+   cursor and the save alarm.
+   ------------------------------------------------------------------ */
+window.tvApplyPref = function (key, value) {
+  try {
+    switch (key) {
+      case "timeCode":
+        if (proj) { proj.timelineTC = !!value; if (typeof renderTimeline === "function") renderTimeline(); }
+        break;
+      case "largeTimeline": {
+        const l = document.getElementById("tlLeft");
+        if (l) l.style.display = value ? "none" : "";
+        if (typeof renderTimeline === "function") renderTimeline();
+        break;
+      }
+      case "handleSize":
+        document.documentElement.style.setProperty("--tl-handle", Math.max(3, parseInt(value, 10) || 9) + "px");
+        break;
+      case "undoSize":
+        // 512 MB of undo is a deep stack, 64 MB a shallow one
+        hist.setDepth(Math.max(8, Math.round((parseInt(value, 10) || 512) / 8)));
+        break;
+      case "colorScheme":
+        if (typeof loadScheme === "function" && value && value !== "Custom" && value !== "Default") {
+          loadScheme(String(value).toLowerCase());
+        }
+        break;
+      case "saveAlarm":
+      case "saveAlarmMinutes":
+        if (typeof tvSaveAlarm === "function") tvSaveAlarm();
+        break;
+      case "openLastProject":
+        if (value && typeof tvOpenLastProject === "function") tvOpenLastProject();
+        break;
+    }
+  } catch (e) { /* a preference must never break the application */ }
+};
 // TVPaint greys the three Save commands until the project has unsaved changes
 // (captured live: a fresh Untitled_(1) shows Save Project / Save As / Save as
 // Template in the disabled grey).  Any edit or undo marks the project dirty.

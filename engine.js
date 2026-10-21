@@ -966,7 +966,10 @@ function reverseSelectedImages(layer, keys) {
 // ---------- undo (per-frame bitmap snapshots, bounded) ----------
 function makeHistory(depth) {
   const undoStack = [], redoStack = [];
+  const state = { depth: depth || 40 };
   return {
+    // the "Undo Size" preference of the live changes the depth of the stack
+    setDepth(d) { state.depth = Math.max(4, Math.round(d || 40)); },
     pushFrame(proj, layer, frameNum) {
       const fr = layer.frames[frameNum];
       undoStack.push({
@@ -974,7 +977,7 @@ function makeHistory(depth) {
         before: fr ? snapshotFrame(proj, fr) : null,
         after: null
       });
-      if (undoStack.length > (depth || 40)) undoStack.shift();
+      if (undoStack.length > (state.depth || depth || 40)) undoStack.shift();
       redoStack.length = 0;
     },
     sealLast(proj, layer, frameNum) {
@@ -984,7 +987,7 @@ function makeHistory(depth) {
     pushModel(proj) {
       undoStack.push({ type: "model", before: modelSnapshot(proj),
         beforeCanvases: collectCanvases(proj), after: null, afterCanvases: null });
-      if (undoStack.length > (depth || 40)) undoStack.shift();
+      if (undoStack.length > (state.depth || depth || 40)) undoStack.shift();
       redoStack.length = 0;
     },
     sealModel(proj) {

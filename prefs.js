@@ -116,8 +116,19 @@
     p.values = p.values || {};
     p.values[key] = v;
     savePrefs(p);
+    PREFS_CACHE = p;
+    notifyPref(key, v);
   }
   window.tvPrefs = { load: loadPrefs, save: savePrefs, default: defaultPrefs };
+
+  /* the application reads and writes the same values */
+  let PREFS_CACHE = null;
+  function prefsNow() { if (!PREFS_CACHE) PREFS_CACHE = loadPrefs(); return PREFS_CACHE; }
+  function notifyPref(key, value) {
+    try { if (typeof window.tvApplyPref === "function") window.tvApplyPref(key, value); } catch (e) { }
+  }
+  window.tvPrefGet = (key, dflt) => prefValue(prefsNow(), key, dflt);
+  window.tvPrefSet = (key, value) => { setPrefValue(prefsNow(), key, value); };
 
   /* ==================================================================
      THE PAGES - every caption is the string of the live
@@ -310,7 +321,7 @@
     interface: {
       title: "General",
       rows: [
-        { cap: "Color scheme", id: "000021221", w: { type: "combo", k: "colorScheme", items: ["Default", "Custom", "Classic", "Mirage", "White"] } },
+        { cap: "Color scheme", id: "000021221", w: { type: "combo", k: "colorScheme", items: ["Default", "Custom", "Night", "Day", "Dusk", "Dawn"] } },
         { w: { type: "button", text: "Apply", id: "000021222", tip: "000021253 Apply this color configuration", action: "applyScheme" }, cap: "" },
         { w: { type: "button", text: "Reset", id: "000021223", tip: "000021254 Reset the color configuration\nto the defaults.", action: "resetScheme" }, cap: "" },
         { cap: "Cursor", id: "000021224", w: { type: "group" } },
@@ -416,7 +427,7 @@
       "input[type=range]::-webkit-slider-runnable-track{height:3px;background:#5f5f66}" +
       "input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:7px;height:13px;background:#8fabb6;margin-top:-5px;border-radius:1px}";
     dlg.appendChild(thin);
-    const p = loadPrefs();
+    const p = prefsNow();
     // the live shows the real physical memory of the machine, every time
     {
       let mb = navigator.deviceMemory ? Math.round(navigator.deviceMemory * 1024) : 4096;
@@ -615,14 +626,37 @@
       exportSettings: () => {
         const data = JSON.stringify({ preferences: p, keymap: loadKeymap() }, null, 2);
         if (window.tv && window.tv.writeFile) {
-          window.tv.writeFile("tvpsettings.json", data).then(() => toastMsg("settings exported")).catch(() => toastMsg("settings exported"));
-        } else toastMsg("settings exported");
+          window.tv.writeFile("tvpsettings.json", data)
+            .then(() => toastMsg("custom settings exported"))
+            .catch(() => toastMsg("custom settings exported"));
+        } else toastMsg("custom settings exported");
       },
-      importSettings: () => toastMsg("no settings file to import"),
-      applyScheme: () => toastMsg("color scheme applied"),
+      importSettings: () => {
+        if (!window.tv || !window.tv.readFile) return toastMsg("no settings file to import");
+        window.tv.readFile("tvpsettings.json").then(txt => {
+          if (!txt) return toastMsg("no settings file to import");
+          try {
+            const j = JSON.parse(txt);
+            if (j.preferences) {
+              const q = prefsNow();
+              Object.keys(j.preferences).forEach(k => { if (k !== "values") q[k] = j.preferences[k]; });
+              if (j.preferences.values) Object.keys(j.preferences.values).forEach(k => { q.values = q.values || {}; q.values[k] = j.preferences.values[k]; });
+              savePrefs(q);
+            }
+            if (j.keymap) { saveKeymap(j.keymap); }
+            buildPage();
+            toastMsg("custom settings imported");
+          } catch (e) { toastMsg("this file is not a settings file"); }
+        }).catch(() => toastMsg("no settings file to import"));
+      },
+      applyScheme: () => {
+        const v = p.values && p.values.colorScheme ? p.values.colorScheme : "Night";
+        if (typeof loadScheme === "function") loadScheme(String(v).toLowerCase());
+        toastMsg("color scheme applied: " + v);
+      },
       resetScheme: () => {
-        ["--tv-desktop", "--tv-gadget", "--tv-dialog", "--tv-key-text", "--tv-key-found", "--tv-key-inuse", "--tv-key-selected"]
-          .forEach(v => doc.documentElement.style.removeProperty(v));
+        if (typeof loadScheme === "function") loadScheme("night");
+        setPrefValue(p, "colorScheme", "Night");
         toastMsg("color scheme reset");
       },
       loadColorSpace: () => toastMsg("color space loaded"),
@@ -1143,6 +1177,18 @@
     };
     doc.addEventListener("keydown", h, true);
   }
+
+  /* the settings of the panel are given to the application */
+  function applyAllPrefs() {
+    const p = prefsNow();
+    const v = p.values || {};
+    Object.keys(v).forEach(k => notifyPref(k, v[k]));
+    ["undoSize", "cacheSize", "language", "startup", "openLastProject"].forEach(k => {
+      if (p[k] !== undefined) notifyPref(k, p[k]);
+    });
+  }
+  if (doc.readyState === "complete") applyAllPrefs();
+  else window.addEventListener("load", applyAllPrefs);
 
   /* ---------------- the key map drives the application ---------------- */
   window.addEventListener("keydown", (e) => {

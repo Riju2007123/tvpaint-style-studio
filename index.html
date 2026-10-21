@@ -435,7 +435,7 @@
   .trimghost { position: absolute; top: 0; width: 2px; height: 40px; background: #ffd24a;
     box-shadow: 0 0 4px #ffd24a; z-index: 7; pointer-events: none; }
   .strip.sliding { cursor: grabbing; }
-  .expHandle { position: absolute; top: 0; width: 9px; height: 40px; cursor: ew-resize; z-index: 6;
+  .expHandle { position: absolute; top: 0; width: var(--tl-handle, 9px); height: 40px; cursor: ew-resize; z-index: 6;
     touch-action: none; }
   .expHandle::after { content: ""; position: absolute; left: 1px; top: 1px; width: 3px; height: 38px;
     background: var(--tv-text-out); border-radius: 1px; box-shadow: inset 1px 0 var(--tv-text-out); }
