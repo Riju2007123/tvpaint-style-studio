@@ -131,34 +131,36 @@
   .tvwin{position:fixed;z-index:2400;background:#313136;border:1px solid #5f5f66;
     box-shadow:0 10px 34px rgba(0,0,0,.55);color:#c8c8cc;font:11px/1.25 "Segoe UI",Tahoma,sans-serif;
     user-select:none;display:flex;flex-direction:column;min-height:0}
-  .tvwin-t{height:22px;flex:0 0 22px;display:flex;align-items:center;background:#303036;
-    border-bottom:1px solid #232328;padding:0 4px 0 7px;cursor:default}
-  .tvwin-t span.tvwin-tt{color:#cfcfd3;font-size:11px}
+  .tvwin-t{height:22px;flex:0 0 22px;display:flex;align-items:center;background:#313136;
+    border-bottom:0;padding:0 4px 0 7px;cursor:default}
+  .tvwin-t span.tvwin-tt{color:#898989;font-size:11px}
   .tvwin-x{margin-left:auto;width:17px;height:17px;display:grid;place-items:center;
     color:#b9b9be;font-size:11px;cursor:pointer;border-radius:2px}
   .tvwin-x:hover{background:#4a4a52;color:#fff}
   .tvwin-b{padding:7px 8px 8px;overflow:auto;flex:1 1 auto;min-height:0}
-  .tvlbl{color:#bdbdc3;font-size:11px;white-space:nowrap}
+  .tvlbl{color:#b6b6b6;font-size:11px;white-space:nowrap}
   .tvlbl.dim{color:#7f7f86}
-  .tvf{background:#46464d;border:1px solid #5a5a62;border-radius:2px;color:#c8c8cc;
+  .tvf{background:#46464d;border:1px solid #2b2b30;border-radius:2px;color:#b6b6b6;
     font:11px "Segoe UI",Tahoma,sans-serif;height:17px;padding:0 3px;min-width:0;outline:none}
   .tvf:focus{border-color:#6a7a9a}
   .tvf:disabled,.tvf[readonly]{color:#8f8f96}
   .tvsel{display:inline-flex;align-items:center;gap:0}
-  .tvcombo{display:flex;align-items:center;background:#46464d;border:1px solid #5a5a62;
-    border-radius:2px;height:17px;color:#c8c8cc;cursor:pointer;overflow:hidden}
+  .tvcombo{display:flex;align-items:center;background:#46464d;border:1px solid #3d3d43;
+    border-radius:2px;height:17px;color:#b6b6b6;cursor:pointer;overflow:hidden}
   .tvcombo .v{flex:1 1 auto;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .tvcombo .a{flex:0 0 17px;height:17px;display:grid;place-items:center;color:#d0d0d6;font-size:8px}
+  .tvcombo .a{flex:0 0 17px;height:17px;display:grid;place-items:center;color:#b6b6b6;font-size:8px;position:relative}
+  .tvcombo .a:before{content:"";position:absolute;left:2px;top:2px;width:13px;height:13px;
+    border-radius:50%;border:1px solid #5f5f67;box-sizing:border-box;pointer-events:none}
   .tvcombo:hover{border-color:#6d6d76}
   .tvspin{display:inline-flex;height:17px}
   .tvspin .tvf{border-radius:2px 0 0 2px;border-right:0;text-align:left}
   .tvspin .sp{width:8px;height:17px;display:grid;place-items:center;background:#46464d;
-    border:1px solid #5a5a62;color:#c4c4ca;font-size:5px;cursor:pointer}
+    border:1px solid #5a5a62;color:#b6b6b6;font-size:5px;cursor:pointer}
   .tvspin .sp.l{border-right:0;border-radius:0}
   .tvspin .sp.r{border-radius:0 2px 2px 0}
   .tvspin .sp:hover{background:#51515a}
-  .tvbtn{background:#46464d;border:1px solid #5a5a62;border-radius:2px;color:#d2d2d6;
-    font:11px "Segoe UI",Tahoma,sans-serif;height:19px;padding:0 9px;cursor:pointer}
+  .tvbtn{background:#46464d;border:0;border-radius:2px;color:#b6b6b6;
+    font:11px "Segoe UI",Tahoma,sans-serif;height:17px;padding:0 9px;cursor:pointer}
   .tvbtn:hover{background:#51515a}
   .tvbtn:active{background:#3f3f46}
   .tvbtn.wide{width:100%;height:22px}
@@ -166,14 +168,14 @@
   .tvbtn:disabled{color:#77777e;background:#3a3a41;border-color:#45454c;cursor:default}
   .tvchk{width:13px;height:13px;background:#46464d;border:1px solid #5f5f67;border-radius:1px;
     display:inline-grid;place-items:center;cursor:pointer;color:#d8d8dc;font-size:9px;flex:0 0 13px}
-  .tvchk.on:after{content:"\\2713"}
+  .tvchk.on:after{content:"";width:12px;height:9px;background-position:center calc(50% - 2px);background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAJCAYAAAAGuM1UAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAABRSURBVChTYzA0NPtPCmZAF8CFtbT0wJgoDSCF27Zt+6+srEZYA0wxXAPMKhAmpBgkxgBiwASRNWFTDNYAItA14VIM14CuCZdiFA3omrApBmEAUgjGB6MDXSEAAAAASUVORK5CYII=) no-repeat center}
   .tvchk.big{width:21px;height:18px;flex:0 0 21px;border:0;border-radius:0;background:#414146;font-size:12px}
   .tvchk.big.on{background:transparent}
   .tvtabs{display:flex;align-items:flex-end;gap:0}
-  .tvt{padding:2px 10px;height:18px;display:flex;align-items:center;justify-content:center;
-    background:#46464d;color:#c2c2c8;border:1px solid #2a2a30;border-bottom:0;
+  .tvt{padding:0 10px;height:16px;line-height:12px;display:flex;align-items:center;justify-content:center;
+    background:#46464d;color:#b6b6b6;border:1px solid #2a2a30;border-bottom:0;
     border-radius:2px 2px 0 0;cursor:pointer;white-space:nowrap}
-  .tvt.on{background:#3e476b;color:#e9e9ec;border-color:#5d6f92}
+  .tvt.on{background:#3e476b;color:#b6b6b6;border-color:#3e476b}
   .tvlist{position:fixed;z-index:2600;background:#313136;border:1px solid #4a4a52;
     box-shadow:0 5px 18px rgba(0,0,0,.55);padding:2px 0;min-width:120px;color:#c8c8cc;
     font:11px "Segoe UI",Tahoma,sans-serif;user-select:none}
@@ -184,7 +186,7 @@
   .tvlist .ri.on:before{content:"\\2713";position:absolute;left:6px;font-size:9px}
   .tvlist .ri .ar{margin-left:auto;padding-left:14px;font-size:9px;color:#a9a9b0}
   .tvlist .rsep{height:1px;background:#4a4a52;margin:3px 0}
-  .tvmsg{color:#c8c8cc;font-size:11px;line-height:1.45;white-space:pre-wrap}
+  .tvmsg{color:#b6b6b6;font-size:11px;line-height:1.45;white-space:pre-wrap}
   `;
   const styleEl = el("style");
   styleEl.textContent = CSS;
@@ -905,7 +907,7 @@
     let tx = 6;
     tabNames.forEach((n, i) => {
       const t = el("div", "tvt", n);
-      at(t, tx, 6, tabW[i], 18);
+      at(t, tx, 7, tabW[i], 16);
       t.style.padding = "0";
       t.style.justifyContent = "center";
       t.title = "Selected Tab indicates the content of the exported footage";
@@ -919,26 +921,31 @@
     });
     // live: the 1px baseline under the strip is the active tab colour
     const tabLine = el("div");
-    at(tabLine, 6, 24, 465, 1);
+    at(tabLine, 6, 23, 465, 2);
     tabLine.style.cssText += "background:#3e476b;pointer-events:none;z-index:4";
     b.appendChild(tabLine);
 
     /* --- name + path --- */
+    // live: a recessed #2d2d32 band (dialog y 48..77) holds the clip name
+    const nameBand = el("div");
+    at(nameBand, 0, 25, 1008, 29);
+    nameBand.style.background = "#2d2d32";
+    b.appendChild(nameBand);
     const clipName = el("div", "tvlbl", "");
     clipName.style.textAlign = "right";
-    at(clipName, 335, 31, 200, 14);
+    at(clipName, 335, 34, 200, 14);
     b.appendChild(clipName);
 
     const browse = el("button", "tvbtn", "Browse");
-    at(browse, 6, 53, 116, 17);
+    at(browse, 6, 56, 117, 17);
     browse.title = "Click here to change the exported file location";
     const pathField = txt(documentsExportDefault(), {});
-    at(pathField, 126, 53, 872, 17);
+    at(pathField, 126, 56, 872, 17);
     pathField.title = "Exported File location and name";
     b.append(browse, pathField);
 
     /* --- As + Replace + Export/Cancel --- */
-    b.appendChild(labelAt("As", 90, 92, 30));
+    b.appendChild(labelAt("As", 90, 96, 27));
     const asC = combo("Sequence", {
       width: 240,
       items: EXPORT_AS.map(x => ({ label: x, value: x }))
@@ -947,15 +954,15 @@
     asC.title = "Set the export of the file";
     b.appendChild(asC);
 
-    const replaceChk = mkCheck(380, 94, false);
+    const replaceChk = mkBig(369, 94, false);
     const replaceLbl = el("div", "tvlbl", "Replace existing file(s)");
-    at(replaceLbl, 397, 94, 120, 14);
+    at(replaceLbl, 398, 98, 130, 14);
     b.append(replaceChk, replaceLbl);
 
     const exportBtn = el("button", "tvbtn", "Export");
-    at(exportBtn, 847, 87, 74, 17);
+    at(exportBtn, 847, 94, 74, 17);
     const cancelBtn = el("button", "tvbtn", "Cancel");
-    at(cancelBtn, 925, 87, 74, 17);
+    at(cancelBtn, 925, 94, 74, 17);
     b.append(exportBtn, cancelBtn);
 
     /* --- display-tab settings --- */
@@ -1068,51 +1075,50 @@
 
     /* --- the seven export flags (live: flat 21x18 boxes, a bare tick when
        the option is on - Notes and Slate are check boxes as well) --- */
-    const bgChk = mkBig(273, 374, true);
+    const bgChk = mkBig(273, 372, true);
     bgChk.title = "Export Content with Layer Background";
-    pD.append(labelAt("Background", 140, 372, 130), bgChk);
+    pD.append(labelAt("Background", 140, 372, 126), bgChk);
 
     const notesChk = mkBig(273, 391, false);
     notesChk.title = "Add notes at bottom of the file";
-    pD.append(labelAt("Notes", 140, 389, 130), notesChk);
+    pD.append(labelAt("Notes", 140, 392, 126), notesChk);
 
     const slateChk = mkBig(273, 410, false);
     slateChk.title = "Add a black border around the content with the current frame, the name of the project and clip, and the date.";
     const slateBtn = el("button", "tvbtn", "");
-    at(slateBtn, 298, 410, 20, 17);
+    at(slateBtn, 297, 410, 21, 17);
     slateBtn.style.padding = "0";
+    slateBtn.style.background = "transparent";
     slateBtn.title = "Set some parameters of the slate.";
-    // live: a gear with a diagonal slash while the slate is off
-    const slateGear = el("span", "", "\u2699"); slateGear.style.cssText = "font-size:11px;color:#8f8f96;position:absolute;left:4px;top:3px";
-    const slash = el("span"); slash.style.cssText = "position:absolute;left:3px;top:8px;width:14px;height:1px;background:#8f8f96;transform:rotate(-45deg)";
-    slateBtn.append(slateGear, slash);
-    pD.append(labelAt("Slate", 140, 408, 130), slateChk, slateBtn);
+    // live: the whole button (crossed gear) is one picture, the plain gear when on
+    const SLATE_OFF = "url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABUAAAARCAYAAAAyhueAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAAESSURBVDhPtZQ/D4JADMX5SixuTiQORicnpkuIRhwwMfxRGUhk41PXvGoVH4cJMQ6Py/XaH3ft9YIwnAk0n0cSRUtZLNaThTjEGyvAh51+kULxB15gpWkmZXnVkde6rvuYgxf4jpwke8mykzi31XlRXKRpbjpibnYGQuAFbIQArOtGQawkSUeBJi/Uud0T0kqenyWOnaxWGx37QPhx7CgUAhRAthvQduzTAHo4HF85tJ0xEHbLMfyZMYBWVf3KH47MQAh284E/MwZQ3065KJN3avpWZeQaULabvFCraj+HVv0HsFXo5Or3q8x3FcI9xn3mOIX6Oup9D8c7CkB0HsdqR3Hv+3L4rfdZ2vt/eaX+8Z7eAZaZvYdQZrBuAAAAAElFTkSuQmCC)";
+    const SLATE_ON = "url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABUAAAARCAYAAAAyhueAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAADySURBVDhPtZQ9DoJAEEb3SjR2VCQUJjZUnoHGG1DYkHgHcDWIUFHB9ca8TZZiQIUoxWOz88187L8Jgp1AGEYSRXuJ48NqqKPeexk+OukXnCl/0IKmKK7SNK1rtabBz8xNOcvOUlUPyfOL69f1U4ZhcC194ujk6Vr8jA4CBV3XOaNPkKdrYdaUkVDU971Ye5M0PUmSHF1L35v6mWhmTYEiDHQcvLGOeyam1t7HNWRkWgfifo3L0k70iWnbtuP0mLLWgbjPIV/rE9NNRur565rCt90nvnr3l5xT9LfndJMbteTus3ncfVqtadzd3+SV2uI9fQGMcfQJeLLpsgAAAABJRU5ErkJggg==)";
+    const setSlateImg = (on) => {
+      slateBtn.style.backgroundImage = on ? SLATE_ON : SLATE_OFF;
+      slateBtn.style.backgroundRepeat = "no-repeat";
+      slateBtn.style.backgroundPosition = "center";
+    };
+    pD.append(labelAt("Slate", 140, 411, 126), slateChk, slateBtn);
 
     const lockAspectChk = mkBig(273, 429, false);
     lockAspectChk.title = "Preserve Width / Height ratio";
-    pD.append(labelAt("Lock aspect ratio", 140, 427, 130), lockAspectChk);
+    pD.append(labelAt("Lock aspect ratio", 140, 430, 126), lockAspectChk);
 
     const stretchChk = mkBig(273, 448, false);
     stretchChk.title = "TimeStretch Exported Footage to respect new Frame Rate";
-    pD.append(labelAt("Stretch to Frame Rate", 140, 446, 130), stretchChk);
+    pD.append(labelAt("Stretch to Frame Rate", 140, 449, 126), stretchChk);
 
     const interpChk = mkBig(273, 467, false);
     interpChk.title = "Perform TimeStretch by creating new frame instead of duplicating frame";
-    pD.append(labelAt("Time Interpolation", 140, 465, 130), interpChk);
+    pD.append(labelAt("Time Interpolation", 140, 468, 126), interpChk);
 
     const splitChk = mkBig(273, 486, false);
     splitChk.title = "Split Scenes/Clip in different files";
-    pD.append(labelAt("Split Scenes", 140, 484, 130), splitChk);
+    pD.append(labelAt("Split Scenes", 140, 487, 126), splitChk);
 
     /* --- the slate parameters (live: "Set some parameters of the slate.") --- */
     const slateOpt = { layout: "Overlay", borderPct: 4 };
-    const syncSlateBtn = () => {
-      const on = slateChk.checked();
-      slash.style.display = on ? "none" : "";
-      slateGear.style.color = on ? "#c8c8cc" : "#8f8f96";
-      slateBtn.title = on ? "Set some parameters of the slate." : "Set some parameters of the slate.";
-      slateBtn.style.opacity = on ? "1" : ".75";
-    };
+    const syncSlateBtn = () => { setSlateImg(slateChk.checked()); };
     // keep the check box's own toggle and add the redraw after it
     const onFlag = (c, fn) => { const old = c.onclick; c.onclick = (e) => { if (old) old(e); fn(); }; };
     onFlag(slateChk, () => { syncSlateBtn(); drawPreview(); });
@@ -1210,7 +1216,7 @@
 
     /* --- preview + both watermarks --- */
     const previewBox = el("div");
-    at(previewBox, 373, 117, 627, 366);
+    at(previewBox, 373, 113, 627, 370);
     previewBox.style.zIndex = "2";
     previewBox.style.cssText += "background:#2d2d32;overflow:hidden";
     previewBox.title = "Footage Preview";
@@ -1222,7 +1228,7 @@
 
     /* --- footer (All Frames bar + current frame) --- */
     const allBar = el("div");
-    at(allBar, 632, 489, 370, 17);
+    at(allBar, 632, 487, 370, 17);
     allBar.style.zIndex = "3";
     allBar.style.cssText += "display:flex;align-items:center;justify-content:flex-start;position:relative";
     allBar.title = "Uncheck to set the mark in / mark out";
