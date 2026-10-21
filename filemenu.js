@@ -849,7 +849,7 @@
     const fs = Math.max(5, Math.round(band * 0.68));
     const pad = Math.round(fs * 1.3);
     const pname = proj && proj.name ? proj.name.replace(/^\*/, "").replace(/\.tvpp$/i, "") : "";
-    const cname = "Clip_001";
+    const cname = (proj && proj.clipName) ? proj.clipName : "Clip_001";
     c.save();
     c.font = fs + "px " + (sl.font || "Arial") + ", Tahoma, sans-serif";
     c.textBaseline = "middle";
@@ -876,8 +876,8 @@
     const y0 = h - band - (bottomOffset || 0);
     let authorW = 0;
     let authorText = "";
-    if (sl.authorOn !== false && sl.author) {
-      authorText = sl.author;
+    if (sl.authorOn !== false) {
+      authorText = sl.author || "";
       authorW = c.measureText(authorText).width + pad * 2;
     }
     if (sl.dateOn !== false) {
@@ -889,7 +889,7 @@
       c.textAlign = "left";
       c.fillText(t, pad, y0 + Math.round(band / 2));
     }
-    if (sl.logoOn !== false) {
+    if (sl.logoOn !== false && sl.logo) {
       const dateW = sl.dateOn !== false ? c.measureText(slateDate(sl.date)).width + pad * 2 : 0;
       const bx = dateW, bw = Math.max(0, w - dateW - authorW);
       c.fillStyle = "#505057";
@@ -897,17 +897,18 @@
       if (SLATE_LOGO.complete && SLATE_LOGO.naturalWidth) {
         const lh = Math.round(band * 0.53), lw = Math.round(lh * (SLATE_LOGO.naturalWidth / SLATE_LOGO.naturalHeight));
         c.save();
-        c.globalAlpha = 0.95;
         c.drawImage(SLATE_LOGO, Math.round(bx + (bw - lw) / 2), Math.round(y0 + (band - lh) / 2), lw, lh);
         c.restore();
       }
     }
-    if (authorText) {
+    if (sl.authorOn !== false) {
       c.fillStyle = sl.bgColor || "#000000";
       c.fillRect(w - authorW, y0, authorW, band);
-      c.fillStyle = sl.textColor || "#ffffff";
-      c.textAlign = "center";
-      c.fillText(authorText, w - authorW / 2, y0 + Math.round(band / 2));
+      if (authorText) {
+        c.fillStyle = sl.textColor || "#ffffff";
+        c.textAlign = "center";
+        c.fillText(authorText, w - authorW / 2, y0 + Math.round(band / 2));
+      }
     }
     c.restore();
   }
