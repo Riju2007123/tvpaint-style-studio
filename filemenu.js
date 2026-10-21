@@ -785,10 +785,13 @@
       ? { x: 0, y: band, w: w, h: Math.max(1, h - band * 2) }
       : { x: 0, y: 0, w: w, h: h };
 
-    let sx = 0, sy = 0, sw = proj.width, sh = proj.height;
-    if (viewMode === "Camera" && proj.cameraKeys && proj.cameraKeys.length) {
-      const r = E.cameraRect(proj, E.cameraEvaluate(proj, frame));
-      sx = r.x; sy = r.y; sw = r.w; sh = r.h;
+    let sx = 0, sy = 0, sw = proj.width, sh = proj.height, rot = 0;
+    if (viewMode === "Camera") {
+      const cam = E.cameraEvaluate(proj, frame);
+      const r = E.cameraRect(proj, cam);
+      sw = r.w; sh = r.h;
+      sx = r.cx - sw / 2; sy = r.cy - sh / 2;
+      rot = r.rot || 0;
     }
     const kx = inner.w / sw, ky = inner.h / sh;
     const drawLayers = (f, alpha) => {
@@ -798,7 +801,16 @@
         const surf = key !== null ? l.frames[key] && l.frames[key].canvas : null;
         if (surf && surf.getContext) {
           c.globalAlpha = l.opacity * alpha;
-          c.drawImage(surf, sx, sy, sw, sh, inner.x, inner.y, Math.round(sw * kx), Math.round(sh * ky));
+          if (rot) {
+            // the camera is turned: the picture spins around its centre
+            c.save();
+            c.translate(inner.x + inner.w / 2, inner.y + inner.h / 2);
+            c.rotate(rot * Math.PI / 180);
+            c.drawImage(surf, sx, sy, sw, sh, -inner.w / 2, -inner.h / 2, Math.round(sw * kx), Math.round(sh * ky));
+            c.restore();
+          } else {
+            c.drawImage(surf, sx, sy, sw, sh, inner.x, inner.y, Math.round(sw * kx), Math.round(sh * ky));
+          }
           c.globalAlpha = 1;
         }
       });
@@ -1134,6 +1146,21 @@
     at(tgtW, 273, 273, 69, 17);
     tgtW.title = "Set Exported Footage Width";
     pD.append(srcW, triBtn(273, () => { tgtW.input.value = srcW.textContent; drawPreview(); }), tgtW);
+    // the size of the camera, the way the live panel reads it
+    const cameraSize = () => {
+      if (!proj) return { w: startW, h: startH };
+      const r = E.cameraRect(proj, E.cameraEvaluate(proj, frameField.value));
+      return { w: Math.max(1, Math.round(r.w)), h: Math.max(1, Math.round(r.h)) };
+    };
+    const applyView = () => {
+      const cam = viewC.getValue() === "Camera";
+      const sz = cam ? cameraSize() : { w: startW, h: startH };
+      srcW.textContent = String(sz.w);
+      srcH.textContent = String(sz.h);
+      tgtW.input.value = String(sz.w);
+      tgtH.input.value = String(sz.h);
+      drawPreview();
+    };
 
     pD.appendChild(labelAt("Height", 96, 292, 70));
     const srcH = srcLabel(String(startH), 292);
@@ -1592,6 +1619,7 @@
       clipName.textContent = isLayers || tabIndex === 1 ? (isBrush ? "CustomBrush" : "Clip_001") : projName();
       viewC.setValue("Project");
       if (tabIndex === 1) viewC.setValue("Clip");
+      applyView();
       const as = asC.getValue();
       allBar.style.display = (isBrush || as === "Single Image") ? "none" : "";
       frameField.style.display = isBrush ? "none" : "";
@@ -1608,7 +1636,10 @@
     [tgtW.input, tgtH.input, frameField].forEach(i => i.addEventListener("input", drawPreview));
     [viewC, tgtFps, tgtDpi, tgtPar, convC, modeC, alphaC].forEach(c => {
       const old = c.onPick;
-      c.onPick = (v) => { if (old) old(v); drawPreview(); };
+      c.onPick = (v) => {
+        if (old) old(v);
+        if (c === viewC) applyView(); else drawPreview();
+      };
     });
 
     // Width/Height link (the padlock and "Lock aspect ratio")
