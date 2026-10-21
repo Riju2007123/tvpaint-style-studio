@@ -778,14 +778,11 @@
     }
     if (!proj || proj.closed) return out;
 
-    // the slate reserves a black border around the content
-    let slate = null;
-    if (o.slate && o.slate.on) {
-      const b = Math.max(2, Math.round(Math.min(w, h) * (o.slate.borderPct || 4) / 100));
-      slate = { b: b, layout: o.slate.layout || "Overlay" };
-    }
-    const inner = slate && slate.layout === "resize"
-      ? { x: slate.b, y: slate.b, w: Math.max(1, w - 2 * slate.b), h: Math.max(1, h - 2 * slate.b) }
+    // the slate reserves a band at the top and at the bottom
+    const sl = (o.slate && o.slate.on) ? o.slate : null;
+    const band = sl ? Math.max(6, Math.round(h * (sl.ratio || 10) / 100)) : 0;
+    const inner = sl && sl.layout === "Resize Image within Border"
+      ? { x: 0, y: band, w: w, h: Math.max(1, h - band * 2) }
       : { x: 0, y: 0, w: w, h: h };
 
     let sx = 0, sy = 0, sw = proj.width, sh = proj.height;
@@ -810,55 +807,144 @@
     // "Perform TimeStretch by creating new frame instead of duplicating frame"
     if (o.blend && o.blend.frac > 0.001) drawLayers(o.blend.frame, o.blend.frac);
 
-    if (slate) drawSlate(c, w, h, slate, frame);
-    if (o.notes) drawNotes(c, w, h, o.notes);
+    const notesBand = o.notes ? notesBandHeight(c, w, h, o.notes) : 0;
+    if (sl) drawSlate(c, w, h, sl, frame, o.pos || 1, o.total || 1, notesBand);
+    if (o.notes) drawNotes(c, w, h, o.notes, notesBand);
     return out;
   }
 
-  // TVPaint's slate: "Add a black border around the content with the current
-  // frame, the name of the project and clip, and the date."
-  function drawSlate(c, w, h, slate, frame) {
-    const b = slate.b;
-    c.save();
-    c.fillStyle = "#000000";
-    c.fillRect(0, 0, w, b);
-    c.fillRect(0, h - b, w, b);
-    c.fillRect(0, 0, b, h);
-    c.fillRect(w - b, 0, b, h);
-    const fs = Math.max(8, Math.round(Math.min(w, h) * 0.022));
-    c.fillStyle = "#ffffff";
-    c.font = fs + "px Tahoma, sans-serif";
-    c.textBaseline = "middle";
+  // TVPaint 12's slate, drawn exactly as the live panel draws it
+  // (shots/live-slate-on.png): a band at the top and one at the bottom,
+  // the band height being the "Ratio" percent of the image height.  The
+  // top carries "<project> - <clip> - (<pos>/<total>)" on the left and the
+  // frame number on the right, the bottom the date on the left, the logo
+  // in the middle and the author on the right.  Each caption sits on a
+  // black box of its own.
+  const SLATE_LOGO = new Image();
+  try { SLATE_LOGO.src = "Resources/tvpaint_logo_wider.png"; } catch (e) { /* no logo */ }
+
+  function slateText(format, pname, cname, pos, total, frame) {
+    return String(format || "").split(" - ").map(part => {
+      const p = part.trim().toLowerCase();
+      if (p === "project") return pname;
+      if (p === "clip") return cname;
+      if (p === "position") return "(" + pos + "/" + total + ")";
+      if (p === "frame" || p === "time") return String(frame);
+      return part;
+    }).join(" - ");
+  }
+  function slateDate(format) {
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yy = String(d.getFullYear());
+    switch (String(format || "Day Month Year")) {
+      case "Month Day Year": return mm + "/" + dd + "/" + yy;
+      case "Year Month Day": return yy + "/" + mm + "/" + dd;
+      default: return dd + "/" + mm + "/" + yy;
+    }
+  }
+  function drawSlate(c, w, h, sl, frame, pos, total, bottomOffset) {
+    const band = Math.max(6, Math.round(h * (sl.ratio || 10) / 100));
+    const fs = Math.max(5, Math.round(band * 0.68));
+    const pad = Math.round(fs * 1.3);
     const pname = proj && proj.name ? proj.name.replace(/^\*/, "").replace(/\.tvpp$/i, "") : "";
     const cname = "Clip_001";
-    const d = new Date();
-    const date = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-    c.textAlign = "left";
-    c.fillText(cname, b + 5, Math.round(b / 2));
-    c.fillText(pname, b + 5, h - Math.round(b / 2));
-    c.textAlign = "right";
-    c.fillText(frame + "  " + date, w - b - 5, h - Math.round(b / 2));
+    c.save();
+    c.font = fs + "px " + (sl.font || "Arial") + ", Tahoma, sans-serif";
+    c.textBaseline = "middle";
+    // --- top band: the title on the left, the frame number on the right
+    if (sl.titleOn !== false) {
+      const t = slateText(sl.title, pname, cname, pos, total, frame);
+      const tw = c.measureText(t).width;
+      c.fillStyle = sl.bgColor || "#000000";
+      c.fillRect(0, 0, tw + pad * 2, band);
+      c.fillStyle = sl.textColor || "#ffffff";
+      c.textAlign = "left";
+      c.fillText(t, pad, Math.round(band / 2));
+    }
+    if (sl.frameOn !== false) {
+      const t = sl.frame === "Time" ? slateTime(frame) : String(frame);
+      const tw = c.measureText(t).width;
+      c.fillStyle = sl.bgColor || "#000000";
+      c.fillRect(w - tw - pad * 2, 0, tw + pad * 2, band);
+      c.fillStyle = sl.textColor || "#ffffff";
+      c.textAlign = "center";
+      c.fillText(t, w - tw / 2 - pad, Math.round(band / 2));
+    }
+    // --- bottom band: the date, the logo, the author
+    const y0 = h - band - (bottomOffset || 0);
+    let authorW = 0;
+    let authorText = "";
+    if (sl.authorOn !== false && sl.author) {
+      authorText = sl.author;
+      authorW = c.measureText(authorText).width + pad * 2;
+    }
+    if (sl.dateOn !== false) {
+      const t = slateDate(sl.date);
+      const tw = c.measureText(t).width;
+      c.fillStyle = sl.bgColor || "#000000";
+      c.fillRect(0, y0, tw + pad * 2, band);
+      c.fillStyle = sl.textColor || "#ffffff";
+      c.textAlign = "left";
+      c.fillText(t, pad, y0 + Math.round(band / 2));
+    }
+    if (sl.logoOn !== false) {
+      const dateW = sl.dateOn !== false ? c.measureText(slateDate(sl.date)).width + pad * 2 : 0;
+      const bx = dateW, bw = Math.max(0, w - dateW - authorW);
+      c.fillStyle = "#505057";
+      c.fillRect(bx, y0, bw, band);
+      if (SLATE_LOGO.complete && SLATE_LOGO.naturalWidth) {
+        const lh = Math.round(band * 0.53), lw = Math.round(lh * (SLATE_LOGO.naturalWidth / SLATE_LOGO.naturalHeight));
+        c.save();
+        c.globalAlpha = 0.95;
+        c.drawImage(SLATE_LOGO, Math.round(bx + (bw - lw) / 2), Math.round(y0 + (band - lh) / 2), lw, lh);
+        c.restore();
+      }
+    }
+    if (authorText) {
+      c.fillStyle = sl.bgColor || "#000000";
+      c.fillRect(w - authorW, y0, authorW, band);
+      c.fillStyle = sl.textColor || "#ffffff";
+      c.textAlign = "center";
+      c.fillText(authorText, w - authorW / 2, y0 + Math.round(band / 2));
+    }
     c.restore();
   }
+  function slateTime(frame) {
+    const fps = Number(proj && proj.fps) || 24;
+    const s = Math.max(0, (Number(frame) - 1) / fps);
+    const mm = Math.floor(s / 60), ss = Math.floor(s % 60), ff = Math.floor((s % 1) * fps);
+    return String(mm).padStart(2, "0") + ":" + String(ss).padStart(2, "0") + ":" + String(ff).padStart(2, "0");
+  }
 
-  // "Add notes at bottom of the file" - the project notes of the timeline.
-  function drawNotes(c, w, h, notes) {
-    const text = String(notes == null ? "" : notes);
-    if (!text.trim()) return;
+  // "Add notes at bottom of the file" - the project notes of the timeline,
+  // written on a band at the bottom of the exported image.
+  function notesLines(notes) {
+    return String(notes == null ? "" : notes).split(/\r?\n/).filter(l => l.length).slice(-4);
+  }
+  function notesBandHeight(c, w, h, notes) {
+    const lines = notesLines(notes);
+    if (!lines.length) return 0;
     const fs = Math.max(9, Math.round(h * 0.022));
-    const lines = text.split(/\r?\n/).filter(l => l.length).slice(-4);
+    return Math.round(fs * (lines.length + 1.4));
+  }
+  function drawNotes(c, w, h, notes, band) {
+    const lines = notesLines(notes);
+    if (!lines.length) return;
+    const fs = Math.max(9, Math.round(h * 0.022));
+    band = band || Math.round(fs * (lines.length + 1.4));
     c.save();
     c.font = fs + "px Tahoma, sans-serif";
     c.textBaseline = "bottom";
     c.textAlign = "left";
-    let y = h - 4;
+    c.fillStyle = "rgba(255,255,255,0.85)";
+    c.fillRect(0, h - band, w, band);
+    let y = h - Math.round(fs * 0.4);
     for (let i = lines.length - 1; i >= 0; i--) {
-      const tw = c.measureText(lines[i]).width;
-      c.fillStyle = "rgba(255,255,255,0.78)";
-      c.fillRect(4, y - fs, tw + 6, fs + 2);
       c.fillStyle = "#101014";
-      c.fillText(lines[i], 7, y);
-      y -= fs + 3;
+      c.fillText(lines[i], Math.round(fs * 0.4), y);
+      y -= Math.round(fs * 1.25);
     }
     c.restore();
   }
@@ -1117,7 +1203,18 @@
     pD.append(labelAt("Split Scenes", 140, 487, 126), splitChk);
 
     /* --- the slate parameters (live: "Set some parameters of the slate.") --- */
-    const slateOpt = { layout: "Overlay", borderPct: 4 };
+    // TVPaint's slate settings (live panel, shots/live-slate-settings.png and
+    // the .loc strings 011003200..011003262)
+    const slateOpt = {
+      layout: "Overlay", ratio: 10,
+      textColor: "#ffffff", bgColor: "#000000",
+      font: "Arial", style: "Regular", script: "Western",
+      titleOn: true, title: "Project - Clip - Position",
+      frameOn: true, frame: "Frame",
+      dateOn: true, date: "Day Month Year",
+      logoOn: true, logo: "",
+      authorOn: true, author: ""
+    };
     const syncSlateBtn = () => { setSlateImg(slateChk.checked()); };
     // keep the check box's own toggle and add the redraw after it
     const onFlag = (c, fn) => { const old = c.onclick; c.onclick = (e) => { if (old) old(e); fn(); }; };
@@ -1129,44 +1226,153 @@
     onFlag(splitChk, () => drawPreview());
     onFlag(lockAspectChk, () => drawPreview());
     slateBtn.onclick = () => {
-      if (!slateChk.checked()) return toast("enable the slate first");
+      if (!slateChk.checked()) return;   // the live disables it while the slate is off
       tvSlateParams();
     };
+    // The slate settings panel, laid out like the live one: 386x228, no
+    // title bar, the labels right aligned at x=146, the check boxes at 139,
+    // the widgets at 158 and the "..." buttons at 360, one row every 18 px.
     function tvSlateParams() {
-      const d2 = tvWin("Slate", 320);
-      const b2 = bodyOf(d2);
-      b2.style.padding = "10px 12px";
-      const l1 = el("div", "tvlbl", "Layout");
-      l1.style.marginBottom = "6px";
-      b2.appendChild(l1);
-      const r1 = el("label"); r1.style.cssText = "display:flex;align-items:center;gap:6px;margin:3px 0;font:11px 'Segoe UI',Tahoma,sans-serif;color:#c8c8cc";
-      const rad1 = el("input"); rad1.type = "radio"; rad1.name = "slateLayout"; rad1.checked = slateOpt.layout === "Overlay";
-      r1.append(rad1, document.createTextNode("Overlay"));
-      const r2 = el("label"); r2.style.cssText = r1.style.cssText;
-      const rad2 = el("input"); rad2.type = "radio"; rad2.name = "slateLayout"; rad2.checked = slateOpt.layout !== "Overlay";
-      r2.append(rad2, document.createTextNode("Resize within Border"));
-      const hint = el("div", "tvlbl", "Set the layout\n\n_ Overlay: the slate will overlay some part of the image\n_ Resize within Border: black borders will be added to display the slate, \nbut the inner image will be smaller than the original");
-      hint.style.cssText += ";white-space:pre-wrap;margin:8px 0 6px;color:#8f8f96;line-height:14px";
-      const bRow = el("div"); bRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:10px";
-      bRow.appendChild(el("span", "tvlbl", "Border size"));
-      const bs = spin(String(slateOpt.borderPct), 1, { width: 48, suffix: "%" });
-      bs.input.value = slateOpt.borderPct + "%";
-      bRow.appendChild(bs);
-      b2.append(r1, r2, hint, bRow);
-      const bar = el("div"); bar.style.cssText = "display:flex;justify-content:flex-end;gap:8px";
-      const ok = el("button", "tvbtn", "OK");
-      const cancel = el("button", "tvbtn", "Cancel");
-      bar.append(cancel, ok);
-      b2.appendChild(bar);
-      ok.onclick = () => {
-        slateOpt.layout = rad1.checked ? "Overlay" : "Resize within Border";
-        slateOpt.borderPct = Math.max(1, Math.min(30, parseInt(bs.input.value, 10) || 4));
-        d2.remove();
-        drawPreview();
-        toast("slate: " + slateOpt.layout + ", border " + slateOpt.borderPct + "%");
+      const p = el("div", "tvwin");
+      p.style.cssText = "width:386px;height:228px;position:absolute;z-index:2450;background:#313136;" +
+        "border:1px solid #2b2b30;box-shadow:0 6px 20px rgba(0,0,0,.6);padding:0";
+      // the live opens it over the export panel, at +116 / +206 from its corner
+      const dr = dlg.getBoundingClientRect();
+      p.style.left = Math.round(dr.left + 116) + "px";
+      p.style.top = Math.round(dr.top + 206) + "px";
+      doc.body.appendChild(p);
+      const rowY = [8, 26, 44, 62, 80, 98, 116, 134, 152, 170, 188];
+      const lbl = (t, y) => {
+        const d = el("div", "tvlbl", t);
+        d.style.cssText = "position:absolute;left:40px;top:" + (y + 1) + "px;width:78px;height:15px;" +
+          "text-align:right;color:#b6b6b6;font:11px 'Segoe UI',Tahoma,sans-serif";
+        p.appendChild(d);
+        return d;
       };
-      cancel.onclick = () => d2.remove();
-      return d2;
+      const put = (node, x, y, w, h) => {
+        node.style.cssText += ";position:absolute;left:" + x + "px;top:" + y + "px";
+        if (w) node.style.width = w + "px";
+        if (h) node.style.height = h + "px";
+        p.appendChild(node);
+        return node;
+      };
+      const mkCombo = (value, items, tip) => {
+        const c = combo(value, { width: 200, items: items.map(v => ({ label: v, value: v })) });
+        c.title = tip || "";
+        return c;
+      };
+      const mkCheck = (on, tip) => {
+        const c = check(!!on);
+        c.classList.add("big");
+        c.title = tip || "";
+        return c;
+      };
+      const dots = (tip) => {
+        const b = el("button", "tvbtn", "\u2026");
+        b.style.cssText += ";width:17px;height:17px;padding:0;font-size:11px";
+        b.title = tip || "";
+        b.onclick = () => toast(tip || "");
+        return b;
+      };
+      // 1 - Layout
+      lbl("Layout", rowY[0]);
+      const layC = mkCombo(slateOpt.layout, ["Overlay", "Resize Image within Border"],
+        "Set the layout\n\n_ Overlay: the slate will overlay some part of the image\n_ Resize within Border: black borders will be added to display the slate, \nbut the inner image will be smaller than the original");
+      put(layC, 158, rowY[0], 219, 17);
+      layC.onPick = (v) => { slateOpt.layout = v; };
+      // 2 - Ratio
+      lbl("Ratio", rowY[1]);
+      const ratioS = spin(String(slateOpt.ratio), 1, { width: 195, suffix: "%" });
+      ratioS.input.value = slateOpt.ratio + "%";
+      put(ratioS, 158, rowY[1], 212, 17);
+      ratioS.title = "Set the ratio";
+      ratioS.input.addEventListener("input", () => {
+        slateOpt.ratio = Math.max(1, Math.min(50, parseInt(ratioS.input.value, 10) || 10));
+        drawPreview();
+      });
+      // 3 - Color
+      lbl("Color", rowY[2]);
+      const cText = el("div"); cText.style.cssText = "background:" + slateOpt.textColor + ";width:18px;height:17px";
+      cText.title = "Set the Text & Background Color";
+      cText.onclick = () => { slateOpt.textColor = slateOpt.textColor === "#ffffff" ? "#101014" : "#ffffff"; cText.style.background = slateOpt.textColor; drawPreview(); };
+      const cBg = el("div"); cBg.style.cssText = "background:" + slateOpt.bgColor + ";width:18px;height:17px";
+      cBg.title = "Set the Text & Background Color";
+      cBg.onclick = () => { slateOpt.bgColor = slateOpt.bgColor === "#000000" ? "#505057" : "#000000"; cBg.style.background = slateOpt.bgColor; drawPreview(); };
+      put(cText, 158, rowY[2], 18, 17);
+      put(cBg, 176, rowY[2], 18, 17);
+      // 4 - Font Name
+      lbl("Font Name", rowY[3]);
+      const fontC = mkCombo(slateOpt.font, ["Arial", "Tahoma", "Verdana", "Courier New"], "Set the font");
+      put(fontC, 158, rowY[3], 202, 17);
+      fontC.onPick = (v) => { slateOpt.font = v; drawPreview(); };
+      put(dots("Set the font"), 360, rowY[3], 17, 17);
+      // 5 - Style
+      lbl("Style", rowY[4]);
+      const styleC = mkCombo(slateOpt.style, ["Regular", "Bold", "Italic", "Bold Italic"], "Set the Style");
+      put(styleC, 158, rowY[4], 202, 17);
+      styleC.onPick = (v) => { slateOpt.style = v; drawPreview(); };
+      put(dots("Set the Style"), 360, rowY[4], 17, 17);
+      // 6 - Script
+      lbl("Script", rowY[5]);
+      const scriptC = mkCombo(slateOpt.script, ["Western", "Central European", "Cyrillic", "Greek"], "Set the Script");
+      put(scriptC, 158, rowY[5], 202, 17);
+      scriptC.onPick = (v) => { slateOpt.script = v; };
+      put(dots("Set the Script"), 360, rowY[5], 17, 17);
+      // 7 - Title
+      const titleChk = mkCheck(slateOpt.titleOn, "Show/Hide the title");
+      put(titleChk, 139, rowY[6], 21, 18);
+      lbl("Title", rowY[6]);
+      const titleC = mkCombo(slateOpt.title, ["Project - Clip - Position", "Project - Clip", "Project", "Clip", "Position"], "Set the format of the title");
+      put(titleC, 158, rowY[6], 202, 17);
+      titleC.onPick = (v) => { slateOpt.title = v; drawPreview(); };
+      put(dots("Set the format of the title"), 360, rowY[6], 17, 17);
+      // 8 - Frame/Time
+      const frameChk = mkCheck(slateOpt.frameOn, "Show/Hide the frame number");
+      put(frameChk, 139, rowY[7], 21, 18);
+      lbl("Frame/Time", rowY[7]);
+      const frameC = mkCombo(slateOpt.frame, ["Frame", "Time"], "Set the format of the image time code");
+      put(frameC, 158, rowY[7], 202, 17);
+      frameC.onPick = (v) => { slateOpt.frame = v; drawPreview(); };
+      put(dots("Set the format of the image time code"), 360, rowY[7], 17, 17);
+      // 9 - Date Format
+      const dateChk = mkCheck(slateOpt.dateOn, "Show/Hide the date");
+      put(dateChk, 139, rowY[8], 21, 18);
+      lbl("Date Format", rowY[8]);
+      const dateC = mkCombo(slateOpt.date, ["Day Month Year", "Month Day Year", "Year Month Day"], "Set the format of the date");
+      put(dateC, 158, rowY[8], 202, 17);
+      dateC.onPick = (v) => { slateOpt.date = v; drawPreview(); };
+      put(dots("Set the format of the date"), 360, rowY[8], 17, 17);
+      // 10 - Logo
+      const logoChk = mkCheck(slateOpt.logoOn, "Show/Hide the logo");
+      put(logoChk, 139, rowY[9], 21, 18);
+      lbl("Logo", rowY[9]);
+      const logoF = txt(slateOpt.logo, {});
+      put(logoF, 158, rowY[9], 202, 17);
+      logoF.title = "Set the file name of the logo to display\n(Leave empty to have the default one)";
+      logoF.addEventListener("input", () => { slateOpt.logo = logoF.value; drawPreview(); });
+      put(dots("Select the file of the logo"), 360, rowY[9], 17, 17);
+      // 11 - Author
+      const authChk = mkCheck(slateOpt.authorOn, "Show/Hide the author");
+      put(authChk, 139, rowY[10], 21, 18);
+      lbl("Author", rowY[10]);
+      const authF = txt(slateOpt.author, {});
+      put(authF, 158, rowY[10], 218, 17);
+      authF.title = "Set the author\n(Leave empty to have the project one)";
+      authF.addEventListener("input", () => { slateOpt.author = authF.value; drawPreview(); });
+      // the check boxes and the fields drive the slate
+      const syncSlate = () => {
+        slateOpt.titleOn = titleChk.checked();
+        slateOpt.frameOn = frameChk.checked();
+        slateOpt.dateOn = dateChk.checked();
+        slateOpt.logoOn = logoChk.checked();
+        slateOpt.authorOn = authChk.checked();
+        drawPreview();
+      };
+      [titleChk, frameChk, dateChk, logoChk, authChk].forEach(c => {
+        const old = c.onclick;
+        c.onclick = (e) => { if (old) old(e); syncSlate(); };
+      });
+      return p;
     }
     syncSlateBtn();
 
@@ -1243,6 +1449,38 @@
     frameField.style.zIndex = "3";
     frameField.title = "Current Frame Value";
     b.append(allBar, frameField);
+    /* --- the frame slider: the live panel has a thin bar under the preview
+       that scrubs through the animation (its handle is 5 px wide) --- */
+    const slider = el("div");
+    at(slider, 375, 525, 623, 15);
+    slider.style.cssText += ";background:#2d2d32;position:absolute;z-index:3";
+    slider.title = "Drag to move through the animation";
+    const handle = el("div");
+    handle.style.cssText = "position:absolute;top:0;width:5px;height:15px;background:#cfcfcf;border:1px solid #202023;box-sizing:border-box";
+    slider.appendChild(handle);
+    b.appendChild(slider);
+    const slideTo = (clientX) => {
+      const r = slider.getBoundingClientRect();
+      const first = proj ? (proj.inFrame || 1) : 1;
+      const last = proj ? Math.max(first, proj.outFrame || 1) : 1;
+      const t = Math.max(0, Math.min(1, (clientX - r.left - 2) / Math.max(1, r.width - 5)));
+      const f = Math.round(first + t * (last - first));
+      frameField.value = String(f);
+      drawPreview();
+    };
+    const placeHandle = () => {
+      const first = proj ? (proj.inFrame || 1) : 1;
+      const last = proj ? Math.max(first, proj.outFrame || 1) : 1;
+      const f = Math.max(0, Math.min(1, (parseInt(frameField.value, 10) - first) / Math.max(1, last - first)));
+      handle.style.left = Math.round(f * (slider.offsetWidth - 5)) + "px";
+    };
+    let sliding = false;
+    slider.addEventListener("mousedown", (e) => { sliding = true; slideTo(e.clientX); e.preventDefault(); });
+    window.addEventListener("mousemove", (e) => { if (sliding) slideTo(e.clientX); });
+    window.addEventListener("mouseup", () => { sliding = false; });
+    frameField.addEventListener("input", () => { placeHandle(); drawPreview(); });
+
+
 
     /* --- custom-brush tab: the live warning box --- */
     const brushMsg = el("div");
@@ -1284,7 +1522,7 @@
     function pixelOpts(o) {
       return {
         background: o.background,
-        slate: o.slate.on ? o.slate : null,
+        slate: o.slate.on ? Object.assign({ on: true }, slateOpt) : null,
         notes: o.notes
       };
     }
@@ -1301,7 +1539,7 @@
       const c = pv.getContext("2d");
       c.fillStyle = "#2d2d32"; c.fillRect(0, 0, cw, ch);
       const mode = (tabIndex === 2 ? viewL.getValue() : viewC.getValue());
-      const img = composeFrame(frame, w, h, mode, pixelOpts(optState()));
+      const img = composeFrame(frame, w, h, mode, Object.assign({}, pixelOpts(optState()), { pos: 1, total: 1 }));
       const s = Math.min(cw / w, ch / h);
       const dw = Math.max(1, Math.round(w * s)), dh = Math.max(1, Math.round(h * s));
       c.drawImage(img, Math.round((cw - dw) / 2), Math.round((ch - dh) / 2), dw, dh);
@@ -1326,6 +1564,7 @@
         else if (isDisplay) pathField.value = withExt(pathField.value, fmtC.getValue() === "JPG" ? "jpg" : fmtC.getValue().toLowerCase());
       }
       drawPreview();
+      if (typeof placeHandle === "function") placeHandle();
     }
 
     asC.onPick = () => refresh();
@@ -1471,7 +1710,8 @@
         }
       }
       const painted = (p) => composeFrame(p.f, w, h, mode, Object.assign({}, px, {
-        blend: o.interp && p.frac > 0.001 ? { frame: p.f2, frac: p.frac } : null
+        blend: o.interp && p.frac > 0.001 ? { frame: p.f2, frac: p.frac } : null,
+        pos: p.index || 1, total: (as === "Single Image" || plan.length <= 1) ? 1 : plan.length
       }));
 
       /* "Split Scenes": one file per scene of the project.  A scene is a
