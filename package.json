@@ -12,5 +12,8 @@
   "devDependencies": {
     "@electron/packager": "^18",
     "electron": "^44.9.2"
+  },
+  "dependencies": {
+    "pngjs": "^7.0.0"
   }
 }
