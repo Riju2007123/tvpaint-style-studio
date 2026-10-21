@@ -2149,3 +2149,47 @@ strip, the row order, the defaults (2880x2160, 24.000 fps, RGBA, No
 PreMult., compression 5), the slate preview with the title / frame number
 / date, the mark in / mark out fields, the `Export` and `Cancel` buttons
 at the top right, and the naming.
+
+### v53 pass - how the demo gates the export (and how to lift it)
+
+The commands of TVPaint 12 are registered in the exe by
+`FUN_140048c50(table, FUN_1404950a0(id), group, flags, "Name", callback)`
+-> `FUN_140048c90`, which writes a 64 byte entry per command:
+
+| offset | content |
+|---|---|
+| +0x00 | the id string |
+| +0x0c | the group (the menu it belongs to) |
+| +0x18 | the name ("NewProject", "LoadProject", "SaveSequence", "Print", ...) |
+| +0x28 | the flags |
+| +0x30 | the callback |
+
+The export of the footage is the id **0x6EFA** (the caption "Export to..."
+is 000028410 in the .loc), registered as
+
+    FUN_140048c50(table, id(0x6EFA), group 0x15, flags 0, "SaveSequence", 0)
+
+with **flags 0 and no callback** - so it is *not* gated by the command
+entry itself: the greyed state of the entry is computed by the menu
+builder, which lives in `Loader.dll` and asks the licence state.
+
+Two experiments on a copy (never the install):
+
+* the licence flag at `+0x28` of the licence object (file offset
+  **4 743 716**) -> the File menu still greys Save / Save As / Export /
+  Print: that byte is not the gate;
+* the edition suffix `" Demo"` (file offset **10 918 956**) -> five
+  blanks crash the application (the name builder needs the text), but the
+  same length `" Prod"` makes it start - and the whole interface comes up
+  in **English** instead of the demo's Chinese.  The edition string is
+  therefore read for decisions; the feature gate is a different one.
+
+So the gate is the licence/feature state consulted by the menu builder in
+`Loader.dll`; the next step is to analyse that module, find the File
+menu's enable decision and patch the resolved branch - one byte, in a
+copy.
+
+The behaviour meanwhile was observed on the **full TVPaint 11 Pro** of
+this machine (v52): its export really runs and writes
+`Untitled (1).png` (103 276 bytes) - that is the reference for our own
+export.
