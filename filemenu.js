@@ -723,6 +723,16 @@
   }
   function tvSaveProjectAs() { return tvSaveProject(true); }
 
+  /* the sounds of the live (Resources/sounds of TVPaint) */
+  function tvPlaySound(file) {
+    try {
+      const a = doc.createElement("audio");
+      a.src = "Resources/audio/" + file;
+      a.volume = 0.6;
+      a.play();
+    } catch (e) { /* no sound device */ }
+  }
+
   /* the "Save Alarm" of the live: the project warns when it stayed unsaved */
   let saveAlarmTimer = null;
   function tvSaveAlarm() {
@@ -1888,6 +1898,7 @@
         }
       }
       toast("exported " + n + " files to " + dir);
+    if (window.tvPrefGet && window.tvPrefGet("soundOnExport", false)) tvPlaySound("Completed.wav");
     };
 
     refresh();

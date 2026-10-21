@@ -1168,15 +1168,15 @@ function menuItems(items) {
 }
 
 let menusBuilt = false;
-function buildMenubar() {
-  if (menusBuilt) return;
+function buildMenubar(force) {
+  if (menusBuilt && !force) return;
   menusBuilt = true;
   const mb = $("menubar");
   mb.innerHTML = "";
   MENUS.forEach(menu => {
     const t = document.createElement("div");
     t.className = "menu-t";
-    t.textContent = menu.label;
+    t.textContent = window.tvpaintT ? window.tvpaintT(menu.label) : menu.label;
     const open = () => {
       closeMenus();
       const r = t.getBoundingClientRect();
@@ -4209,7 +4209,7 @@ function buildTvMenu(items) {
       : ((typeof it.checked === "function" ? it.checked() : it.checked) ? "✓" : "");
     d.innerHTML = `<span class="chk">${lead}</span>` +
       (it.sw ? `<span class="sw" style="background:${it.sw}"></span>` : "") +
-      `<span class="lbl">${it.label}</span>` +
+      `<span class="lbl">${window.tvpaintT ? window.tvpaintT(it.label) : it.label}</span>` +
       (it.arrows ? `<span class="arr">${it.arrows[1]}</span>` : "") +
       (it.shortcut ? `<span class="sc">${it.shortcut}</span>` : "") +
       (it.submenu ? `<span class="arrow">›</span>` : "");

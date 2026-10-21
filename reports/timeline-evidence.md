@@ -2057,3 +2057,29 @@ tablet in this build), the resampling algorithm and the Barbecue option
 (the drawing does not resample), the XSheet tab and the drag and drop pop
 up (there is no XSheet), and the TVPP compression (our project file is
 JSON, not the TVPaint format).
+
+### v50 pass - the language of the live, and the sounds of the live
+
+TVPaint ships its own localisation files
+(`Resources/data/english|french|japanese|chinese.tvpaint.loc`) and its own
+sounds (`Resources/audio/*.wav`).  They are now part of the rebuild, so the
+"Language" preference is not a stored value any more: **the application
+really changes language**, with the wording of TVPaint itself.
+
+* `i18n.js` reads the english file - the reference, it gives the id of
+  every string - and the file of the chosen language.  `tvpaintT(text)`
+  returns the translation of a string of the interface.
+* the menu bar, the menus, the tree and the captions of the panels, and
+  the tooltips are all drawn through it.  Measured with the french file:
+  File -> Fichier, Edit -> Editer, Project -> Projet, Layer -> Calque,
+  Effects -> Effets, View -> Vue, Windows -> Fenêtres,
+  Custom Panels -> Panneaux personnalisés, Help -> Aide, and
+  "Preferences" -> "Préférences", "Keyboard Shortcuts" ->
+  "Raccourcis clavier".
+* the "Sound when export is complete" plays `Completed.wav` of the live
+  (323 309 bytes, the file of TVPaint) - and the other sounds of the live
+  (OKBeep, Failure, Metronome, DefaultBeep, ShareNotification) are there
+  for the actions that use them.
+
+So the two things that were "documented as not honourable" before are now
+honoured with the resources of the application itself.

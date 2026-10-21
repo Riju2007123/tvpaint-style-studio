@@ -455,7 +455,7 @@
 
     let current = "general";
     const rowOf = (label, depth) => {
-      const r = el("div", "", label);
+      const r = el("div", "", window.tvpaintT ? window.tvpaintT(label) : label);
       r.style.cssText = "height:19px;line-height:19px;padding:0 4px 0 " + (4 + depth * 14) + "px;font:11px 'Segoe UI',Tahoma,sans-serif;color:#b6b6b6;cursor:pointer;white-space:nowrap;box-sizing:border-box;width:100%";
       return r;
     };
@@ -484,7 +484,7 @@
     const LBL_X = 136, WID_X = 406, WID_W = 390;
 
     function label(t, y, x) {
-      const l = el("div", "tvlbl", t);
+      const l = el("div", "tvlbl", window.tvpaintT ? window.tvpaintT(t) : t);
       at(l, x == null ? LBL_X : x, y, 260, 15);
       page.appendChild(l);
       return l;
@@ -499,7 +499,7 @@
       return f;
     }
     function button(x, y, w, text, fn) {
-      const bt = el("button", "tvbtn", text);
+      const bt = el("button", "tvbtn", window.tvpaintT ? window.tvpaintT(text) : text);
       at(bt, x, y, w, 17);
       bt.style.height = "17px";
       bt.onclick = fn;
@@ -694,12 +694,24 @@
           g.style.color = "#d0d0d6";
           page.appendChild(g);
         }
-        const tip = row.tip ? String(row.tip).split(" ").slice(1).join(" ") : null;
+        let tip = row.tip ? String(row.tip).split(" ").slice(1).join(" ") : null;
+        if (tip && window.tvpaintT) tip = window.tvpaintT(tip);
         switch (w.type) {
           case "combo": {
             const v = w.k === "language" ? p.language : (w.k === "startup" ? p.startup : prefValue(p, w.k, w.items[0]));
             const c = combo(widX, ry, w.w || WID_W, v, w.items, (nv) => {
-              if (w.k === "language") { p.language = nv; savePrefs(p); }
+              if (w.k === "language") {
+                p.language = nv; savePrefs(p);
+                if (window.tvpaintLoadLanguage) {
+                  window.tvpaintLoadLanguage(nv).then(() => {
+                    // the menus and the panels are drawn again in the new language
+                    if (typeof buildMenubar === "function") { buildMenubar(true); }
+                    if (typeof renderAll === "function") renderAll();
+                    buildPage();
+                    toastMsg("language: " + nv);
+                  });
+                }
+              }
               else if (w.k === "startup") { p.startup = nv; savePrefs(p); }
               else setPrefValue(p, w.k, nv);
               toastMsg(w.cap + ": " + nv);
@@ -1187,8 +1199,19 @@
       if (p[k] !== undefined) notifyPref(k, p[k]);
     });
   }
-  if (doc.readyState === "complete") applyAllPrefs();
-  else window.addEventListener("load", applyAllPrefs);
+  function startPrefs() {
+    const p = prefsNow();
+    const lang = p.language && p.language !== "Default" ? p.language : "English";
+    if (window.tvpaintLoadLanguage) {
+      window.tvpaintLoadLanguage(lang).then(() => {
+        if (typeof buildMenubar === "function") buildMenubar(true);
+        if (typeof renderAll === "function") renderAll();
+      });
+    }
+    applyAllPrefs();
+  }
+  if (doc.readyState === "complete") startPrefs();
+  else window.addEventListener("load", startPrefs);
 
   /* ---------------- the key map drives the application ---------------- */
   window.addEventListener("keydown", (e) => {
