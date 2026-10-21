@@ -846,12 +846,15 @@
   }
   function drawSlate(c, w, h, sl, frame, pos, total, bottomOffset) {
     const band = Math.max(6, Math.round(h * (sl.ratio || 10) / 100));
-    const fs = Math.max(5, Math.round(band * 0.68));
-    const pad = Math.round(fs * 1.3);
+    const fs = Math.max(5, Math.round(band * 0.514));
+    const pad = Math.round(fs * 1.78);
     const pname = proj && proj.name ? proj.name.replace(/^\*/, "").replace(/\.tvpp$/i, "") : "";
     const cname = (proj && proj.clipName) ? proj.clipName : "Clip_001";
     c.save();
     c.font = fs + "px " + (sl.font || "Arial") + ", Tahoma, sans-serif";
+    if (sl.style === "Bold") c.font = "bold " + c.font;
+    else if (sl.style === "Italic") c.font = "italic " + c.font;
+    else if (sl.style === "Bold Italic") c.font = "bold italic " + c.font;
     c.textBaseline = "middle";
     // --- top band: the title on the left, the frame number on the right
     if (sl.titleOn !== false) {
@@ -1245,6 +1248,9 @@
       // the live closes a settings panel as soon as the user clicks outside
       const closeOnOutside = (e) => {
         if (p.contains(e.target)) return;
+        // the combo pop-ups are drawn outside the panel but belong to it
+        const t = e.target;
+        if (t && t.closest && t.closest(".tvlist")) return;
         p.remove();
         doc.removeEventListener("mousedown", closeOnOutside, true);
       };
@@ -1265,7 +1271,8 @@
         return node;
       };
       const mkCombo = (value, items, tip) => {
-        const c = combo(value, { width: 200, items: items.map(v => ({ label: v, value: v })) });
+        const norm = (arr) => (typeof arr === "function" ? arr() : arr).map(v => ({ label: v, value: v }));
+        const c = combo(value, { width: 200, items: () => norm(items) });
         c.title = tip || "";
         return c;
       };
@@ -1309,21 +1316,41 @@
       cBg.onclick = () => { slateOpt.bgColor = slateOpt.bgColor === "#000000" ? "#505057" : "#000000"; cBg.style.background = slateOpt.bgColor; drawPreview(); };
       put(cText, 158, rowY[2], 18, 17);
       put(cBg, 176, rowY[2], 18, 17);
-      // 4 - Font Name
+      // 4 - Font Name: the live lists every installed font
       lbl("Font Name", rowY[3]);
-      const fontC = mkCombo(slateOpt.font, ["Arial", "Tahoma", "Verdana", "Courier New"], "Set the font");
+      const fontList = ["Arial", "Tahoma", "Verdana", "Courier New"];
+      const fontC = mkCombo(slateOpt.font, () => fontList, "Set the font");
       put(fontC, 158, rowY[3], 202, 17);
       fontC.onPick = (v) => { slateOpt.font = v; drawPreview(); };
       put(dots("Set the font"), 360, rowY[3], 17, 17);
+      if (typeof window.queryLocalFonts === "function") {
+        window.queryLocalFonts().then(list => {
+          const names = [];
+          const seen = new Set();
+          list.forEach(f => {
+            const nm = f && f.family;
+            if (nm && !seen.has(nm)) { seen.add(nm); names.push(nm); }
+          });
+          names.sort((a, b) => a.localeCompare(b));
+          fontList.length = 0;
+          names.forEach(x => fontList.push(x));
+        }).catch(() => { });
+      }
       // 5 - Style
       lbl("Style", rowY[4]);
-      const styleC = mkCombo(slateOpt.style, ["Regular", "Bold", "Italic", "Bold Italic"], "Set the Style");
+      const styleC = mkCombo(slateOpt.style, ["Regular", "Bold", "Italic", "Bold Italic", "Underline", "Strikeout"], "Set the Style");
       put(styleC, 158, rowY[4], 202, 17);
       styleC.onPick = (v) => { slateOpt.style = v; drawPreview(); };
       put(dots("Set the Style"), 360, rowY[4], 17, 17);
       // 6 - Script
       lbl("Script", rowY[5]);
-      const scriptC = mkCombo(slateOpt.script, ["Western", "Central European", "Cyrillic", "Greek"], "Set the Script");
+      const scriptC = mkCombo(slateOpt.script, [
+        "Western", "Central European", "Cyrillic", "Greek", "Turkish", "Arabic",
+        "Hebrew", "Thai", "Vietnamese", "Japanese", "Simplified Chinese",
+        "Traditional Chinese", "Korean", "Devanagari", "Bengali", "Tamil",
+        "Gujarati", "Oriya", "Telugu", "Malayalam", "Sinhala", "Khmer",
+        "Myanmar", "Georgian", "Armenian"
+      ], "Set the Script");
       put(scriptC, 158, rowY[5], 202, 17);
       scriptC.onPick = (v) => { slateOpt.script = v; };
       put(dots("Set the Script"), 360, rowY[5], 17, 17);
