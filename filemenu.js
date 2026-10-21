@@ -811,7 +811,10 @@
   }
 
   /* ---------------- Export Footage ---------------- */
-  const EXPORT_FORMATS = ["PNG", "JPG", "WebP", "TIFF", "TGA", "PSD", "BMP", "OpenEXR", "AVI", "QuickTime", "MPEG-4"];
+  // the formats of the live: the image formats of its own open filter plus
+  // the plug-in formats (the panel of the live shows "AVI (DirectShow)")
+  const EXPORT_FORMATS = ["PNG", "JPG", "WebP", "TIFF", "TGA", "PSD", "BMP", "OpenEXR",
+    "AVI (DirectShow)", "QuickTime (DirectShow)", "MPEG-4 (DirectShow)"];
   const EXPORT_MODES = ["Palette", "Greyscale", "RGB", "RGBA", "Alpha Only"];
   const EXPORT_ALPHA = ["PreMult.", "No PreMult."];
   const EXPORT_AS = ["Single Image", "Sequence", "Animation"];
@@ -1168,7 +1171,7 @@
     const pD = el("div"); at(pD, 0, 0, 1008, 547); b.appendChild(pD);
 
     pD.appendChild(labelAt("Format", 56, 117, 120));
-    const fmtC = combo("PNG", { width: 163, items: EXPORT_FORMATS.map(x => ({ label: x, value: x })) });
+    const fmtC = combo("AVI (DirectShow)", { width: 163, items: EXPORT_FORMATS.map(x => ({ label: x, value: x })) });
     at(fmtC, 176, 117, 163, 17);
     fmtC.title = "Select the file format used for the exported footage";
     const gear = el("button", "tvbtn", "\u2699");
