@@ -65,7 +65,9 @@
   #menubar { background: var(--tv-document); display: flex; align-items: center; padding: 0 8px; height: 18px; position: relative; }
   .menu-t { padding: 0 8px; cursor: default; position: relative; font-size: 12px;
     line-height: 18px; color: var(--tv-text); }
-  .menu-t:hover, .menu-t.open { background: var(--tv-action-selected); }
+  /* the open menu title is drawn as a light box with dark text (live capture) */
+  .menu-t:hover { background: var(--tv-action-selected); }
+  .menu-t.act { background: #d4d4d8; color: #1c1c20; }
   .menu-dd { position: absolute; top: 100%; left: 0; min-width: 230px; z-index: 50;
     background: #2f3237; border: 1px solid var(--tv-document); border-radius: 4px;
     box-shadow: 0 8px 24px #0009; padding: 3px; display: none; }
@@ -561,19 +563,21 @@
     transition: opacity .15s, transform .15s; z-index: 500; }
   #toastMsg.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   /* ---- TVPaint-style popup menus (layer / cell / New / Background ...) ---- */
-  .tvmenu { position: fixed; z-index: 1200; background: var(--tv-desktop); border: 1px solid var(--tv-stat);
-    border-radius: 2px; box-shadow: 0 10px 26px #000a; padding: 3px 0; min-width: 186px;
+  /* metrics from the live popups: 17 px row pitch, 11 px text, 22 px first
+     column, accelerators right aligned, submenu arrow at the right edge */
+  .tvmenu { position: fixed; z-index: 1200; background: #313136; border: 1px solid #4a4a52;
+    border-radius: 2px; box-shadow: 0 10px 26px #000a; padding: 2px 0; min-width: 120px;
     font-size: 11px; color: var(--tv-text); user-select: none; }
-  .tvmi { height: 21px; display: flex; align-items: center; padding: 0 20px 0 22px;
+  .tvmi { height: 17px; display: flex; align-items: center; padding: 0 18px 0 22px;
     position: relative; white-space: nowrap; cursor: default; }
   .tvmi:hover { background: var(--tv-action-selected); color: #fff; }
-  .tvmi.dis { color: #6d6d72; pointer-events: none; }
+  .tvmi.dis { color: #7c7c84; pointer-events: none; }
   .tvmi.danger .lbl { color: #d05a5a; }
-  .tvmi .chk { position: absolute; left: 7px; width: 11px; text-align: center; color: #e6e6ea; }
-  .tvmi .sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin: 0 5px 0 -12px;
+  .tvmi .chk { position: absolute; left: 6px; width: 11px; text-align: center; color: #e6e6ea; }
+  .tvmi .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin: 0 5px 0 -12px;
     box-shadow: 0 0 0 1px #1c1c20; }
   .tvmi .sc { margin-left: auto; color: var(--tv-text-out); padding-left: 24px; }
-  .tvmi .arrow { position: absolute; right: 6px; color: #b9b9c0; }
+  .tvmi .arrow { position: absolute; right: 5px; color: #c2c2c8; font-size: 10px; }
   .tvmi.modes, .tvmi.modes .lbl, .tvmi.modes .chk, .tvmi.modes .arr { color: var(--tv-text-out); }
   .tvmi.modes.act, .tvmi.modes.act .lbl, .tvmi.modes.act .chk, .tvmi.modes.act .arr { color: #fff; }
   .tvmi.modes:hover, .tvmi.modes:hover .lbl, .tvmi.modes:hover .chk, .tvmi.modes:hover .arr { color: #fff; }
@@ -678,6 +682,7 @@
 <script src="scheme.js"></script>
 <script src="commands.js"></script>
 <script src="panels.js"></script>
+<script src="menus.js"></script>
 <script>window.Engine = { BRUSHES, DRAW_MODES, SHAPES, LAYER_LOOP_MODES, XSHEET_OPS,
   BRUSH_PROFILES, brushDefaults, activateToolBrush, gradientFill,
   newCameraKey, cameraEvaluate, cameraRect, cameraKeyAt, setCameraKey, layerLengthOp,

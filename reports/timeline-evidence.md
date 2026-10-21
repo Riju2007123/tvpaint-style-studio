@@ -1462,3 +1462,55 @@ the real `Toggle*Panel` commands, so the prototype has TVPaint's own windows
 - Modifier Move/Copy/Insert drag semantics documented in the .loc but not observed
   live; the prototype implements the documented modifier behaviour for a cross
   layer drag.
+
+## v38 — the full menu bar (all 11 menus, transcribed live)
+
+Captured from the running TVPaint 12.1.0 Pro Demo on 2026-10-21, window
+1936 x 1048, one screenshot per menu with the popup open:
+
+| menu | popup x | notes |
+|---|---|---|
+| File | 8..220 | Recent projects/folders/files are disabled headers |
+| Edit | 47..215 | image-mark palette, ClipBoard, Spare Image |
+| Project | 100..245 | Render Camera, Project Information, Go to |
+| Clip | 145..330 | All layers, Background, Send to |
+| Layer | 185..400 | Delete All Layers, Move, Align, Reverse Order, Merge |
+| Image | 230..420 | Modify, Instances, Exposure |
+| Effects | 265..350 | 8 filter families, 91 filters |
+| View | 330..500 | Flip, Workspaces |
+| Windows | 355..465 | 4 panels + 5 groups + Plugins + Scripts |
+| Custom Panels | 430..560 | 16 shipped panels + 5 commands |
+| Help | 535..760 | Tooltips, Online Tutorials, Social networks |
+
+Measured title centres (px from the window's left edge):
+`File 24, Edit 60, Project 106, Clip 152, Layer 194, Image 241, Effects 290,
+View 338, Windows 392, Custom Panels 475, Help 544`.
+
+Popup metrics measured from the captures: **17 px row pitch**, 11 px text,
+popup background `#313136`, separator = 1 px line with an 6/5 px gap, first
+text column at 22 px (check column 6..17 px), accelerators right aligned,
+submenu arrow `›` at the right edge. The open menu title is drawn as a light
+box `#d4d4d8` with dark text — not the blue selection colour.
+
+### What was built
+- `menus.js` — the whole tree as data: 11 menus, 1 100+ items, every shortcut,
+  tick, greyed state and nested submenu (3 levels deep in places, e.g.
+  Image ▸ Exposure ▸ Repeat Images).
+- `ui.js` — the menu bar now renders from `TV_MENU_TREE`; a resolver maps
+  command ids to the prototype's implementations (`MENU_ACTIONS`), the
+  Windows entries toggle the real dock panels, the Custom Panels entries open
+  the shipped `.bin` panels, and anything not implemented yet says so.
+- `index.html` — popup metrics (17 px rows, `#313136`, 120 px minimum width),
+  light "open menu" title box.
+- `test/menus.test.js` — 11 structural tests (menu order, separators, every
+  item has a destination, panel group inventories, filter counts, palette).
+
+### Captured vs inferred
+- **Captured:** every label, separator position, shortcut, tick, greyed row,
+  submenu nesting and the 31 palette swatch colours (`#fa0000` … `#f2f5a9`).
+- **Inferred:** the five palette letters after `Z` (`AA..AE`) — the capture
+  crops at `AE`'s row; the letters follow from the 17 px pitch.
+- **Not reproduced:** `Effects ▸ Color` is drawn by TVPaint as a **two-column**
+  popup (6 rows of two); ours draws it as one column. Flagged as a gap.
+- **Unconfirmed:** `Project ▸ Project Information` shows an arrow but hovering
+  it produced no popup in 3 attempts (it may open a panel rather than a menu).

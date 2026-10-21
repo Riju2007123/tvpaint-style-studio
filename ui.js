@@ -610,250 +610,203 @@ function doFill(p, color, tol) {
 }
 
 // ================= menu bar =================
-// The menus that carry submenus are opened with the TVPaint style popup menu.
-// Their contents were captured live on TVPaint Animation 12.1.0 Pro Demo.
-const fx = (name) => () => toast(name + " — not in this prototype");
-const TV_MENUS = {
-  "Effects": [
-    { label: "Blur", submenu: [
-      { label: "Cubic Blur", action: fx("Cubic Blur") },
-      { label: "Gaussian Blur", action: fx("Gaussian Blur") },
-      { sep: true },
-      { label: "Directional Blur", action: fx("Directional Blur") },
-      { label: "Center Blur", action: fx("Center Blur") },
-      { label: "Radial Blur", action: fx("Radial Blur") },
-      { label: "Motion Blur", action: fx("Motion Blur") },
-      { sep: true },
-      { label: "Chroma Blur", action: fx("Chroma Blur") },
-      { label: "Median Blur", action: fx("Median Blur") }
-    ] },
-    { label: "Color", submenu: [
-      { label: "Black And White Converter", action: fx("Black And White Converter") },
-      { label: "Color Replacer", action: fx("Color Replacer") },
-      { label: "Multi Color Replacer", action: fx("Multi Color Replacer") },
-      { label: "Color Adjust", action: fx("Color Adjust") },
-      { label: "Curves", action: fx("Curves") },
-      { sep: true },
-      { label: "Color Desaturator", action: fx("Color Desaturator") }
-    ] },
-    { label: "Distortion", submenu: [
-      { label: "Perspective : 4 Points", action: fx("Perspective : 4 Points") },
-      { label: "Warp Grid", action: fx("Warp Grid") },
-      { label: "Optical Flow", action: fx("Optical Flow") },
-      { sep: true },
-      { label: "Tornado", action: fx("Tornado") },
-      { label: "Wave", action: fx("Wave") }
-    ] },
-    { label: "Keying", submenu: [
-      { label: "Color Keyer", action: fx("Color Keyer") },
-      { label: "Cross Keyer", action: fx("Cross Keyer") },
-      { sep: true },
-      { label: "Chroma Keyer", action: fx("Chroma Keyer") },
-      { label: "Advanced Keyer", action: fx("Advanced Keyer") }
-    ] },
-    { label: "Motion", submenu: [
-      { label: "KeyFramer", action: fx("KeyFramer") },
-      { sep: true },
-      { label: "Multi Plane Camera", action: fx("Multi Plane Camera") }
-    ] },
-    { label: "Rendering", submenu: [
-      { label: "Auto Paint", action: fx("Auto Paint") },
-      { sep: true },
-      { label: "Brush Spreading", action: fx("Brush Spreading") }
-    ] },
-    { label: "Stylize", submenu: [
-      { label: "Drop Shadow", action: fx("Drop Shadow") },
-      { label: "Toon Shading", action: fx("Toon Shading") }
-    ] },
-    { label: "Transition", submenu: [
-      { label: "Blind", action: fx("Blind") }
-    ] }
-  ],
-  "Windows": TV_PANEL_COMMANDS.map(p => ({
-    label: p.title,
-    checked: () => {
-      const el = tvPanelElement(p.panel);
-      return !!el && el.style.display !== "none";
-    },
-    action: () => tvTogglePanel(p.panel)
-  })),
-  "Custom Panels": TV_CUSTOM_PANELS.map(p => ({
-    label: p.name,
-    checked: () => {
-      const el = document.getElementById("custom-" + p.name.replace(/[^A-Za-z0-9]+/g, "-"));
-      return !!el && el.style.display !== "none";
-    },
-    action: () => openCustomPanel(p.name)
-  })).concat([
-    { sep: true },
-    { label: "New Custom Panel", action: () => toast("new custom panel — not in this prototype") },
-    { label: "New Embedded Custom Panel", action: () => toast("new embedded custom panel — not in this prototype") },
-    { label: "Load a Custom Panel...", action: () => toast("load a custom panel — not in this prototype") },
-    { sep: true },
-    { label: "Open All", action: () => TV_CUSTOM_PANELS.forEach(p => openCustomPanel(p.name)) },
-    { label: "Hide All", action: () => TV_CUSTOM_PANELS.forEach(p => {
-      const el = document.getElementById("custom-" + p.name.replace(/[^A-Za-z0-9]+/g, "-"));
-      if (el) el.style.display = "none";
-    }) }
-  ])
+// The menu tree lives in menus.js: every label, shortcut, separator, tick,
+// greyed state and submenu was transcribed from live TVPaint 12.1.0 Pro
+// captures (see reports/timeline-evidence.md v38).  This file only maps the
+// command ids to the prototype's implementations.
+const MENUS = TV_MENU_TREE;
+const TV_MENUS = { Effects: (TV_MENU_TREE.find(m => m.label === "Effects") || {}).items || [] };
+
+function menuPanelVisible(key) {
+  const el = tvPanelElement(key);
+  return !!el && el.style.display !== "none";
+}
+function menuCustomVisible(name) {
+  const el = document.getElementById("custom-" + name.replace(/[^A-Za-z0-9]+/g, "-"));
+  return !!el && el.style.display !== "none";
+}
+
+// command id -> implementation.  Everything that is not in this table still
+// appears in the menu (the live app has it) and says so when clicked; that is
+// deliberate, so the command surface can be completed incrementally.
+const MENU_ACTIONS = {
+  "file.new": () => dlgNewProject(),
+  "file.open": () => uiOpen(),
+  "file.save": () => uiSave(),
+  "file.saveAs": () => uiSaveAs(),
+  "file.export": () => exportFrame(),
+  "file.quit": () => { if (window.api && api.quit) api.quit(); else toast("quit"); },
+
+  "edit.undo": () => uiUndo(),
+  "edit.redo": () => uiRedo(),
+  "edit.clear": () => xop("empty"),
+  "edit.toggleBookmark": () => toggleBookmark(),
+  "edit.prevBookmark": () => gotoBookmark(-1),
+  "edit.nextBookmark": () => gotoBookmark(1),
+  "edit.removeBookmark": () => removeBookmark(proj.currentFrame),
+  "edit.removeAllBookmarks": () => { proj.bookmarks = []; renderAll(); toast("bookmarks removed"); },
+  "edit.reapply": () => applySelection(),
+
+  "mark.set": (it) => {
+    const l = tvCurrentLayer(), f = proj.currentFrame;
+    tvCommit(() => {
+      E.setImageMark(l, f, true);
+      l.markColors = l.markColors || {};
+      l.markColors[f] = it.label;
+    });
+    toast("image mark " + it.label + " on image " + f);
+  },
+  "mark.default": () => {
+    const l = tvCurrentLayer();
+    tvCommit(() => {
+      E.setImageMark(l, proj.currentFrame, true);
+      if (l.markColors) delete l.markColors[proj.currentFrame];
+    });
+    toast("default image mark on image " + proj.currentFrame);
+  },
+  "mark.clear": () => { tvCommit(() => E.setImageMark(tvCurrentLayer(), proj.currentFrame, false)); },
+  "mark.prev": () => { const m = E.nextImageMark(tvCurrentLayer(), proj.currentFrame, -1); if (m) gotoFrame(m); else toast("no previous image mark"); },
+  "mark.next": () => { const m = E.nextImageMark(tvCurrentLayer(), proj.currentFrame, 1); if (m) gotoFrame(m); else toast("no next image mark"); },
+  "mark.removeAll": () => { tvCommit(() => { tvCurrentLayer().marks = {}; }); toast("image marks removed"); },
+
+  "clipboard.copyBrush": () => toast("copy brush — not in this build yet"),
+  "clipboard.copyImage": () => { proj.imageClipboard = tvCurrentLayer().frames[E.effectiveFrameKey(tvCurrentLayer(), proj.currentFrame)] || null; toast("image copied"); },
+  "clipboard.pasteImage": () => toast("paste image (new layer) — not in this build yet"),
+  "spare.swap": () => toast("spare image — not in this build yet"),
+
+  "project.duplicate": () => { proj.name = "Untitled_(" + (+(proj.name.match(/\d+/) || [0])[0] + 1) + ")"; renderTimelineStatus(); toast("project duplicated: " + proj.name); },
+  "project.modify": () => dlgNewProject(true),
+  "project.renderCamera": () => renderCameraProject(false),
+  "project.renderCameraMerged": () => renderCameraProject(true),
+  "project.loadSound": () => togglePane("sound"),
+  "project.soundLibrary": () => togglePane("sound"),
+  "project.info": () => alert("Project: " + proj.name + "\nSize: " + proj.width + "x" + proj.height +
+    "\nFrame rate: " + proj.fps + "\nLayers: " + proj.layers.length + "\nCamera keys: " + (proj.cameraKeys || []).length),
+
+  "clip.rename": () => { const n = prompt("Clip name:", "Clip_001"); if (n) toast("clip renamed: " + n); },
+  "clip.loadSound": () => togglePane("sound"),
+  "clip.soundLibrary": () => togglePane("sound"),
+
+  "layer.new": () => layerAdd(),
+  "layer.presets": () => layerPresetsDlg(),
+  "layer.rename": () => { const n = prompt("Layer name:", proj.layers[proj.currentLayer].name); if (n) { proj.layers[proj.currentLayer].name = n; renderAll(); } },
+  "layer.delete": () => layerDel(),
+  "layer.duplicate": () => layerDup(),
+  "layer.lock": () => toggleLayerFlagAt(proj.currentLayer, "locked"),
+  "layer.moveUp": () => { const i = proj.currentLayer; if (i <= 0) return; tvCommit(() => { const [l] = proj.layers.splice(i, 1); proj.layers.splice(i - 1, 0, l); }); proj.currentLayer = i - 1; renderAll(); },
+  "layer.moveDown": () => { const i = proj.currentLayer; if (i >= proj.layers.length - 1) return; tvCommit(() => { const [l] = proj.layers.splice(i, 1); proj.layers.splice(i + 1, 0, l); }); proj.currentLayer = i + 1; renderAll(); },
+  "layer.reverseAll": () => { tvCommit(() => E.reverseLayerOrder(proj, [])); },
+  "layer.mergeSelected": () => mergeLayerDown(),
+  "layer.mergeVisible": () => mergeLayerDown(),
+  "layer.mergeAll": () => { while (proj.layers.length > 1) mergeLayerDown(); },
+  "layer.viewAll": () => { proj.layers.forEach(l => l.visible = true); renderAll(); },
+  "layer.viewCurrent": () => { proj.layers.forEach((l, i) => l.visible = i === proj.currentLayer); renderAll(); },
+  "layer.selectAll": () => selectLayers("all"),
+  "layer.cut": () => { clipboardLayer = proj.layers.splice(proj.currentLayer, 1)[0]; proj.currentLayer = Math.min(proj.currentLayer, proj.layers.length - 1); renderAll(); },
+  "layer.copy": () => { clipboardLayer = proj.layers[proj.currentLayer]; toast("layer copied"); },
+  "layer.paste": () => { if (!clipboardLayer) { toast("clipboard empty"); return; } proj.layers.splice(proj.currentLayer, 0, JSON.parse(JSON.stringify(clipboardLayer, (k, v) => k === "canvas" ? undefined : v))); renderAll(); },
+
+  "image.flipH": () => flipCurrentImage("h"),
+  "image.flipV": () => flipCurrentImage("v"),
+  "image.flipHV": () => flipCurrentImage("hv"),
+  "image.clear": () => xop("empty"),
+  "image.cut": () => xop("remove"),
+  "image.copy": () => { proj.imageClipboard = tvCurrentLayer().frames[E.effectiveFrameKey(tvCurrentLayer(), proj.currentFrame)] || null; toast("image copied"); },
+  "image.paste": () => toast("paste image — not in this build yet"),
+
+  "instances.prev": () => { const k = E.prevInstance ? E.prevInstance(tvCurrentLayer(), proj.currentFrame) : null; if (k) gotoFrame(k); else toast("no previous instance"); },
+  "instances.next": () => { const k = E.nextInstance ? E.nextInstance(tvCurrentLayer(), proj.currentFrame) : null; if (k) gotoFrame(k); else toast("no next instance"); },
+  "exposure.add": () => addExposureHere(),
+  "exposure.deleteCell": () => deleteImageHere(),
+
+  "bg.none": () => { proj.background = "none"; renderAll(); },
+  "bg.color": () => { proj.background = "color"; renderAll(); },
+  "bg.check": () => { proj.background = "check"; renderAll(); },
+
+  "view.zoomIn": () => zoomStep(1),
+  "view.zoomOut": () => zoomStep(-1),
+  "view.fit": () => fitView(),
+  "view.oneToOne": () => zoomTo(1),
+  "view.reset": () => { view.rot = 0; renderAll(); },
+  "view.fullPage": () => fitView(),
+  "view.aspect": () => { proj.aspectRatio = !proj.aspectRatio; renderAll(); toast("display with aspect ratio " + (proj.aspectRatio ? "on" : "off")); },
+
+  "edit.shortcuts": () => alert("Space play\nArrow keys: frame/layer\nCtrl+Z undo · Ctrl+Y redo · Ctrl+S save\nEnter: apply selection · Esc: cancel"),
+  "edit.preferences": () => toast("preferences dialog — not in this build yet"),
+
+  "custom.openAll": () => TV_CUSTOM_PANELS.forEach(p => openCustomPanel(p.name)),
+  "custom.hideAll": () => TV_CUSTOM_PANELS.forEach(p => {
+    const el = document.getElementById("custom-" + p.name.replace(/[^A-Za-z0-9]+/g, "-"));
+    if (el) el.style.display = "none";
+  }),
+
+  "help.about": () => alert("my-version — rebuilt from REA analysis of TVPaint Animation 12 Pro. No original code copied."),
+  "help.buy": () => toast("TVPaint store — external link not wired")
 };
-const MENUS = [
-  ["File", [
-    ["New Project…", () => dlgNewProject()], ["Open Project…", () => uiOpen()],
-    null, ["Save Project", () => uiSave()], ["Save Project As…", () => uiSaveAs()],
-    null, ["Export Current Frame (PNG)", () => exportFrame()],
-    ["Export Image Sequence…", () => exportSequence()],
-    null, ["RECENT", "recent"]
-  ]],
-  ["Edit", [
-    ["Undo", () => uiUndo()], ["Redo", () => uiRedo()], ["Clear Image (current layer)", () => xop("empty")],
-    null, ["Toggle Bookmark", () => toggleBookmark()],
-    ["Go to Previous Bookmark", () => gotoBookmark(-1)], ["Go to Next Bookmark", () => gotoBookmark(1)],
-    ["Remove Selected Bookmark", () => removeBookmark(proj.currentFrame)],
-    ["Remove All Bookmarks", () => { proj.bookmarks = []; renderAll(); }],
-    null, ["Set Mark ▸", "mark"],
-    ["Go to Previous Image Mark", () => { const m = E.nextImageMark(tvCurrentLayer(), proj.currentFrame, -1); if (m) gotoFrame(m); else toast("no previous image mark"); }],
-    ["Go to Next Image Mark", () => { const m = E.nextImageMark(tvCurrentLayer(), proj.currentFrame, 1); if (m) gotoFrame(m); else toast("no next image mark"); }],
-    ["Remove All Image Marks", () => { tvCommit(() => { tvCurrentLayer().marks = {}; }); toast("image marks removed"); }],
-    null, ["Re Apply", () => { if (sel) applySelection(); }],
-    null, ["ClipBoard ▸", "clipboard"],
-    ["Shortcuts…", () => alert("Space play\nArrow keys: frame/layer\nCtrl+Z undo · Ctrl+Y redo · Ctrl+S save\nEnter: apply selection · Esc: cancel")],
-    ["Preferences…", () => toast("preferences — not in this prototype")]
-  ]],
-  ["Project", [
-    ["Duplicate Project", () => { proj.name = "Untitled_(" + (+(proj.name.match(/\d+/) || [0])[0] + 1) + ")"; renderTimelineStatus(); toast("project duplicated: " + proj.name); }],
-    ["Modify Project…", () => dlgNewProject(true)],
-    null, ["Render Camera", (ev) => openTvMenu([{ label: "Into a New Project", action: () => renderCameraProject(false) }, { label: "Into a New merged Project", action: () => renderCameraProject(true) }], ev ? ev.clientX : 300, ev ? ev.clientY : 300)],    null, ["Load Sound…", () => togglePane("sound")],
-    ["Add sound from library", () => togglePane("sound")],
-    null, ["Project Information", () => alert(
-      "Project: " + proj.name + "\nSize: " + proj.width + "x" + proj.height + "\nFrame rate: " + proj.fps +
-      "\nLayers: " + proj.layers.length + "\nCamera keys: " + (proj.cameraKeys || []).length)],
-    null, ["Go to ▸", "goto"]
-  ]],
-  ["Clip", [
-    ["Rename Clip…", () => { const n = prompt("Clip name:", "Clip_001"); if (n) toast("clip renamed: " + n); }],
-    null, ["New Clip", null, 1], ["Duplicate Clip", null, 1], ["Delete Clip", null, 1],
-    ["Split Clip", null, 1], ["Merge clips", null, 1],
-    null, ["New Scene", null, 1], ["Duplicate Scene", null, 1], ["Delete Scene", null, 1],
-    null, ["Load Sound…", () => togglePane("sound")],
-    null, ["Send to ▸", null, 1]
-  ]],
-  ["Layer", [
-    ["New Layer", () => layerAdd()],
-    ["Open Layer Presets Manager", () => layerPresetsDlg()],
-    ["Rename Layer…", () => { const n = prompt("Layer name:", proj.layers[proj.currentLayer].name); if (n) { proj.layers[proj.currentLayer].name = n; renderAll(); } }],
-    ["Delete All Layers…", () => toast("use Layer ▸ Delete Layer")],
-    ["Delete Layer", () => layerDel()],
-    ["Split Layer", null, 1],
-    ["Duplicate Layer", () => layerDup()],
-    null, ["Lock Layer", () => toggleLayerFlagAt(proj.currentLayer, "locked")],
-    ["Lock Position", null, 1],
-    null, ["Go to Image…", () => numDialog("Go to Image", "Image", proj.currentFrame, v => gotoFrame(v, proj.currentLayer), 1, 9999)],
-    ["Slide Layer…", () => numDialog("Slide Layer", "Offset (frames)", 1, v => tvCommit(() => E.slideLayer(proj.layers[proj.currentLayer], v)), -999, 999)],
-    ["Slide Layer to Image…", () => numDialog("Slide Layer to Image", "Target image", proj.currentFrame, v => tvCommit(() => E.slideLayer(proj.layers[proj.currentLayer], v - (E.layerKeys(proj.layers[proj.currentLayer])[0] || 1))), 1, 9999)],
-    null, ["Reverse Order", () => { tvCommit(() => E.reverseLayerOrder(proj, [])); }],
-    ["Merge", () => mergeLayerDown()],
-    null, ["View All Layers", () => { proj.layers.forEach(l => l.visible = true); renderAll(); }],
-    ["View Current Layer Only", () => { proj.layers.forEach((l, i) => l.visible = i === proj.currentLayer); renderAll(); }],
-    null, ["Make Anim Layer", null, 1],
-    ["Select All Layers", () => selectLayers("all")],
-    null, ["Cut Layer", () => { clipboardLayer = proj.layers.splice(proj.currentLayer, 1)[0]; proj.currentLayer = Math.min(proj.currentLayer, proj.layers.length - 1); renderAll(); }],
-    ["Copy Layer", () => { clipboardLayer = proj.layers[proj.currentLayer]; toast("layer copied"); }],
-    ["Paste Layer (Above)", () => { if (!clipboardLayer) { toast("clipboard empty"); return; } proj.layers.splice(proj.currentLayer, 0, JSON.parse(JSON.stringify(clipboardLayer, (k, v) => k === "canvas" ? undefined : v))); renderAll(); }]
-  ]],
-  ["Image", [
-    ["Add Drawing (after current)", () => xop("add")],
-    ["Duplicate Drawing", () => xop("duplicate")],
-    ["Remove Drawing", () => xop("remove")],
-    null, ["Hold ×2", () => xop("hold")], ["Unhold", () => xop("unhold")],
-    ["Empty (clear)", () => xop("empty")], ["Reverse to End", () => xop("reverse")],
-    null, ["Add Exposure", () => addExposureHere()],
-    ["Delete Image", () => deleteImageHere()],
-    ["Delete Selection from Layer", () => deleteSelectionFromLayer()],
-    ["Delete Selection from all Layers", () => deleteSelectionFromLayer(true)],
-    null, ["Flip Horizontally", () => flipCurrentImage("h")],
-    ["Flip Vertically", () => flipCurrentImage("v")],
-    ["Flip Horizontally & Vertically", () => flipCurrentImage("hv")],
-    null, ["Increase Layer Length…", () => dlgLayerLength()]
-  ]],
-  ["Effects", null],
-  ["View", [
-    ["Onion Skin", () => toggleOnion()],
-    ["Grid", () => toggleGuide("grid", !proj.guidelines.grid)],
-    ["Safe Area", () => toggleGuide("safeArea", !proj.guidelines.safeArea)],
-    ["Rule of Thirds", () => toggleGuide("thirds", !proj.guidelines.thirds)],
-    null, ["Follow Camera", () => { proj.followCamera = !proj.followCamera; toast("follow camera " + (proj.followCamera ? "on" : "off")); renderAll(); }],
-    null, ["Reticule", () => { proj.showReticule = proj.showReticule === false; toast("reticule " + (proj.showReticule ? "on" : "off")); renderAll(); }],
-    null, ["Attenuate other layers", () => { proj.layerAttenuation = !proj.layerAttenuation; toast("layer attenuation " + (proj.layerAttenuation ? "on" : "off")); renderAll(); }],
-    null, ["Fit View", () => fitView()], ["Zoom 100%", () => zoomTo()]
-  ]],
-  ["Windows", null],
-  ["Custom Panels", null],
-  ["Help", [
-    ["George Console…", () => {
-      const w = $("georgeWin");
-      if (!w) return;
-      const show = w.style.display !== "flex";
-      w.style.display = show ? "flex" : "none";
-      if (show) $("georgeIn").focus();
-    }],
-    ["About my-version", () => alert("my-version — rebuilt from REA analysis of TVPaint Animation 12 Pro. No original code copied.")]
-  ]]
-];
+
+function runMenuCommand(it) {
+  const fn = MENU_ACTIONS[it.cmd];
+  if (fn) return fn(it);
+  if (it.panel) return tvTogglePanel(it.panel);
+  if (it.custom) return openCustomPanel(it.custom);
+  if (typeof it.cmd === "string" && it.cmd.indexOf("fx.") === 0) {
+    return toast(it.label + " — effect present, filter not built yet");
+  }
+  toast(it.label.replace(/\.\.\.$/, "") + " — command present, behaviour not built yet");
+}
+
+// expands the data tree into the popup menu's item shape (openTvMenu)
+function menuItems(items) {
+  const out = [];
+  items.forEach(it => {
+    if (it.sep) { out.push({ sep: true }); return; }
+    const o = { label: it.label, shortcut: it.shortcut };
+    if (it.panel) o.checked = () => menuPanelVisible(it.panel);
+    else if (it.custom) o.checked = () => menuCustomVisible(it.custom);
+    else if (typeof it.checked === "function") o.checked = it.checked;
+    else o.checked = !!it.checked;
+    o.disabled = typeof it.disabled === "function" ? it.disabled() : !!it.disabled;
+    if (it.sw) o.sw = it.sw;
+    if (it.submenu) o.submenu = menuItems(it.submenu);
+    else o.action = () => runMenuCommand(it);
+    out.push(o);
+  });
+  return out;
+}
+
 let menusBuilt = false;
 function buildMenubar() {
   if (menusBuilt) return;
   menusBuilt = true;
   const mb = $("menubar");
   mb.innerHTML = "";
-  MENUS.forEach(([name, items]) => {
+  MENUS.forEach(menu => {
     const t = document.createElement("div");
-    t.className = "menu-t"; t.textContent = name;
-    if (!items) {
-      // the menus that carry submenus use the TVPaint style popup menu
-      t.onclick = (e) => {
-        e.stopPropagation();
-        const was = t.classList.contains("open");
-        closeMenus();
-        if (was) return;
-        t.classList.add("open");
-        const r = t.getBoundingClientRect();
-        openTvMenu(TV_MENUS[name] || [], r.left, r.bottom + 2);
-        t.classList.remove("open");
-      };
-      mb.appendChild(t);
-      return;
-    }
-    const dd = document.createElement("div");
-    dd.className = "menu-dd";
-    items.forEach(it => {
-      if (!it) { const s = document.createElement("div"); s.className = "msep"; dd.appendChild(s); return; }
-      const [label, action, dis] = it;
-      const mi = document.createElement("div");
-      mi.className = "mi" + (dis ? " mdis" : "");
-      mi.textContent = label === "RECENT" ? "Recent Projects ▸" : (typeof label === "function" ? label() : label);
-      if (!dis) mi.onclick = (ev) => {
-        ev.stopPropagation();                       // don't bubble to the title's toggle
-        t.classList.remove("open");
-        if (action === "recent") { promptRecent(); return; }
-        action && action(ev);
-      };
-      dd.appendChild(mi);
-    });
-    t.appendChild(dd);
+    t.className = "menu-t";
+    t.textContent = menu.label;
+    const open = () => {
+      closeMenus();
+      const r = t.getBoundingClientRect();
+      t.classList.add("act");
+      openTvMenu(menuItems(menu.items), r.left, r.bottom + 1);
+    };
     t.onclick = (e) => {
       e.stopPropagation();
-      const was = t.classList.contains("open");
-      closeMenus();
-      if (!was) t.classList.add("open");
+      if (t.classList.contains("act")) { closeMenus(); return; }
+      open();
+    };
+    // TVPaint switches menus when the pointer moves along the bar while a
+    // menu is open (captured live).
+    t.onmouseenter = () => {
+      if (mb.querySelector(".menu-t.act") && !t.classList.contains("act")) open();
     };
     mb.appendChild(t);
   });
-  // the PURCHASE button of the live app sits in the tool bar, not in the menu
   document.addEventListener("click", closeMenus);
 }
 function closeMenus() {
-  document.querySelectorAll(".menu-t.open").forEach(t => t.classList.remove("open"));
+  document.querySelectorAll(".menu-t.act").forEach(t => t.classList.remove("act"));
+  closeTvMenus();
 }
 function promptRecent() {
   const list = loadRecent();
@@ -1251,7 +1204,7 @@ function syncTVPanels() {
       const it = (TV_MENUS.Effects || [])[n];
       if (!it) return;
       const r = d.getBoundingClientRect();
-      openTvMenu(it.submenu || [], r.right + 2, r.top);
+      openTvMenu(menuItems(it.submenu || []), r.right + 2, r.top);
     });
   }
   // Share Manager: the export / share destinations
@@ -3867,7 +3820,7 @@ function buildTvMenu(items) {
         document.body.appendChild(sub);
         sub.style.left = "0px"; sub.style.top = "0px";
         const r = d.getBoundingClientRect(), sr = sub.getBoundingClientRect();
-        let sx = r.right - 3, sy = r.top - 3;
+        let sx = r.right - 1, sy = r.top - 3;
         if (sx + sr.width > innerWidth - 2) sx = Math.max(2, r.left - sr.width + 3);
         if (sy + sr.height > innerHeight - 2) sy = Math.max(2, innerHeight - sr.height - 2);
         sub.style.left = sx + "px"; sub.style.top = sy + "px";
