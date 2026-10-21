@@ -1036,6 +1036,38 @@
      Layers, Create folder for layers. Custom Brush without a brush shows
      "Please create a custom brush before trying to export one."
      ------------------------------------------------------------------ */
+  /* The file name pattern of TVPaint (loc 011030951):
+       %[0| ]number]pfn: project (file) name
+       _ %[[0| ]number]cn: clip name
+       _ %[[0| ]number]ln: layer name
+       _ %[[0| ]number]li: layer index
+       _ %[[0| ]number]in: instance name
+       _ %[[0| ]number]ii: instance index
+       _ %[[0| ]number]di: folder number
+       _ %[[0| ]number]fi: file number
+     The text between brackets [] is optional, the symbol | means "or" and
+     the number is the width of the zero padded number.  The example of the
+     live:  "%ln%05in"  ->  "A00002"  (the layer "A", the instance 2).     */
+  function tvPatternValue(tok, width, ctx) {
+    let v = ctx[tok];
+    if (v == null || v === "") v = ctx["_" + tok];
+    if (v == null) v = "";
+    v = String(v);
+    const w = parseInt(width, 10);
+    if (w && /^\d+$/.test(v)) v = v.padStart(w, "0");
+    return safeName(v);
+  }
+  function tvExpandPattern(pattern, ctx) {
+    let out = String(pattern == null ? "" : pattern);
+    // the documented forms:  %[0| ]number]in  and  %[[0| ]number]in
+    out = out.replace(/%\[?\[?(?:0\|\s)?\]?\]?number\]?(\d*)(pfn|cn|ln|li|in|ii|di|fi)/g,
+      (m, width, tok) => tvPatternValue(tok, width, ctx));
+    // the short form:  %05in
+    out = out.replace(/%(\d*)(pfn|cn|ln|li|in|ii|di|fi)/g,
+      (m, width, tok) => tvPatternValue(tok, width, ctx));
+    return out.replace(/[\\/:*?"<>|]/g, "_");
+  }
+
   function tvExportDialog() {
     const dlg = tvWin("Export Footage", 1008, 569);
     const b = bodyOf(dlg);
@@ -1104,6 +1136,12 @@
     at(pathField, 126, 56, 872, 17);
     pathField.title = "Exported File location and name";
     b.append(browse, pathField);
+  /* the file name pattern of the live (loc 011030951) */
+  b.appendChild(labelAt("Pattern", 6, 78, 110));
+  const patternField = txt("%pfn_%cn_%ln%05in", {});
+  at(patternField, 126, 76, 872, 17);
+  patternField.title = "Set the file name pattern\n\n%[0| ]number]pfn: project (file) name\n_ %[[0| ]number]cn: clip name\n_ %[[0| ]number]ln: layer name\n_ %[[0| ]number]li: layer index\n_ %[[0| ]number]in: instance name\n_ %[[0| ]number]ii: instance index\n_ %[[0| ]number]di: folder number\n_ %[[0| ]number]fi: file number\n\nThe text between brackets [] are optionals.\nThe symbol '|' means 'or'.\n\nExample:\n%ln%05in      : \"A00002\"";
+  b.appendChild(patternField);
 
     /* --- As + Replace + Export/Cancel --- */
     b.appendChild(labelAt("As", 90, 96, 27));
@@ -1892,7 +1930,13 @@
           if (p.f < part.from || p.f > part.to) continue;
           const url = painted(p).toDataURL(mime, 0.95);
           const no = p.index || p.f;
-          const file = sub + "\\" + stem + String(no).padStart(4, "0") + "." + ext;
+          const lname = (proj && proj.layers && proj.layers[proj.currentLayer]) ? proj.layers[proj.currentLayer].name : "";
+      const pat = patternField.value || "%pfn_%cn_%ln%05in";
+      const name = tvExpandPattern(pat, {
+        pfn: stem, cn: "Clip_001", ln: lname, li: proj ? proj.currentLayer + 1 : 1,
+        in: "", _in: no, ii: no, di: parts.length > 1 ? parts.indexOf(part) + 1 : 1, fi: no
+      });
+      const file = sub + "\\" + name + "." + ext;
           await TVP.writeFileBinary(file, url);
           n++;
         }
