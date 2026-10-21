@@ -1,5 +1,71 @@
 # REA evidence bank — Timeline (TVPaint Animation 12 Pro Demo.exe, sha c998c6fe…)
 
+## v37 pass — the tool bar, the Main Panel and the Tool panel, pixel by pixel
+
+Everything below was **measured on the running TVPaint** (window 1936x1048) and
+reproduced with the pixels of the live application itself.
+
+### The tool bar — 17 buttons, the exact x of each one
+The live tool bar row is y 48..80 (background 49,49,54).  The light-pixel
+groups of that row give the exact position of every button:
+
+| x | icon | command (read from the live tool tip) |
+|---|------|------------------------------------------|
+| 26 | new document | New Project |
+| 48 | open folder | Open/Import Project |
+| 115 | undo | Undo the last operation |
+| 140 | redo | Redo the last operation undone |
+| 183 | toolbox | Open/Close Main Panel |
+| 207 | colour wheel | Open/Close Color panel |
+| 232 | tools in a tray | Open/close Tool panel |
+| 257 | stack of sheets | Open/Close Timeline |
+| 286 | light bulb | Open/Close Light Table Panel |
+| 308 | film strip | Open/Close the Timesheet Panel |
+| 337 | keypad | Open/Close Remote panel |
+| 357 | magnifier | Open/Close **Navigator** panel |
+| 384 | pen holder | Open/Close **FX Stack** Panel |
+| 407 | binders | Open/Close **Image Library** Panel |
+| 432 | brush + ruler | Open/Close Guidelines Panel |
+| 458 | paper plane | Open/Close Share Manager Panel |
+| 500 | "?" notebook | Online Documentation |
+
+The three buttons that were missing (Navigator, Image Library) and the wrong
+icon of the FX Stack were taken **from the live screen** (cropped at x 357,
+x 407 and split out of the old 44 px wide `Toolbar-Search.png`), so they are
+the pixels of TVPaint and not a drawing of them.
+
+The `PURCHASE` badge of the demo is an **image**, not a text button: it covers
+x 538..700 / y 52..78 and is now `icons/TVPaint-Purchase.png`, cropped from
+the live window.  The document tab is the blue field at x 706..898 / y 57..75.
+
+### The Main Panel — 18 tools, 6 columns x 3 rows
+Measured glyph rows y 113..133, 140..160, 171..191 and glyph columns
+x 28..48, 53..73, 78..98, 103..123, 129..149, 155..176.  The 18 icons were
+cropped from the live window (`icons/Main-01.png` … `Main-18.png`) and are
+drawn at exactly those positions.  The names of the five that could be read
+from the live "Tool : ..." header are Pen Brush, Paint bucket, Cut Brush,
+Select and Crop.
+
+### The Tool panel — 10 brushes, 2 rows of 5
+Measured rows y 229..249 and 256..276, columns x 37, 65, 95, 121, 148.
+The icons were cropped from the live window (`icons/Brush-01..10.png`).
+Below them the live panel shows a rounded **Color** button with a chevron
+(x 34..170 / y 280..297) and then the **Options | Bin** tabs — the rebuild
+now draws the same three blocks, and the graph picker that the live does not
+show is hidden.
+
+### The order of the left column
+The live column reads Main Panel, Tool : <name>, Color, Options / Bin.  The
+rebuild now orders the dock the same way (`TV_DOCK_ORDER` in `ui.js`).
+
+### Still not captured
+- the eight panel header buttons of the live are drawn as small squares here
+  (the live draws them as circles);
+- the Color panel of the live is a collapsed drop-down, the rebuild still
+  shows the A / B pen rows and the chromatic wheel as its own block;
+- the `Graphs` picker of the rebuild is hidden (the live has no such block).
+
+
 ## v10 pass — layout constants decompiled from the real code
 - FUN_14054f790 (LayerPanel layout, 4006 B, decompiled): panel geometry uses scaled
   constants via FUN_140045210(x) — row heights 0x18=24 and 0x13=19, spacing 0x19=25

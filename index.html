@@ -7,7 +7,7 @@
   * { box-sizing: border-box; user-select: none; }
   html, body { margin: 0; height: 100vh; overflow: hidden;
     font: 12px/1.35 "Segoe UI", sans-serif; background: #1e2023; color: var(--tv-text); }
-  #app { display: grid; height: 100vh; grid-template-rows: 24px 32px 1fr 320px 26px; }
+  #app { display: grid; height: 100vh; grid-template-rows: 18px 33px 1fr 268px 28px; }
 
   /* the colours of TVPaint's own Night scheme - scheme.js overwrites them with
      the values read from Resources/colorschemes/Night.ini */
@@ -62,8 +62,7 @@
   }
 
   /* ---- menu bar (TVPaint 12: y 31..47, background 45,45,50) ---- */
-  #menubar { background: var(--tv-document); display: flex; align-items: center; padding: 0 8px;
-    height: 18px; position: relative; }
+  #menubar { background: var(--tv-document); display: flex; align-items: center; padding: 0 8px; height: 18px; position: relative; }
   .menu-t { padding: 0 8px; cursor: default; position: relative; font-size: 12px;
     line-height: 18px; color: var(--tv-text); }
   .menu-t:hover, .menu-t.open { background: var(--tv-action-selected); }
@@ -91,13 +90,14 @@
     background: var(--tv-action-selected); border-radius: 2px; }
   .tib:hover { background: #3d4249; }
   .tib.on { background: var(--tv-action-selected); }
-  #projTab { background: #40454c; color: var(--tv-text); border-radius: 3px; padding: 3px 26px 3px 10px;
-    position: absolute; left: 780px; top: 5px; font-size: 12px; }
+  #projTab { background: rgb(62,71,107); color: var(--tv-text); border-radius: 3px;
+    position: absolute; left: 706px; top: 9px; width: 193px; height: 19px; box-sizing: border-box;
+    font-size: 12px; line-height: 19px; padding: 0 26px 0 6px; overflow: hidden; white-space: nowrap; }
   #projTab button { position: absolute; right: 4px; top: 3px; background: none; border: 0;
     color: var(--tv-text-out); cursor: pointer; }
-  #purchase { position: absolute; left: 620px; top: 7px; border: 1.5px solid #b7bec7;
-    color: var(--tv-text); font-weight: 700; background: var(--tv-desktop); border-radius: 3px;
-    padding: 2px 12px; font-size: 13px; letter-spacing: .06em; cursor: pointer; }
+  /* the PURCHASE badge of the live app: x 538..700, y 52..78 */
+  #purchase { position: absolute; left: 538px; top: 4px; width: 162px; height: 26px;
+    cursor: pointer; user-select: none; -webkit-user-drag: none; }
 
   /* ---- work area (TVPaint 12: the left column is 215 px wide) ---- */
   #workarea { display: grid; grid-template-columns: 215px 1fr; min-height: 0; }
@@ -154,6 +154,34 @@
 
   .toolgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
   .toolgrid.g6 { grid-template-columns: repeat(6, 1fr); }
+  /* the tool grid of the Main Panel of TVPaint 12: 6 columns and 3 rows of
+     21 px icons drawn at the measured positions of the live application */
+  .maingrid { position: relative; width: 199px; height: 79px; margin: 3px 0 4px 14px; }
+  .mgcell { position: absolute; width: 21px; height: 21px; cursor: pointer; }
+  .mgcell img { width: 21px; height: 21px; display: block; position: relative; z-index: 1; }
+  .mgcell:hover img { filter: brightness(1.4); }
+  .mgcell.on::before { content: ""; position: absolute; left: -1px; top: -4px; width: 25px; height: 27px;
+    background: var(--tv-action-selected); z-index: 0; }
+  .mgcell.on img { filter: brightness(1.45); }
+  /* the brush grid of the Tool panel: two rows of five */
+  .brushgrid { position: relative; width: 160px; height: 48px; margin: -5px 0 6px 22px; }
+  .bcell { position: absolute; width: 21px; height: 21px; cursor: pointer; }
+  .bcell img { width: 21px; height: 21px; display: block; position: relative; z-index: 1; }
+  .bcell:hover img { filter: brightness(1.4); }
+  .bcell.on::before { content: ""; position: absolute; left: -4px; top: -4px; width: 26px; height: 28px;
+    background: var(--tv-action-selected); z-index: 0; }
+  .bcell.on img { filter: brightness(1.45); }
+  /* the "Color" button of the live Tool panel: a rounded button with a chevron */
+  .colbtn { position: relative; flex: 1; height: 17px; border-radius: 8px; background: #3c3c43;
+    color: var(--tv-text); display: flex; align-items: center; justify-content: space-between;
+    padding: 0 6px 0 10px; font-size: 12px; }
+  .colbtn .carrow { color: var(--tv-text-out); }
+  .colbtn select { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+  /* the live Tool panel shows the brushes, the Color button and the
+     Options / Bin tabs - the graph picker of this rebuild stays hidden */
+  #graphHead, #graphGrid { display: none; }
+  /* the live Tool panel has no colour chip next to the Color button */
+  #chipA { display: none; }
   .tbtn { background: var(--tv-desktop); border: 1px solid var(--tv-gadget-border); border-radius: 3px; padding: 3px;
     cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .tbtn img { width: 20px; height: 20px; }

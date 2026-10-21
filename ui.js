@@ -908,16 +908,44 @@ function buildToolbar() {
     blk.style.width = (items[last].x + items[last].w - items[first].x) + "px";
     blk.style.display = "";
   } else blk.style.display = "none";  // the purchase button and the document tab of the live app
-  const buy = document.createElement("button");
-  buy.id = "purchase"; buy.textContent = "PURCHASE";
-  buy.onclick = () => toast("(this is a rebuild — nothing to buy)");
-  buy.style.left = (x + 40) + "px";
+  const buy = document.createElement("img");
+  buy.id = "purchase"; buy.src = "icons/TVPaint-Purchase.png"; buy.alt = "PURCHASE";
+  buy.title = "TVPaint Animation 12 Pro Demo";
+  buy.onclick = () => toast("(this is a rebuild - nothing to buy)");
+  buy.style.left = "538px";   // the measured position in the live app
   tb.appendChild(buy);
   const tab = document.createElement("div");
   tab.id = "projTab";
   tb.appendChild(tab);
 }
 // ================= left panels =================
+// The 18 tools of the Main Panel of TVPaint 12.  The icons are the ones of
+// the live application (cropped from it, 21x21) and the positions are the
+// measured ones: 6 columns at x 28/53/78/103/129/155 and 3 rows at
+// y 113/140/171, so the grid is exactly where TVPaint draws it.
+const MAINTOOLS = [
+  ["penbrush", "Pen Brush"],
+  ["line", "Line"],
+  ["rect", "Rectangle"],
+  ["ellipse", "Ellipse"],
+  ["spline", "Spline"],
+  ["fill", "Paint bucket"],
+  ["cutrect", "Cut Brush"],
+  ["selrect", "Select"],
+  ["crop", "Crop"],
+  ["puppet", "Puppet"],
+  ["transform", "Transform"],
+  ["camera", "Camera"],
+  ["fx", "Effects"],
+  ["pick", "Color picker"],
+  ["smudge", "Smudge"],
+  ["warp", "Warp"],
+  ["texture", "Texture"],
+  ["transparency", "Transparency"]
+];
+// the tools the drawing engine of this rebuild really implements
+const MAIN_SUPPORTED = new Set(["penbrush", "fill", "cutrect", "selrect",
+  "transform", "camera", "pick"]);
 const MAINGRID = [
   ["selrect", "Shape-Selection-Rectangle", "Selection: rectangle"],
   ["selfreehand", "Shape-Selection-FreeHand", "Freehand selection"],
@@ -931,6 +959,20 @@ const MAINGRID = [
   ["zoomrect", "Zoom-Rect", "Zoom rectangle"],
   ["crop", "Shape-Crop", "Crop (soon)", 1],
   ["camera", "Shape-Camera", "Camera (keyframe path + locks)"]
+];
+// the brushes of the "Tool : <name>" panel of the live app: two rows of five,
+// at the measured positions (x 36/64/92/120/148, y 229/256)
+const BRUSHGRID = [
+  ["penbrush", "Pen Brush"],
+  ["pencilbrush", "Pencil Brush"],
+  ["mechanicalpencil", "Mechanical Pencil"],
+  ["oilbrush", "Oil Brush"],
+  ["airbrush", "Air Brush"],
+  ["custombrush", "Custom Brush"],
+  ["wetbrush", "Wet Brush"],
+  ["speedfill", "Speed Fill"],
+  ["textbrush", "Text Brush"],
+  ["warpbrush", "Warp Brush"]
 ];
 const TOOLGRID = [
   ["penbrush", "ToolPenBrush", "Freehand — Pen Brush"],
@@ -981,6 +1023,8 @@ const GRAD_MODES = {
 const TOOL_LABELS = Object.fromEntries([
   ...TOOLGRID, ...GRAPHS, ...MAINGRID, ["selclear", "Clear Selection"]
 ].map(([id, , tip]) => [id, (tip || id).split("(")[0].trim()]));
+// the names TVPaint shows in the "Tool :" header of the Tool panel
+Object.assign(TOOL_LABELS, Object.fromEntries(MAINTOOLS.map(([id, tip]) => [id, tip])));
 TOOL_LABELS.penbrush = "Pen Brush"; TOOL_LABELS.pencilbrush = "Pencil Brush";
 TOOL_LABELS.mechanicalpencil = "Mechanical Pencil"; TOOL_LABELS.oilbrush = "Oil Brush";
 TOOL_LABELS.wetbrush = "Wet Brush"; TOOL_LABELS.airbrush = "Airbrush";
@@ -1026,15 +1070,15 @@ const TV_PANEL_DEFS = [
     tip: "Open/Close the Timesheet Panel" },
   { key: "remote", title: "Remote Control", icon: "Toolbar-Remote.png", cmd: "ToggleRemotePanel",
     tip: "Open/Close Remote panel" },
-  { key: "fxstack", title: "FX Stack", icon: "Toolbar-Search.png", cmd: "ToggleEffectPanel",
+  { key: "fxstack", title: "FX Stack", icon: "Toolbar-FXStack.png", cmd: "ToggleEffectPanel",
     tip: "Open/Close FX Stack Panel" },
   { key: "guideline", title: "Guidelines", icon: "Toolbar-Nature.png", cmd: "ToggleGuidelinePanel",
     tip: "Open/Close Guidelines Panel" },
   { key: "share", title: "Share Manager", icon: "Toolbar-Send.png", cmd: "ToggleShareServicesPanel",
     tip: "Open/Close Share Manager Panel" },
   // the panels the live bar does not show but the Windows menu still offers
-  { key: "library", title: "Library", icon: "LibraryImage-x20.png", cmd: "ToggleLibraryImagePanel" },
-  { key: "navigator", title: "Navigator", icon: "MiscNavigator-x20.png", cmd: "ToggleNavigatorPanel" }
+  { key: "library", title: "Image Library", icon: "Toolbar-Library.png", cmd: "ToggleLibraryImagePanel" },
+  { key: "navigator", title: "Navigator", icon: "Toolbar-Navigator.png", cmd: "ToggleNavigatorPanel" }
 ];
 // the live order of the tool bar and the measured x position of every button
 const TV_TOOLBAR_ORDER = [
@@ -1045,7 +1089,9 @@ const TV_TOOLBAR_ORDER = [
   { panel: "main", x: 183 }, { panel: "color", x: 207 }, { panel: "tool", x: 232 },
   { panel: "timeline", x: 257 },
   { panel: "lt", x: 286 }, { panel: "timesheet", x: 308 }, { panel: "remote", x: 337 },
-  { panel: "fxstack", x: 384 }, { panel: "guideline", x: 432 }, { panel: "share", x: 458 },
+  { panel: "navigator", x: 357 },
+  { panel: "fxstack", x: 384 }, { panel: "library", x: 407 },
+  { panel: "guideline", x: 432 }, { panel: "share", x: 458 },
   { icon: "Toolbar-Docs.png", tip: "Online Documentation", cmd: "Online Help", x: 500,
     fn: () => toast("online documentation — not in this prototype") }
 ];
@@ -1468,13 +1514,8 @@ function buildPanels() {
   // ---- Main Panel ----
   const main = mkPanel("Main Panel", "main");
   renderTabBar();
-  main.innerHTML = `<div class="toolgrid g6" id="mainGrid"></div>
-    <div class="minirow">
-      <button class="minib" id="btnBinClear" title="clear Custom Brush">Clear Bin</button>
-      <button class="minib" onclick="toggleLoop()" id="rLoopT">Loop</button>
-    </div>`;
-  buildBtnGrid($("mainGrid"), MAINGRID);
-  $("btnBinClear").onclick = clearBin;
+  main.innerHTML = `<div class="maingrid" id="mainGrid"></div>`;
+  buildMainGrid($("mainGrid"));
   // ---- the panels the tool bar toggles (REA: one action per panel) ----
   // The Main / Tool / Timeline panels exist above; the other TVPaint panels are
   // created here so that every tool bar button really opens something.
@@ -1785,12 +1826,12 @@ function buildPanels() {
   const tp = mkPanel("Tool : Pen Brush", "tool");
   document.querySelector("[data-panel-key=tool]").id = "toolPanel";
   tp.innerHTML = `
-    <div class="toolgrid g6" id="toolGrid"></div>
+    <div class="brushgrid" id="toolGrid"></div>
     <div id="toolOpts">
-    <h4 style="margin:6px 0 2px;color:#898989;font-size:10px">GRAPHS</h4>
+    <h4 id="graphHead" style="margin:6px 0 2px;color:#898989;font-size:10px">GRAPHS</h4>
     <div class="toolgrid g6" id="graphGrid" style="max-height:132px;overflow-y:auto"></div>
-    <div class="orow"><label>Color</label>
-      <select id="colSel" style="flex:1"></select>
+    <div class="orow"><div class="colbtn"><span>Color</span><span class="carrow">▾</span>
+      <select id="colSel"></select></div>
       <span id="chipA" style="width:22px;height:16px;border-radius:2px;border:1px solid #000;flex:none"></span></div>
     <div class="tabs"><div class="tab on" data-tab="options">Options</div><div class="tab" data-tab="bin">Bin</div></div>
     <div id="paneOptions">
@@ -1826,11 +1867,13 @@ function buildPanels() {
       <div style="display:flex;justify-content:center"><canvas id="binThumb" width="64" height="64"
         style="background:#2D2D32;border:1px solid #2D2D32;border-radius:3px"></canvas></div>
       <div class="minirow" style="justify-content:center">
-        <button class="minib" id="btnBinClear2">Clear Bin</button></div>
+        <button class="minib" id="btnBinClear2">Clear Bin</button>
+        <button class="minib" onclick="toggleLoop()" id="rLoopT">Loop</button></div>
     </div>
     </div>`;
-  buildBtnGrid($("toolGrid"), TOOLGRID);
+  buildBrushGrid($("toolGrid"));
   buildBtnGrid($("graphGrid"), GRAPHS);
+  $("btnBinClear2").onclick = clearBin;
   wireToolOptions();
   // tabs
   tp.querySelectorAll(".tabs .tab").forEach(t => {
@@ -1839,6 +1882,35 @@ function buildPanels() {
       $("paneOptions").style.display = t.dataset.tab === "options" ? "" : "none";
       $("paneBin").style.display = t.dataset.tab === "bin" ? "" : "none";
       renderBin();
+    };
+  });
+}
+// the brushes of the Tool panel, drawn at the measured positions of the live app
+function buildBrushGrid(grid) {
+  const COLS = [0, 28, 56, 84, 112];
+  const ROWS = [0, 27];
+  grid.innerHTML = BRUSHGRID.map((t, i) => {
+    const x = COLS[i % 5], y = ROWS[Math.floor(i / 5)];
+    return `<div class="bcell" data-tool="${t[0]}" title="${t[1]}"
+      style="left:${x}px;top:${y}px"><img src="icons/Brush-${String(i + 1).padStart(2, "0")}.png" alt=""></div>`;
+  }).join("");
+  grid.querySelectorAll(".bcell").forEach(b => {
+    b.onclick = () => selectTool(b.dataset.tool);
+  });
+}
+// the Main Panel of the live app: 18 tools, drawn at the measured positions
+function buildMainGrid(grid) {
+  const COLS = [0, 25, 50, 75, 101, 127];
+  const ROWS = [0, 27, 58];
+  grid.innerHTML = MAINTOOLS.map((t, i) => {
+    const x = COLS[i % 6], y = ROWS[Math.floor(i / 6)];
+    return `<div class="mgcell" data-tool="${t[0]}" title="${t[1]}"
+      style="left:${x}px;top:${y}px"><img src="icons/Main-${String(i + 1).padStart(2, "0")}.png" alt=""></div>`;
+  }).join("");
+  grid.querySelectorAll(".mgcell").forEach(b => {
+    b.onclick = () => {
+      if (!MAIN_SUPPORTED.has(b.dataset.tool)) { toast(b.title + " - not in this prototype yet"); return; }
+      selectTool(b.dataset.tool);
     };
   });
 }
@@ -1891,6 +1963,8 @@ function selectTool(id) {
   }
   $("toolPanel").querySelector(".pt").textContent = "Tool : " + (TOOL_LABELS[id] || id);
   document.querySelectorAll(".tbtn").forEach(b => b.classList.toggle("on", b.dataset.tool === id));
+  document.querySelectorAll(".mgcell").forEach(b => b.classList.toggle("on", b.dataset.tool === id));
+  document.querySelectorAll(".bcell").forEach(b => b.classList.toggle("on", b.dataset.tool === id));
   // the live app shows the camera options while the Camera tool is active
   if (id === "camera") {
     $("toolPanel").querySelector(".pt").textContent = "Tool : Camera[Pro]";
@@ -5850,11 +5924,23 @@ window.addEventListener("wheel", (e) => {
 window.addEventListener("resize", () => renderAll());
 
 // ================= boot =================
+// the order of the left column of the live app: Main Panel, Tool : <name>,
+// Color, then the panels the tool bar toggles.
+const TV_DOCK_ORDER = ["main", "tool", "color", "wheel", "lt", "timesheet",
+  "remote", "navigator", "fxstack", "share", "guideline", "library", "camera"];
+function orderDockPanels() {
+  const host = $("panels");
+  TV_DOCK_ORDER.forEach(k => {
+    const el = host.querySelector("[data-panel-key=\"" + k + "\"]");
+    if (el) host.appendChild(el);
+  });
+}
 boot();
 function boot() {
   buildMenubar();
   buildPanels();
   buildCameraPanel();
+  orderDockPanels();
   buildToolbar();
   buildTlTabs();
   buildVbRow();
