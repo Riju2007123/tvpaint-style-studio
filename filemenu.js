@@ -1081,7 +1081,7 @@
     const compLbl = labelAt("Compression (lossless)", 126, 174, 140);
     compLbl.style.textAlign = "left";
     pD.appendChild(compLbl);
-    const comp = spin("5", 1, { width: 53 });
+    const comp = spin("5", 1, { width: 53, onInput: () => drawPreview() });
     at(comp, 274, 174, 67, 17);
     comp.title = "Set the compression ratio";
     pD.appendChild(comp);
@@ -1127,14 +1127,14 @@
 
     pD.appendChild(labelAt("Width", 96, 273, 70));
     const srcW = srcLabel(String(startW), 273);
-    const tgtW = spin(String(startW), 1, { width: 53 });
+    const tgtW = spin(String(startW), 1, { width: 53, onInput: () => drawPreview() });
     at(tgtW, 273, 273, 69, 17);
     tgtW.title = "Set Exported Footage Width";
     pD.append(srcW, triBtn(273, () => { tgtW.input.value = srcW.textContent; drawPreview(); }), tgtW);
 
     pD.appendChild(labelAt("Height", 96, 292, 70));
     const srcH = srcLabel(String(startH), 292);
-    const tgtH = spin(String(startH), 1, { width: 53 });
+    const tgtH = spin(String(startH), 1, { width: 53, onInput: () => drawPreview() });
     at(tgtH, 273, 292, 69, 17);
     tgtH.title = "Set Exported Footage Height";
     pD.append(srcH, triBtn(292, () => { tgtH.input.value = srcH.textContent; drawPreview(); }), tgtH);
@@ -1242,6 +1242,13 @@
       p.style.left = Math.round(dr.left + 116) + "px";
       p.style.top = Math.round(dr.top + 206) + "px";
       doc.body.appendChild(p);
+      // the live closes a settings panel as soon as the user clicks outside
+      const closeOnOutside = (e) => {
+        if (p.contains(e.target)) return;
+        p.remove();
+        doc.removeEventListener("mousedown", closeOnOutside, true);
+      };
+      setTimeout(() => doc.addEventListener("mousedown", closeOnOutside, true), 0);
       const rowY = [8, 26, 44, 62, 80, 98, 116, 134, 152, 170, 188];
       const lbl = (t, y) => {
         const d = el("div", "tvlbl", t);
@@ -1283,14 +1290,15 @@
       layC.onPick = (v) => { slateOpt.layout = v; };
       // 2 - Ratio
       lbl("Ratio", rowY[1]);
-      const ratioS = spin(String(slateOpt.ratio), 1, { width: 195, suffix: "%" });
+      const applyRatio = () => {
+        slateOpt.ratio = Math.max(1, Math.min(90, parseInt(ratioS.input.value, 10) || 10));
+        drawPreview();
+      };
+      const ratioS = spin(String(slateOpt.ratio), 1, { width: 195, suffix: "%", onInput: applyRatio });
       ratioS.input.value = slateOpt.ratio + "%";
       put(ratioS, 158, rowY[1], 212, 17);
       ratioS.title = "Set the ratio";
-      ratioS.input.addEventListener("input", () => {
-        slateOpt.ratio = Math.max(1, Math.min(50, parseInt(ratioS.input.value, 10) || 10));
-        drawPreview();
-      });
+      ratioS.input.addEventListener("input", applyRatio);
       // 3 - Color
       lbl("Color", rowY[2]);
       const cText = el("div"); cText.style.cssText = "background:" + slateOpt.textColor + ";width:18px;height:17px";
