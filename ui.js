@@ -2673,6 +2673,13 @@ function dlgLayerLength(prefill, dir) {
 // ================= viewport bottom row (canvas scrollbar + zoom/Display) =================
 function buildVbRow() {
   if (!$("vbRow")) return;
+  // the gadget column on the right edge of the project window
+  const rg = $("rgEye");
+  if (rg) rg.onclick = () => { camFrame = !camFrame; rg.classList.toggle("on", camFrame); renderAll(); };
+  const rr = $("rgResize");
+  if (rr) rr.onclick = () => toast("resize the project window - the live app drags the frame");
+  const rc = $("rgChev");
+  if (rc) rc.onclick = () => toast("display options of the project window");
   $("zoomIn").onclick = () => { view.zoom = Math.min(20, view.zoom * 1.25); renderAll(); };
   $("zoomOut").onclick = () => { view.zoom = Math.max(0.05, view.zoom * 0.8); renderAll(); };
   $("dispSel").onchange = (e) => {

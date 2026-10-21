@@ -58,6 +58,19 @@ show is hidden.
 The live column reads Main Panel, Tool : <name>, Color, Options / Bin.  The
 rebuild now orders the dock the same way (`TV_DOCK_ORDER` in `ui.js`).
 
+### The right edge of the project window
+The live window has a vertical scroll bar at x 1894..1904 (the thumb is
+70,70,77) and a column of small gadgets at x 1887..1910: a blue double arrow
+(y 678..694), an eye (y 697..707) and a chevron (y 712..724).  The three
+glyphs were cropped from the live window (`icons/RG-*.png`) and the scroll bar
+was added.
+
+### The transport row
+The `.tib` rule was absolute for the tool bar, so every button of the
+transport row was stacked at the same x and only the fps field, the hand and
+the zoom field were visible.  The absolute placement is now scoped to
+`#toolbar` and the row shows the whole set of the live app again.
+
 ### Still not captured
 - the eight panel header buttons of the live are drawn as small squares here
   (the live draws them as circles);

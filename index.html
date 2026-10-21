@@ -229,6 +229,17 @@
   #viewport { position: relative; background: var(--tv-desktop); overflow: hidden; min-width: 0; }
   #art, #ovl { position: absolute; left: 0; top: 0; }
   #ovl { touch-action: none; cursor: crosshair; }
+  /* the vertical scroll bar of the project window (live: x 1894..1904) */
+  #vScroll { position: absolute; right: 0; top: 0; width: 11px; height: 66%; background: #232327; }
+  #vThumb { position: absolute; left: 0; top: 0; width: 11px; height: 34%; background: rgb(70,70,77);
+    border-radius: 2px; }
+  /* the gadget column on the right edge of the project window (live: x 1887..1910) */
+  #rGadgets { position: absolute; right: 0; bottom: 2px; width: 24px; z-index: 6;
+    display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  #rGadgets button { background: none; border: 0; padding: 0; cursor: pointer; line-height: 0;
+    display: flex; align-items: center; justify-content: center; }
+  #rGadgets button.on { background: var(--tv-action-selected); }
+  #rGadgets img { display: block; }
   #vbRow { background: var(--tv-desktop); border-top: 1px solid var(--tv-gadget-border); display: flex;
     align-items: center; gap: 8px; padding: 0 8px; overflow: hidden; }
   #canvasScroll { flex: 1; height: 6px; background: #232327; border-radius: 3px; position: relative;
@@ -629,6 +640,13 @@
       <div id="viewport">
         <canvas id="art"></canvas>
         <canvas id="ovl"></canvas>
+        <div id="vScroll"><div id="vThumb"></div></div>
+        <div id="rGadgets">
+          <button title="Resize the project window" id="rgResize" class="on"><img src="icons/RG-Resize.png" alt=""></button>
+          <button title="Show / hide the camera frame" id="rgEye"><img src="icons/RG-Eye.png" alt=""></button>
+          <button title="Display options" id="rgChev"><span style="width:16px;height:16px;line-height:14px;
+            text-align:center;color:#9a9aa2;font-size:12px">&#9660;</span></button>
+        </div>
       </div>
       <div id="vbRow">
         <div id="canvasScroll"><div id="canvasScrollThumb"></div></div>
