@@ -69,6 +69,9 @@ function newProject(w, h, fps) {
     bgA: "#ffffff", bgB: "#cfcfcf",
     startFrame: 1,
     notes: "",
+    // scene markers: a scene starts at "from" and runs until the next one
+    // (used by the Export Footage "Split Scenes" option)
+    scenes: [],
     sound: null,                           // { name, duration, offset }
     groups: [
       { name: "Default", color: "#8f8f95" }, { name: "Dark Blue", color: "#2b3a67" },

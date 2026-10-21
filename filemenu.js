@@ -167,7 +167,7 @@
   .tvchk{width:13px;height:13px;background:#46464d;border:1px solid #5f5f67;border-radius:1px;
     display:inline-grid;place-items:center;cursor:pointer;color:#d8d8dc;font-size:9px;flex:0 0 13px}
   .tvchk.on:after{content:"\\2713"}
-  .tvchk.big{width:20px;height:17px;flex:0 0 20px;border:0;border-radius:0;background:#46464d;font-size:11px}
+  .tvchk.big{width:21px;height:18px;flex:0 0 21px;border:0;border-radius:0;background:#414146;font-size:12px}
   .tvchk.big.on{background:transparent}
   .tvtabs{display:flex;align-items:flex-end;gap:0}
   .tvt{padding:2px 10px;height:18px;display:flex;align-items:center;justify-content:center;
@@ -756,28 +756,109 @@
   const EXPORT_AS = ["Single Image", "Sequence", "Animation"];
   const EXPORT_STRUCTURES = ["PSD (.psd)", "JSON (.json + images)", "CSV (.csv + .png files)", "Flix (.xml + .psd files)"];
 
-  function composeFrame(frame, w, h, viewMode) {
+  // The export composer.  `opts` carries the Export Footage options that
+  // change the produced pixels:
+  //   background  false = no background colour (alpha kept), true = the
+  //               project background colour is written under the drawing
+  //   slate      { on, layout: "Overlay" | "Resize within Border", borderPct }
+  //   notes      the project notes, drawn at the bottom of the file
+  //   blend      { frame, frac } - the next source frame blended in, used by
+  //               the Time Interpolation option
+  function composeFrame(frame, w, h, viewMode, opts) {
+    const o = opts || {};
     const out = E.makeSurface(w, h);
     const c = out.getContext("2d");
-    c.fillStyle = "#ffffff"; c.fillRect(0, 0, w, h);
+    if (o.background === false) {
+      c.clearRect(0, 0, w, h);
+    } else {
+      c.fillStyle = o.bgColor || (proj && proj.bgA) || "#ffffff";
+      c.fillRect(0, 0, w, h);
+    }
     if (!proj || proj.closed) return out;
+
+    // the slate reserves a black border around the content
+    let slate = null;
+    if (o.slate && o.slate.on) {
+      const b = Math.max(2, Math.round(Math.min(w, h) * (o.slate.borderPct || 4) / 100));
+      slate = { b: b, layout: o.slate.layout || "Overlay" };
+    }
+    const inner = slate && slate.layout === "resize"
+      ? { x: slate.b, y: slate.b, w: Math.max(1, w - 2 * slate.b), h: Math.max(1, h - 2 * slate.b) }
+      : { x: 0, y: 0, w: w, h: h };
+
     let sx = 0, sy = 0, sw = proj.width, sh = proj.height;
     if (viewMode === "Camera" && proj.cameraKeys && proj.cameraKeys.length) {
       const r = E.cameraRect(proj, E.cameraEvaluate(proj, frame));
       sx = r.x; sy = r.y; sw = r.w; sh = r.h;
     }
-    const kx = w / sw, ky = h / sh;
-    proj.layers.forEach(l => {
-      if (!l.visible) return;
-      const key = E.effectiveFrameKey(l, frame);
-      const surf = key !== null ? l.frames[key] && l.frames[key].canvas : null;
-      if (surf && surf.getContext) {
-        c.globalAlpha = l.opacity;
-        c.drawImage(surf, sx, sy, sw, sh, 0, 0, Math.round(sw * kx), Math.round(sh * ky));
-        c.globalAlpha = 1;
-      }
-    });
+    const kx = inner.w / sw, ky = inner.h / sh;
+    const drawLayers = (f, alpha) => {
+      proj.layers.forEach(l => {
+        if (!l.visible) return;
+        const key = E.effectiveFrameKey(l, f);
+        const surf = key !== null ? l.frames[key] && l.frames[key].canvas : null;
+        if (surf && surf.getContext) {
+          c.globalAlpha = l.opacity * alpha;
+          c.drawImage(surf, sx, sy, sw, sh, inner.x, inner.y, Math.round(sw * kx), Math.round(sh * ky));
+          c.globalAlpha = 1;
+        }
+      });
+    };
+    drawLayers(frame, 1);
+    // "Perform TimeStretch by creating new frame instead of duplicating frame"
+    if (o.blend && o.blend.frac > 0.001) drawLayers(o.blend.frame, o.blend.frac);
+
+    if (slate) drawSlate(c, w, h, slate, frame);
+    if (o.notes) drawNotes(c, w, h, o.notes);
     return out;
+  }
+
+  // TVPaint's slate: "Add a black border around the content with the current
+  // frame, the name of the project and clip, and the date."
+  function drawSlate(c, w, h, slate, frame) {
+    const b = slate.b;
+    c.save();
+    c.fillStyle = "#000000";
+    c.fillRect(0, 0, w, b);
+    c.fillRect(0, h - b, w, b);
+    c.fillRect(0, 0, b, h);
+    c.fillRect(w - b, 0, b, h);
+    const fs = Math.max(8, Math.round(Math.min(w, h) * 0.022));
+    c.fillStyle = "#ffffff";
+    c.font = fs + "px Tahoma, sans-serif";
+    c.textBaseline = "middle";
+    const pname = proj && proj.name ? proj.name.replace(/^\*/, "").replace(/\.tvpp$/i, "") : "";
+    const cname = "Clip_001";
+    const d = new Date();
+    const date = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    c.textAlign = "left";
+    c.fillText(cname, b + 5, Math.round(b / 2));
+    c.fillText(pname, b + 5, h - Math.round(b / 2));
+    c.textAlign = "right";
+    c.fillText(frame + "  " + date, w - b - 5, h - Math.round(b / 2));
+    c.restore();
+  }
+
+  // "Add notes at bottom of the file" - the project notes of the timeline.
+  function drawNotes(c, w, h, notes) {
+    const text = String(notes == null ? "" : notes);
+    if (!text.trim()) return;
+    const fs = Math.max(9, Math.round(h * 0.022));
+    const lines = text.split(/\r?\n/).filter(l => l.length).slice(-4);
+    c.save();
+    c.font = fs + "px Tahoma, sans-serif";
+    c.textBaseline = "bottom";
+    c.textAlign = "left";
+    let y = h - 4;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const tw = c.measureText(lines[i]).width;
+      c.fillStyle = "rgba(255,255,255,0.78)";
+      c.fillRect(4, y - fs, tw + 6, fs + 2);
+      c.fillStyle = "#101014";
+      c.fillText(lines[i], 7, y);
+      y -= fs + 3;
+    }
+    c.restore();
   }
 
   /* ------------------------------------------------------------------
@@ -810,7 +891,7 @@
       return at(d, x, y, w, 14);
     };
     const mkCheck = (x, y, on) => at(check(!!on), x, y, 13, 13);
-  const mkBig = (x, y, on) => { const c = at(check(!!on), x, y, 20, 17); c.classList.add("big"); return c; };
+  const mkBig = (x, y, on) => { const c = at(check(!!on), x, y, 21, 18); c.classList.add("big"); return c; };
     const projName = () => (proj && proj.name ? proj.name.replace(/^\*/, "").replace(/\.tvpp$/i, "") : "Untitled_(1)");
     const withExt = (p, ext) => String(p).replace(/\.[a-z0-9]+$/i, "") + "." + ext;
     const safeName = (s) => String(s || "layer").replace(/[\\/:*?"<>|]+/g, "_");
@@ -985,45 +1066,103 @@
     tgtPar.title = "Set Exported Footage Pixel Aspect Ratio";
     pD.append(srcPar, triBtn(349, () => tgtPar.setValue(srcPar.textContent)), tgtPar);
 
-    const bgChk = mkBig(274, 375, true);
+    /* --- the seven export flags (live: flat 21x18 boxes, a bare tick when
+       the option is on - Notes and Slate are check boxes as well) --- */
+    const bgChk = mkBig(273, 374, true);
     bgChk.title = "Export Content with Layer Background";
-    pD.append(labelAt("Background", 140, 373, 130), bgChk);
+    pD.append(labelAt("Background", 140, 372, 130), bgChk);
 
-    pD.append(labelAt("Notes", 140, 390, 130));
-    const notesF = txt("", {});
-    at(notesF, 274, 392, 20, 17);
-    notesF.title = "Add notes at bottom of the file";
-    pD.appendChild(notesF);
+    const notesChk = mkBig(273, 391, false);
+    notesChk.title = "Add notes at bottom of the file";
+    pD.append(labelAt("Notes", 140, 389, 130), notesChk);
 
-    pD.append(labelAt("Slate", 140, 409, 130));
-    const slateF = txt("", {});
-    at(slateF, 274, 411, 20, 17);
-    slateF.title = "Add a black border around the content with the current frame, the name of the project and clip, and the date.";
+    const slateChk = mkBig(273, 410, false);
+    slateChk.title = "Add a black border around the content with the current frame, the name of the project and clip, and the date.";
     const slateBtn = el("button", "tvbtn", "");
-    at(slateBtn, 298, 411, 20, 17);
+    at(slateBtn, 298, 410, 20, 17);
     slateBtn.style.padding = "0";
     slateBtn.title = "Set some parameters of the slate.";
-    // live: a gear with a diagonal slash (disabled until a slate is set)
+    // live: a gear with a diagonal slash while the slate is off
     const slateGear = el("span", "", "\u2699"); slateGear.style.cssText = "font-size:11px;color:#8f8f96;position:absolute;left:4px;top:3px";
     const slash = el("span"); slash.style.cssText = "position:absolute;left:3px;top:8px;width:14px;height:1px;background:#8f8f96;transform:rotate(-45deg)";
     slateBtn.append(slateGear, slash);
-    pD.append(slateF, slateBtn);
+    pD.append(labelAt("Slate", 140, 408, 130), slateChk, slateBtn);
 
-    const lockAspectChk = mkBig(274, 430, false);
+    const lockAspectChk = mkBig(273, 429, false);
     lockAspectChk.title = "Preserve Width / Height ratio";
-    pD.append(labelAt("Lock aspect ratio", 140, 428, 130), lockAspectChk);
+    pD.append(labelAt("Lock aspect ratio", 140, 427, 130), lockAspectChk);
 
-    const stretchChk = mkBig(274, 449, false);
+    const stretchChk = mkBig(273, 448, false);
     stretchChk.title = "TimeStretch Exported Footage to respect new Frame Rate";
-    pD.append(labelAt("Stretch to Frame Rate", 140, 447, 130), stretchChk);
+    pD.append(labelAt("Stretch to Frame Rate", 140, 446, 130), stretchChk);
 
-    const interpChk = mkBig(274, 468, false);
+    const interpChk = mkBig(273, 467, false);
     interpChk.title = "Perform TimeStretch by creating new frame instead of duplicating frame";
-    pD.append(labelAt("Time Interpolation", 140, 466, 130), interpChk);
+    pD.append(labelAt("Time Interpolation", 140, 465, 130), interpChk);
 
-    const splitChk = mkBig(274, 487, false);
+    const splitChk = mkBig(273, 486, false);
     splitChk.title = "Split Scenes/Clip in different files";
-    pD.append(labelAt("Split Scenes", 140, 485, 130), splitChk);
+    pD.append(labelAt("Split Scenes", 140, 484, 130), splitChk);
+
+    /* --- the slate parameters (live: "Set some parameters of the slate.") --- */
+    const slateOpt = { layout: "Overlay", borderPct: 4 };
+    const syncSlateBtn = () => {
+      const on = slateChk.checked();
+      slash.style.display = on ? "none" : "";
+      slateGear.style.color = on ? "#c8c8cc" : "#8f8f96";
+      slateBtn.title = on ? "Set some parameters of the slate." : "Set some parameters of the slate.";
+      slateBtn.style.opacity = on ? "1" : ".75";
+    };
+    // keep the check box's own toggle and add the redraw after it
+    const onFlag = (c, fn) => { const old = c.onclick; c.onclick = (e) => { if (old) old(e); fn(); }; };
+    onFlag(slateChk, () => { syncSlateBtn(); drawPreview(); });
+    onFlag(bgChk, () => drawPreview());
+    onFlag(notesChk, () => drawPreview());
+    onFlag(stretchChk, () => drawPreview());
+    onFlag(interpChk, () => drawPreview());
+    onFlag(splitChk, () => drawPreview());
+    onFlag(lockAspectChk, () => drawPreview());
+    slateBtn.onclick = () => {
+      if (!slateChk.checked()) return toast("enable the slate first");
+      tvSlateParams();
+    };
+    function tvSlateParams() {
+      const d2 = tvWin("Slate", 320);
+      const b2 = bodyOf(d2);
+      b2.style.padding = "10px 12px";
+      const l1 = el("div", "tvlbl", "Layout");
+      l1.style.marginBottom = "6px";
+      b2.appendChild(l1);
+      const r1 = el("label"); r1.style.cssText = "display:flex;align-items:center;gap:6px;margin:3px 0;font:11px 'Segoe UI',Tahoma,sans-serif;color:#c8c8cc";
+      const rad1 = el("input"); rad1.type = "radio"; rad1.name = "slateLayout"; rad1.checked = slateOpt.layout === "Overlay";
+      r1.append(rad1, document.createTextNode("Overlay"));
+      const r2 = el("label"); r2.style.cssText = r1.style.cssText;
+      const rad2 = el("input"); rad2.type = "radio"; rad2.name = "slateLayout"; rad2.checked = slateOpt.layout !== "Overlay";
+      r2.append(rad2, document.createTextNode("Resize within Border"));
+      const hint = el("div", "tvlbl", "Set the layout\n\n_ Overlay: the slate will overlay some part of the image\n_ Resize within Border: black borders will be added to display the slate, \nbut the inner image will be smaller than the original");
+      hint.style.cssText += ";white-space:pre-wrap;margin:8px 0 6px;color:#8f8f96;line-height:14px";
+      const bRow = el("div"); bRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:10px";
+      bRow.appendChild(el("span", "tvlbl", "Border size"));
+      const bs = spin(String(slateOpt.borderPct), 1, { width: 48, suffix: "%" });
+      bs.input.value = slateOpt.borderPct + "%";
+      bRow.appendChild(bs);
+      b2.append(r1, r2, hint, bRow);
+      const bar = el("div"); bar.style.cssText = "display:flex;justify-content:flex-end;gap:8px";
+      const ok = el("button", "tvbtn", "OK");
+      const cancel = el("button", "tvbtn", "Cancel");
+      bar.append(cancel, ok);
+      b2.appendChild(bar);
+      ok.onclick = () => {
+        slateOpt.layout = rad1.checked ? "Overlay" : "Resize within Border";
+        slateOpt.borderPct = Math.max(1, Math.min(30, parseInt(bs.input.value, 10) || 4));
+        d2.remove();
+        drawPreview();
+        toast("slate: " + slateOpt.layout + ", border " + slateOpt.borderPct + "%");
+      };
+      cancel.onclick = () => d2.remove();
+      return d2;
+    }
+    syncSlateBtn();
 
     // the padlock on the left edge toggles the width/height link
     const padlock = el("div");
@@ -1078,14 +1217,7 @@
     const pv = el("canvas");
     pv.style.cssText = "position:absolute;left:0;top:0";
     previewBox.appendChild(pv);
-    const wmStyle = "position:absolute;color:#c9c9c9;font:bold 13px Verdana;letter-spacing:-.5px;pointer-events:none;z-index:2";
-    const wm1 = el("div", "");
-    wm1.innerHTML = 'TVPAINT <span style="border:1px solid #bbb;border-radius:3px;padding:0 2px;font-size:8px">12</span>';
-    wm1.style.cssText = wmStyle + ";left:22px;top:14px";
-    const wm2 = el("div", "");
-    wm2.innerHTML = 'TVPAINT <span style="border:1px solid #bbb;border-radius:3px;padding:0 2px;font-size:8px">12</span>';
-    wm2.style.cssText = wmStyle + ";right:20px;bottom:12px";
-    previewBox.append(wm1, wm2);
+    const wmStyle = "";
     b.appendChild(previewBox);
 
     /* --- footer (All Frames bar + current frame) --- */
@@ -1130,6 +1262,27 @@
     /* --- behaviour --- */
     let exportFile = null;
 
+    // the state of the seven export flags, in the order TVPaint applies them
+    function optState() {
+      return {
+        background: bgChk.checked(),
+        notes: notesChk.checked() ? (proj && proj.notes ? proj.notes : "") : "",
+        slate: { on: slateChk.checked(), layout: slateOpt.layout, borderPct: slateOpt.borderPct },
+        lock: lockAspectChk.checked(),
+        stretch: stretchChk.checked(),
+        interp: interpChk.checked(),
+        split: splitChk.checked()
+      };
+    }
+    // the pixel options, as composeFrame wants them
+    function pixelOpts(o) {
+      return {
+        background: o.background,
+        slate: o.slate.on ? o.slate : null,
+        notes: o.notes
+      };
+    }
+
     function drawPreview() {
       if (!previewBox || previewBox.style.display === "none") return;
       const w = Math.max(16, parseInt(tgtW.input.value) || 1920);
@@ -1142,7 +1295,7 @@
       const c = pv.getContext("2d");
       c.fillStyle = "#2d2d32"; c.fillRect(0, 0, cw, ch);
       const mode = (tabIndex === 2 ? viewL.getValue() : viewC.getValue());
-      const img = composeFrame(frame, w, h, mode);
+      const img = composeFrame(frame, w, h, mode, pixelOpts(optState()));
       const s = Math.min(cw / w, ch / h);
       const dw = Math.max(1, Math.round(w * s)), dh = Math.max(1, Math.round(h * s));
       c.drawImage(img, Math.round((cw - dw) / 2), Math.round((ch - dh) / 2), dw, dh);
@@ -1171,7 +1324,7 @@
 
     asC.onPick = () => refresh();
     fmtC.onPick = (v) => { pathField.value = withExt(pathField.value, v === "JPG" ? "jpg" : String(v).toLowerCase()); drawPreview(); };
-    [tgtW.input, tgtH.input, frameField, notesF, slateF].forEach(i => i.addEventListener("input", drawPreview));
+    [tgtW.input, tgtH.input, frameField].forEach(i => i.addEventListener("input", drawPreview));
     [viewC, tgtFps, tgtDpi, tgtPar, convC, modeC, alphaC].forEach(c => {
       const old = c.onPick;
       c.onPick = (v) => { if (old) old(v); drawPreview(); };
@@ -1289,21 +1442,70 @@
       const mime = fmt === "PNG" ? "image/png" : fmt === "JPG" ? "image/jpeg" : "image/webp";
       const ext = fmt === "JPG" ? "jpg" : fmt.toLowerCase();
       const mode = viewC.getValue();
+      const o = optState();
+      const px = pixelOpts(o);
 
-      if (as === "Single Image" || frames.length <= 1) {
+      /* "Stretch to Frame Rate": the exported footage respects the new frame
+         rate and keeps the duration of the source.  Without the option the
+         source frames are written as they are. */
+      const srcFps = Number(proj && proj.fps) || 24;
+      const dstFps = parseFloat(tgtFps.getValue()) || srcFps;
+      let plan = frames.map(f => ({ f: f, f2: f, frac: 0 }));
+      if (o.stretch && Math.abs(dstFps - srcFps) > 1e-6 && frames.length > 1) {
+        const dur = frames.length / srcFps;
+        const n = Math.max(1, Math.round(dur * dstFps));
+        plan = [];
+        for (let k = 0; k < n; k++) {
+          const pos = (k / dstFps) * srcFps;
+          const i = Math.floor(pos);
+          const frac = pos - i;
+          const a = frames[Math.max(0, Math.min(frames.length - 1, i))];
+          const b = frames[Math.max(0, Math.min(frames.length - 1, i + 1))];
+          plan.push({ f: a, f2: b, frac: o.interp ? frac : 0, index: k + 1 });
+        }
+      }
+      const painted = (p) => composeFrame(p.f, w, h, mode, Object.assign({}, px, {
+        blend: o.interp && p.frac > 0.001 ? { frame: p.f2, frac: p.frac } : null
+      }));
+
+      /* "Split Scenes": one file per scene of the project.  A scene is a
+         marker: it starts at "from" and runs until the next one. */
+      const mk = (proj && proj.scenes ? proj.scenes.slice().sort((a, b) => a.from - b.from) : []);
+      const firstF = frames[0], lastF = frames[frames.length - 1];
+      const scenes = [];
+      if (!mk.length) {
+        scenes.push({ name: "", from: firstF, to: lastF });
+      } else {
+        // the frames before the first marker belong to a first scene
+        if (mk[0].from > firstF) scenes.push({ name: "", from: firstF, to: mk[0].from - 1 });
+        mk.forEach((s, i) => scenes.push({
+          name: s.name || ("Scene " + (i + 1)),
+          from: Math.max(firstF, s.from),
+          to: i + 1 < mk.length ? Math.min(lastF, mk[i + 1].from - 1) : lastF
+        }));
+      }
+      const parts = o.split ? scenes : [{ name: "", from: firstF, to: lastF }];
+
+      if (as === "Single Image" || plan.length <= 1) {
         if (!TVP) {
           const a = doc.createElement("a");
-          a.href = composeFrame(frames[0], w, h, mode).toDataURL(mime, 0.95);
+          a.href = painted(plan[0]).toDataURL(mime, 0.95);
           a.download = baseName(path).replace(/\.[a-z0-9]+$/i, "") + "." + ext;
           a.click();
           return toast("exported " + a.download);
         }
-        let out = path;
-        if (!new RegExp("\\." + ext + "$", "i").test(out)) out = out.replace(/\.[a-z0-9]+$/i, "") + "." + ext;
-        const url = composeFrame(frames[0], w, h, mode).toDataURL(mime, 0.95);
-        const ok = await TVP.writeFileBinary(out, url);
-        if (ok) pushRecent("folders", dirName(out));
-        return toast(ok ? "exported " + out : "export failed");
+        let written = 0;
+        for (const part of parts) {
+          const first = plan.find(p => p.f >= part.from) || plan[0];
+          let out = path;
+          const stem0 = baseName(path).replace(/\.[a-z0-9]+$/i, "");
+          if (parts.length > 1 && part.name) out = dirName(path) + "\\" + stem0 + "_" + safeName(part.name) + "." + ext;
+          if (!new RegExp("\\." + ext + "$", "i").test(out)) out = out.replace(/\.[a-z0-9]+$/i, "") + "." + ext;
+          const url = painted(first).toDataURL(mime, 0.95);
+          const ok = await TVP.writeFileBinary(out, url);
+          if (ok) { pushRecent("folders", dirName(out)); written++; }
+        }
+        return toast(written ? "exported " + written + " file" + (written > 1 ? "s" : "") : "export failed");
       }
       // sequence
       if (!TVP) return toast("sequence export needs the desktop build");
@@ -1312,11 +1514,16 @@
       pushRecent("folders", dir);
       const stem = baseName(path).replace(/\.[a-z0-9]+$/i, "") || "frame";
       let n = 0;
-      for (const f of frames) {
-        const url = composeFrame(f, w, h, mode).toDataURL(mime, 0.95);
-        const file = dir + "\\" + stem + String(f).padStart(4, "0") + "." + ext;
-        await TVP.writeFileBinary(file, url);
-        n++;
+      for (const part of parts) {
+        const sub = parts.length > 1 && part.name ? dir + "\\" + stem + "_" + safeName(part.name) : dir;
+        for (const p of plan) {
+          if (p.f < part.from || p.f > part.to) continue;
+          const url = painted(p).toDataURL(mime, 0.95);
+          const no = p.index || p.f;
+          const file = sub + "\\" + stem + String(no).padStart(4, "0") + "." + ext;
+          await TVP.writeFileBinary(file, url);
+          n++;
+        }
       }
       toast("exported " + n + " files to " + dir);
     };

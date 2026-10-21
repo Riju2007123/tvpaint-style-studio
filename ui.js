@@ -715,6 +715,33 @@ const MENU_ACTIONS = {
   "clip.loadSound": () => togglePane("sound"),
   "clip.soundLibrary": () => togglePane("sound"),
 
+  // --- scenes: markers used by the Export Footage "Split Scenes" option ---
+  "scene.new": () => {
+    proj.scenes = proj.scenes || [];
+    const f = proj.currentFrame;
+    if (proj.scenes.some(s => s.from === f)) return toast("a scene already starts at frame " + f);
+    proj.scenes.push({ name: "Scene " + (proj.scenes.length + 1), from: f });
+    proj.scenes.sort((a, b) => a.from - b.from);
+    renderAll();
+    toast("scene " + (proj.scenes.length) + " starts at frame " + f);
+  },
+  "scene.delete": () => {
+    proj.scenes = proj.scenes || [];
+    if (!proj.scenes.length) return toast("no scene in the project");
+    const s = proj.scenes.pop();
+    renderAll();
+    toast("scene " + s.name + " removed");
+  },
+  "scene.duplicate": () => {
+    proj.scenes = proj.scenes || [];
+    const last = proj.scenes[proj.scenes.length - 1];
+    if (!last) return toast("no scene to duplicate");
+    proj.scenes.push({ name: last.name + " copy", from: proj.currentFrame });
+    proj.scenes.sort((a, b) => a.from - b.from);
+    renderAll();
+    toast("scene duplicated at frame " + proj.currentFrame);
+  },
+
   "layer.new": () => layerAdd(),
   "layer.presets": () => layerPresetsDlg(),
   "layer.rename": () => { const n = prompt("Layer name:", proj.layers[proj.currentLayer].name); if (n) { proj.layers[proj.currentLayer].name = n; renderAll(); } },

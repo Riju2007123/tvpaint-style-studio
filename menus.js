@@ -589,9 +589,7 @@ const STUB_COMMANDS = [
   "panel.tutorialRecorder",
   "plugin.directshow",
   "project.goto",
-  "scene.delete", "scene.duplicate", "scene.new",
-  "script.animator", "script.timesheet",
-  "send.refresh",
+  "script.animator", "script.timesheet",  "send.refresh",
   "view.newWindow", "view.room1", "view.room2", "view.room3", "view.room4",
   "view.video"
 ];
