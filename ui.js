@@ -13,6 +13,18 @@ let proj = E.newProject(512, 512, 24);
 proj.name = "Untitled_(1)";
 proj.layers.forEach((l, i) => { l.name = "Anim_0" + (i + 1); });
 const hist = E.makeHistory(50);
+// TVPaint greys the three Save commands until the project has unsaved changes
+// (captured live: a fresh Untitled_(1) shows Save Project / Save As / Save as
+// Template in the disabled grey).  Any edit or undo marks the project dirty.
+proj.dirty = false;
+window.tvIsDirty = () => !!(proj && proj.dirty);
+["pushFrame", "pushModel", "undo", "redo"].forEach(k => {
+  const orig = hist[k].bind(hist);
+  hist[k] = (...a) => {
+    if (proj && typeof proj === "object") proj.dirty = true;
+    return orig(...a);
+  };
+});
 let view = { zoom: 1, x: 0, y: 0, rotate: 0 };
 let tool = "penbrush";
 let shapePts = [];
@@ -5438,10 +5450,11 @@ window.uiSave = function () {
   pushRecent(proj.name, data);
   if (TV) {
     TV.saveProject(data).then(file => {
-      if (file) { proj.name = file; toast("saved: " + file); renderTimelineStatus(); }
+      if (file) { proj.name = file; proj.dirty = false; toast("saved: " + file); renderTimelineStatus(); }
     });
     return;
   }
+  proj.dirty = false;
   toast("saved: " + proj.name);
   renderTimelineStatus();
 };
@@ -5451,6 +5464,7 @@ window.uiSaveAs = function () {
     TV.saveProject(data).then(file => {
       if (file) {
         proj.name = file;
+        proj.dirty = false;
         pushRecent(proj.name, data);
         toast("saved as: " + file);
         renderTimelineStatus();
@@ -5466,6 +5480,7 @@ window.uiSaveAs = function () {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
   a.download = proj.name; a.click();
+  proj.dirty = false;
   toast("saved as: " + proj.name);
   renderTimelineStatus();
 };

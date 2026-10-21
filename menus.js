@@ -1,5 +1,5 @@
-/* ------------------------------------------------------------------
-   menus.js — TVPaint Animation 12.1.0 Pro's menu bar, transcribed from
+﻿/* ------------------------------------------------------------------
+   menus.js â€” TVPaint Animation 12.1.0 Pro's menu bar, transcribed from
    live captures (1936 x 1048 window, 2026-10-21).  Every label, shortcut,
    separator, tick mark, disabled state and submenu below is what the live
    app draws; nothing here is guessed except where a comment says so.
@@ -23,7 +23,7 @@ const M = (label, o) => Object.assign({ label }, o || {});
 /* Edit > Set Mark palette.  The 31 swatches were sampled from the live
    menu at x=352, y=238..748 (17 px pitch); the letters A..Z are drawn by
    TVPaint next to the swatch.  The last five letters (AA..AE) are inferred
-   from the 17 px pitch — the capture crops them. */
+   from the 17 px pitch â€” the capture crops them. */
 const TV_IMAGE_MARK_SWATCHES = [
   ["A", "#fa0000"], ["B", "#ff7f00"], ["C", "#ffbf00"], ["D", "#ffff00"],
   ["E", "#bfff00"], ["F", "#3fff00"], ["G", "#00ff9f"], ["H", "#00ffff"],
@@ -47,9 +47,9 @@ const TV_MENU_TREE = [
     SEP,
     M("Close Project", { shortcut: "Shift W", cmd: "file.close" }),
     SEP,
-    M("Save Project", { cmd: "file.save" }),
-    M("Save Project As...", { cmd: "file.saveAs" }),
-    M("Save Project as Template...", { cmd: "file.saveTemplate" }),
+    M("Save Project", { cmd: "file.save", disabled: () => !tvIsDirty() }),
+    M("Save Project As...", { cmd: "file.saveAs", disabled: () => !tvIsDirty() }),
+    M("Save Project as Template...", { cmd: "file.saveTemplate", disabled: () => !tvIsDirty() }),
     SEP,
     M("Export to...", { shortcut: "Ctrl Shift E", cmd: "file.export" }),
     M("Publish...", { cmd: "file.publish" }),
@@ -556,3 +556,4 @@ const TV_MENU_TREE = [
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { TV_MENU_TREE, TV_IMAGE_MARK_SWATCHES };
 }
+

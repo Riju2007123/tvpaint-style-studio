@@ -1514,3 +1514,8 @@ box `#d4d4d8` with dark text — not the blue selection colour.
   popup (6 rows of two); ours draws it as one column. Flagged as a gap.
 - **Unconfirmed:** `Project ▸ Project Information` shows an arrow but hovering
   it produced no popup in 3 attempts (it may open a panel rather than a menu).
+- Save greying: capture shows `Save Project`, `Save Project As...` and
+  `Save Project as Template...` are disabled on a freshly opened, unmodified
+  project (same grey as the `Recent ...` headers).  The prototype now tracks
+  `proj.dirty` (set by any history push or undo/redo, cleared on save) and
+  greys the same three items.
