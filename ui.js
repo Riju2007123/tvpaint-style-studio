@@ -786,8 +786,8 @@ const MENU_ACTIONS = {
   "view.fullPage": () => fitView(),
   "view.aspect": () => { proj.aspectRatio = !proj.aspectRatio; renderAll(); toast("display with aspect ratio " + (proj.aspectRatio ? "on" : "off")); },
 
-  "edit.shortcuts": () => alert("Space play\nArrow keys: frame/layer\nCtrl+Z undo · Ctrl+Y redo · Ctrl+S save\nEnter: apply selection · Esc: cancel"),
-  "edit.preferences": () => toast("preferences dialog — not in this build yet"),
+  "edit.shortcuts": () => { if (window.tvShortcutsDialog) window.tvShortcutsDialog(); else toast("shortcuts panel - not in this build yet"); },
+  "edit.preferences": () => { if (window.tvPreferencesDialog) window.tvPreferencesDialog(); else toast("preferences panel - not in this build yet"); },
 
   "custom.openAll": () => TV_CUSTOM_PANELS.forEach(p => openCustomPanel(p.name)),
   "custom.hideAll": () => TV_CUSTOM_PANELS.forEach(p => {

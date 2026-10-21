@@ -2049,10 +2049,17 @@
     } catch (e) { toast("open failed: " + e.message); }
   }
 
-  /* ---------------- accelerators (11 Pro for the save entries) ---------- */
+  /* ---------------- accelerators -----------------------------------------
+     The key map (prefs.js) holds them, so Edit > Shortcuts... really
+     changes what the application answers to.  The File menu entries keep
+     their own handlers as a fallback when no key map is loaded.        */
   window.addEventListener("keydown", (e) => {
     const tag = (doc.activeElement && doc.activeElement.tagName) || "";
     if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
+    if (window.tvKeymap) {
+      const km = window.tvKeymap.load();
+      if (km[window.tvKeymap.signature(e)]) return;   // the key map handles it
+    }
     const k = e.key.toLowerCase();
     if (e.ctrlKey && e.shiftKey && k === "e") { e.preventDefault(); tvExportDialog(); return; }
     if (e.ctrlKey && e.shiftKey && k === "s") { e.preventDefault(); tvSaveProjectAs(); return; }
