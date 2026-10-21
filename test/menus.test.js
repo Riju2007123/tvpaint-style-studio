@@ -3,7 +3,7 @@
    matter in a hand-transcribed menu (empty submenus, doubled separators,
    missing shortcuts) and pin the counts that were read off the live app. */
 const assert = require("assert");
-const { TV_MENU_TREE, TV_IMAGE_MARK_SWATCHES } = require("../menus.js");
+const { TV_MENU_TREE, TV_IMAGE_MARK_SWATCHES, STUB_COMMANDS } = require("../menus.js");
 
 let pass = 0, fail = 0;
 const t = (name, fn) => {
@@ -18,6 +18,9 @@ const sub = (menuLabel, itemLabel) => {
   return it.submenu;
 };
 const labels = (items) => items.filter(i => !i.sep).map(i => i.label);
+// File > Recent * build their submenu at open time from the recents store, so
+// at rest they are functions. Structural tests walk the static tree only.
+const staticSub = (it) => (it && typeof it.submenu === "function" ? [] : (it && it.submenu));
 
 console.log("menus.js");
 
@@ -38,7 +41,7 @@ t("no leading, trailing or doubled separators at any depth", () => {
     for (let i = 1; i < items.length; i++) {
       assert(!(items[i].sep && items[i - 1].sep), `doubled separator in ${path}`);
     }
-    items.forEach(it => { if (it.submenu) walk(it.submenu, path + " > " + it.label); });
+    items.forEach(it => { const s = staticSub(it); if (s && s.length) walk(s, path + " > " + it.label); });
   };
   TV_MENU_TREE.forEach(m => walk(m.items, m.label));
 });
@@ -50,7 +53,8 @@ t("every non-separator item has a label and a destination", () => {
       assert(it.label && it.label.length, `unlabelled item in ${path}`);
       const hasDest = it.disabled || !!(it.cmd || it.panel || it.custom || it.submenu);
       assert(hasDest, `no cmd/panel/custom/submenu for "${it.label}" in ${path}`);
-      if (it.submenu) walk(it.submenu, path + " > " + it.label);
+      const s = staticSub(it);
+      if (s) walk(s, path + " > " + it.label);
     });
   };
   TV_MENU_TREE.forEach(m => walk(m.items, m.label));
@@ -63,7 +67,7 @@ t("shortcut strings are non-empty when present", () => {
       assert(typeof it.shortcut === "string" && it.shortcut.trim().length > 0,
         `empty shortcut on "${it.label}"`);
     }
-    if (it.submenu) walk(it.submenu);
+    if (it.submenu) { const s = staticSub(it); if (s) walk(s); }
   });
   TV_MENU_TREE.forEach(m => walk(m.items));
 });
@@ -129,6 +133,41 @@ t("View > Workspaces keeps the live accelerator set", () => {
   assert.deepStrictEqual(w.map(i => i.shortcut),
     ["Ctrl Pad 1", "Ctrl Pad 3", "Ctrl Pad 7", "Ctrl Pad 9"]);
   assert.strictEqual(w[0].checked, true);
+});
+
+t("every command is implemented or explicitly registered as a stub", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const actions = new Set();
+  for (const f of ["ui.js", "filemenu.js"]) {
+    const src = fs.readFileSync(path.join(__dirname, "..", f), "utf8");
+    let m, re = /"([a-zA-Z][\w.]+)"\s*:\s*(?:\(|function)/g;
+    while ((m = re.exec(src))) actions.add(m[1]);
+    re = /MENU_ACTIONS\[["']?([\w.]+)["']?\]/g;
+    while ((m = re.exec(src))) actions.add(m[1]);
+  }
+  const stubs = new Set(STUB_COMMANDS);
+  const unaccounted = [];
+  const walk = (items, where) => {
+    items.forEach(it => {
+      if (it.sep) return;
+      if (it.cmd) {
+        const handled = actions.has(it.cmd) || it.cmd.startsWith("fx.") ||
+          it.panel || it.custom || it.submenu || stubs.has(it.cmd);
+        if (!handled) unaccounted.push(where + " > " + it.label + " (" + it.cmd + ")");
+      }
+      if (Array.isArray(it.submenu)) walk(it.submenu, where + " > " + it.label);
+    });
+  };
+  TV_MENU_TREE.forEach(m => walk(m.items || [], m.label));
+  assert.strictEqual(unaccounted.length, 0,
+    "commands without an action and without a stub entry: " + unaccounted.join(" | "));
+  // a stub that got implemented must be removed from the registry
+  const done = STUB_COMMANDS.filter(c => actions.has(c));
+  assert.strictEqual(done.length, 0,
+    "these commands are implemented now, drop them from STUB_COMMANDS: " + done.join(", "));
+  // the list may only shrink
+  assert(STUB_COMMANDS.length <= 49, "the stub list grew: " + STUB_COMMANDS.length);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

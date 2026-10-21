@@ -35,21 +35,35 @@ const TV_IMAGE_MARK_SWATCHES = [
   ["AC", "#ffaea6"], ["AD", "#42bdff"], ["AE", "#f2f5a9"]
 ];
 
+// filemenu.js loads after this file and replaces these with the real
+// implementations; the defaults keep the tree safe to evaluate early.
+if (typeof window !== "undefined") {
+  window.tvRecentCount = window.tvRecentCount || function () { return 0; };
+  window.tvRecentMenuItems = window.tvRecentMenuItems || function () { return []; };
+  window.tvHasProject = window.tvHasProject || function () { return false; };
+}
+
 const TV_MENU_TREE = [
   /* ---------------- File ---------------- */
   { label: "File", items: [
     M("New Project...", { shortcut: "Shift N", cmd: "file.new" }),
-    M("Open / Import...", { shortcut: "Shift I", cmd: "file.open" }),
+    // live 12.1.0 crop: "Open / Import...   Shift L"
+    M("Open / Import...", { shortcut: "Shift L", cmd: "file.open" }),
     SEP,
-    M("Recent projects", { disabled: true }),
-    M("Recent folders", { disabled: true }),
-    M("Recent files", { disabled: true }),
+    // the three recents submenus are greyed in 12 while empty and become
+    // enabled as soon as they hold an entry (menuItems is built on open)
+    M("Recent projects", { cmd: "recent.projects", submenu: () => tvRecentMenuItems("projects"), disabled: () => !tvRecentCount("projects") }),
+    M("Recent folders", { cmd: "recent.folders", submenu: () => tvRecentMenuItems("folders"), disabled: () => !tvRecentCount("folders") }),
+    M("Recent files", { cmd: "recent.files", submenu: () => tvRecentMenuItems("files"), disabled: () => !tvRecentCount("files") }),
     SEP,
-    M("Close Project", { shortcut: "Shift W", cmd: "file.close" }),
+    M("Close Project", { shortcut: "Shift W", cmd: "file.close", disabled: () => !tvHasProject() }),
     SEP,
-    M("Save Project", { cmd: "file.save", disabled: () => !tvIsDirty() }),
-    M("Save Project As...", { cmd: "file.saveAs", disabled: () => !tvIsDirty() }),
-    M("Save Project as Template...", { cmd: "file.saveTemplate", disabled: () => !tvIsDirty() }),
+    // 12 Demo greys these because the trial cannot save; the full product
+    // (11 Pro, live) keeps them enabled with these accelerators, which is
+    // what the rebuild follows.
+    M("Save Project", { shortcut: "Shift S", cmd: "file.save" }),
+    M("Save Project as...", { shortcut: "Ctrl Shift S", cmd: "file.saveAs" }),
+    M("Save Project as Template...", { cmd: "file.saveTemplate" }),
     SEP,
     M("Export to...", { shortcut: "Ctrl Shift E", cmd: "file.export" }),
     M("Publish...", { cmd: "file.publish" }),
@@ -553,7 +567,36 @@ const TV_MENU_TREE = [
   ] }
 ];
 
+// ------------------------------------------------------------------
+// Commands that exist in the live TVPaint menu bar but whose behaviour
+// is not built in this rebuild yet.  Clicking one shows the generic
+// "command present, behaviour not built yet" toast.  The list is
+// explicit on purpose: every command of the tree must either have a
+// real action in ui.js / filemenu.js or appear here, and an entry must
+// be removed from here as soon as the command is implemented
+// (test/menus.test.js checks both directions).
+// ------------------------------------------------------------------
+const STUB_COMMANDS = [
+  "clip.delete", "clip.duplicate", "clip.merge", "clip.new", "clip.split",
+  "custom.load", "custom.new", "custom.newEmbedded",
+  "deps.images", "deps.sounds",
+  "help.bluesky", "help.docs", "help.examples", "help.facebook", "help.forums",
+  "help.instagram", "help.tooltipsFull", "help.tooltipsNone", "help.tooltipsShort",
+  "help.tutAaron", "help.tutBloop", "help.tutHoward", "help.tutTvpaint",
+  "help.vimeo", "help.website", "help.youtube",
+  "panel.connection", "panel.coordinates", "panel.gradient", "panel.notes",
+  "panel.papers", "panel.pegholes", "panel.search", "panel.sound",
+  "panel.tutorialRecorder",
+  "plugin.directshow",
+  "project.goto",
+  "scene.delete", "scene.duplicate", "scene.new",
+  "script.animator", "script.timesheet",
+  "send.refresh",
+  "view.newWindow", "view.room1", "view.room2", "view.room3", "view.room4",
+  "view.video"
+];
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { TV_MENU_TREE, TV_IMAGE_MARK_SWATCHES };
+  module.exports = { TV_MENU_TREE, TV_IMAGE_MARK_SWATCHES, STUB_COMMANDS };
 }
 

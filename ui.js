@@ -282,10 +282,29 @@ function renderArtOnly() {
   // field of view at full brightness (see renderOverlayOnly).
   followCameraView();
   actx.save();
-  actx.translate(view.x, view.y);
-  actx.scale(view.zoom, view.zoom);
-  paintDrawingArea(actx);
+  applyViewTransform(actx);
+  if (!proj.closed) paintDrawingArea(actx);
   actx.restore();
+}
+// The project window's own view transform.  TVPaint keeps pan, zoom, rotation
+// and the Flip submenu in the *view*: the drawings and the overlay are
+// transformed on screen, never baked, and toProj() inverts the same transform
+// so the brush still lands under the cursor.  view.rotate is in radians
+// (the info bar renders it as degrees).
+function applyViewTransform(ctx) {
+  ctx.translate(view.x, view.y);
+  ctx.scale(view.zoom, view.zoom);
+  const cx = proj.width / 2, cy = proj.height / 2;
+  if (view.rotate) {
+    ctx.translate(cx, cy);
+    ctx.rotate(view.rotate);
+    ctx.translate(-cx, -cy);
+  }
+  if (proj.viewFlipH || proj.viewFlipV) {
+    ctx.translate(cx, cy);
+    ctx.scale(proj.viewFlipH ? -1 : 1, proj.viewFlipV ? -1 : 1);
+    ctx.translate(-cx, -cy);
+  }
 }
 function renderOverlayOnly() {
   octx.setTransform(1, 0, 0, 1, 0, 0);
@@ -305,8 +324,7 @@ function renderOverlayOnly() {
     octx.fillRect(0, 0, ovl.width, ovl.height);
     // punch the camera field of view back to full brightness
     octx.globalCompositeOperation = "destination-out";
-    octx.translate(view.x, view.y);
-    octx.scale(view.zoom, view.zoom);
+    applyViewTransform(octx);
     octx.beginPath();
     cameraPath(octx, r);
     octx.fill();
@@ -314,8 +332,7 @@ function renderOverlayOnly() {
     octx.globalCompositeOperation = "source-over";
   }
   octx.save();
-  octx.translate(view.x, view.y);
-  octx.scale(view.zoom, view.zoom);
+  applyViewTransform(octx);
   drawGuidelines();
   if (preview && preview.pts) {
     octx.save();
@@ -424,8 +441,7 @@ function liveStrokePaint() {   // cheapest: blit the frozen under-everything + g
   if (!strokeBase) return fastRenderAll();
   actx.setTransform(1, 0, 0, 1, 0, 0);
   actx.drawImage(strokeBase, 0, 0);            // screen-space base (opaque, covers all)
-  actx.translate(view.x, view.y);
-  actx.scale(view.zoom, view.zoom);
+  applyViewTransform(actx);
   if (drawState.scratch) {
     actx.globalAlpha = Math.max(0, Math.min(1, proj.brush.opacity ?? 1));
     actx.drawImage(drawState.scratch, 0, 0);
@@ -739,7 +755,7 @@ const MENU_ACTIONS = {
   "view.zoomOut": () => zoomStep(-1),
   "view.fit": () => fitView(),
   "view.oneToOne": () => zoomTo(1),
-  "view.reset": () => { view.rot = 0; renderAll(); },
+  "view.reset": () => { view.rotate = 0; renderAll(); toast("view rotation reset"); },
   "view.fullPage": () => fitView(),
   "view.aspect": () => { proj.aspectRatio = !proj.aspectRatio; renderAll(); toast("display with aspect ratio " + (proj.aspectRatio ? "on" : "off")); },
 
@@ -755,6 +771,298 @@ const MENU_ACTIONS = {
   "help.about": () => alert("my-version — rebuilt from REA analysis of TVPaint Animation 12 Pro. No original code copied."),
   "help.buy": () => toast("TVPaint store — external link not wired")
 };
+
+// ---- menu command helpers -------------------------------------------------
+// The command names behind these entries are the ones TVPaint registers in its
+// command table (read from the binary with REA): LayersAlignLeft/Right,
+// LayerDelete, LayerSplit, LayerReverseOrderAll/Sel, LayerMakeAnim,
+// LayerRecomputeExposure(+Threshold), LayerLockPositionToggle, LayerSelectAll*,
+// tv_exposureadd / tv_exposurebreak / tv_exposureset.
+function layerHasDrawing(l) {
+  const keys = Object.keys(l.frames || {});
+  return keys.some(k => {
+    const cv = l.frames[k] && l.frames[k].canvas;
+    if (!cv) return false;
+    const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+    for (let i = 3; i < d.length; i += 4) if (d[i]) return true;
+    return false;
+  });
+}
+function selectedLayerIndexes() {
+  const sel = Array.isArray(proj.selectedLayers) && proj.selectedLayers.length
+    ? proj.selectedLayers : [proj.currentLayer];
+  return sel.filter(i => proj.layers[i]);
+}
+function deleteLayersMatching(pred) {
+  const idx = proj.layers.map((l, i) => (pred(l) ? i : -1)).filter(i => i >= 0);
+  if (!idx.length) return toast("no layer matches");
+  if (proj.layers.length - idx.length < 1) return toast("cannot delete every layer");
+  deleteLayers(idx);
+}
+// Layers are full-canvas in this rebuild, so "align" moves the drawing's own
+// bounding box to the canvas edge. (TVPaint aligns the layer position instead;
+// that needs the per-layer Pos channel this rebuild does not model yet.)
+function alignLayerContent(dir) {
+  const l = tvCurrentLayer();
+  const keys = E.layerKeys(l);
+  if (!keys.length) return toast("empty layer");
+  let minX = Infinity, maxX = -Infinity;
+  keys.forEach(k => {
+    const cv = l.frames[k] && l.frames[k].canvas;
+    if (!cv) return;
+    const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+    const w = cv.width;
+    for (let y = 0; y < cv.height; y++) {
+      for (let x = 0; x < w; x++) {
+        if (d[(y * w + x) * 4 + 3]) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+      }
+    }
+  });
+  if (minX === Infinity) return toast("layer is empty");
+  const shift = dir === "left" ? -minX : (proj.width - 1 - maxX);
+  if (!shift) return toast("already aligned " + dir);
+  tvCommit(() => {
+    keys.forEach(k => {
+      const src = l.frames[k] && l.frames[k].canvas;
+      if (!src) return;
+      const tmp = E.makeSurface(proj.width, proj.height);
+      tmp.getContext("2d").drawImage(src, shift, 0);
+      l.frames[k].canvas = tmp;
+    });
+  });
+  toast("aligned " + dir);
+}
+// The instance (exposure run) under frame f: its head key and its last frame.
+function instanceBounds(l, f) {
+  const keys = E.layerKeys(l);
+  let head = null;
+  keys.forEach(k => {
+    const e = l.frames[k].exposure || 1;
+    if (f >= k && f < k + e) head = k;
+  });
+  if (head == null) return null;
+  return { head, tail: head + (l.frames[head].exposure || 1) - 1 };
+}
+function aboutToInstance(delta) {
+  const l = tvCurrentLayer(), f = proj.currentFrame;
+  const b = instanceBounds(l, f);
+  if (!b) return toast("no image at frame " + f);
+  gotoFrame(delta < 0 ? b.head : b.tail);
+}
+// Grow / shrink one instance's exposure and ripple the later keys, which is
+// what tv_exposureset does in the live app.
+function exposureDelta(l, f, delta) {
+  const b = instanceBounds(l, f);
+  if (!b) return toast("no instance at frame " + f);
+  const cur = l.frames[b.head].exposure || 1;
+  const next = Math.max(1, cur + delta);
+  if (next === cur) return toast(delta < 0 ? "exposure is already 1" : "nothing to grow");
+  tvCommit(() => {
+    const d = next - cur;
+    const keys = E.layerKeys(l);
+    if (d > 0) {
+      for (let i = keys.length - 1; i >= 0; i--) {
+        const k = keys[i];
+        if (k > b.head) { l.frames[k + d] = l.frames[k]; delete l.frames[k]; }
+      }
+    } else {
+      keys.forEach(k => { if (k > b.head) { l.frames[k + d] = l.frames[k]; delete l.frames[k]; } });
+    }
+    l.frames[b.head].exposure = next;
+  });
+  toast("exposure " + cur + " -> " + next);
+}
+// Scan Cleaner (FastScanCleaner / ExtendedScanCleaner in the binary): drop the
+// paper, keep the line. Thresholds are the prototype's; the real filter's
+// parameters live in the FX and were not measured yet.
+function scanCleaner(level) {
+  const l = tvCurrentLayer(), f = proj.currentFrame;
+  const k = E.effectiveFrameKey(l, f);
+  if (k == null) return toast("empty image");
+  const cv = l.frames[k].canvas;
+  const ctx = cv.getContext("2d");
+  const img = ctx.getImageData(0, 0, cv.width, cv.height);
+  const d = img.data;
+  const thr = level === "soft" ? 235 : 205;
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    if (lum >= thr) d[i + 3] = 0;
+    else { d[i] = 0; d[i + 1] = 0; d[i + 2] = 0; }
+  }
+  tvCommit(() => ctx.putImageData(img, 0, 0));
+  toast("scan cleaner (" + level + ")");
+}
+// Edit > Spare Image (one spare surface per project)
+function spareSurface() {
+  if (!proj.spare) return null;
+  const s = E.makeSurface(proj.width, proj.height);
+  s.getContext("2d").drawImage(proj.spare, 0, 0);
+  return s;
+}
+function currentSurface() {
+  const l = tvCurrentLayer();
+  const k = E.effectiveFrameKey(l, proj.currentFrame);
+  return k == null ? null : l.frames[k].canvas;
+}
+
+Object.assign(MENU_ACTIONS, {
+  // --- Layer ---
+  "layer.deleteEmpty": () => deleteLayersMatching(l => !layerHasDrawing(l)),
+  "layer.deleteInactive": () => deleteLayersMatching(l => l.visible === false),
+  "layer.deleteEmptyInactive": () => deleteLayersMatching(l => l.visible === false || !layerHasDrawing(l)),
+  "layer.split": () => splitLayerAt(proj.currentLayer),
+  "layer.alignLeft": () => alignLayerContent("left"),
+  "layer.alignRight": () => alignLayerContent("right"),
+  "layer.lockPosition": () => {
+    const l = tvCurrentLayer();
+    l.lockPos = !l.lockPos;
+    renderAll();
+    toast("position lock " + (l.lockPos ? "on" : "off"));
+  },
+  "layer.reverseSelected": () => {
+    const sel = selectedLayerIndexes();
+    if (sel.length < 2) return toast("select at least two layers");
+    tvCommit(() => E.reverseLayerOrder(proj, sel));
+    toast(sel.length + " selected layers reversed");
+  },
+  "layer.makeAnim": () => {
+    const l = tvCurrentLayer();
+    if (l.type === "anim") return toast("already an anim layer");
+    tvCommit(() => { l.type = "anim"; });
+    toast("converted to anim layer");
+  },
+
+  // --- Image ---
+  "image.selectAll": () => {
+    const l = tvCurrentLayer();
+    const keys = E.layerKeys(l);
+    if (!keys.length) return toast("layer is empty");
+    proj.imageSel = { layerId: l.id, keys };
+    renderAll();
+    toast(keys.length + " images selected");
+  },
+  "image.reverse": () => cellOp("reverse", proj.currentLayer, proj.currentFrame),
+  "image.scanSoft": () => scanCleaner("soft"),
+  "image.scanStrong": () => scanCleaner("strong"),
+
+  // --- Instances (image runs) ---
+  "instances.prev": () => {
+    const l = tvCurrentLayer();
+    const b = instanceBounds(l, proj.currentFrame);
+    const keys = E.layerKeys(l);
+    const before = b ? keys.filter(k => k < b.head) : [];
+    if (!before.length) return toast("no previous instance");
+    gotoFrame(before[before.length - 1]);
+  },
+  "instances.next": () => {
+    const l = tvCurrentLayer();
+    const b = instanceBounds(l, proj.currentFrame);
+    const keys = E.layerKeys(l);
+    const after = b ? keys.filter(k => k > b.head) : [];
+    if (!after.length) return toast("no next instance");
+    gotoFrame(after[0]);
+  },
+  "instances.head": () => aboutToInstance(-1),
+  "instances.tail": () => aboutToInstance(1),
+  "instances.break": () => cellOp("break", proj.currentLayer, proj.currentFrame),
+  "instances.insertBefore": () => dlgInsert(proj.currentLayer, proj.currentFrame, "before"),
+  "instances.insertAfter": () => dlgInsert(proj.currentLayer, proj.currentFrame, "after"),
+  "instances.duplicate": () => dlgDuplicate(proj.currentLayer, proj.currentFrame),
+  "instances.delete": () => deleteSelectionFromLayer(false),
+
+  // --- Exposure ---
+  "exposure.remove": () => exposureDelta(tvCurrentLayer(), proj.currentFrame, -1),
+  "exposure.removeAll": () => {
+    const l = tvCurrentLayer(), b = instanceBounds(l, proj.currentFrame);
+    if (!b) return toast("no instance here");
+    const cur = l.frames[b.head].exposure || 1;
+    if (cur === 1) return toast("exposure is already 1");
+    exposureDelta(l, proj.currentFrame, 1 - cur);
+  },
+  "exposure.deleteHead": () => {
+    // "Delete instance head": drop the first exposure cell of the run.
+    const l = tvCurrentLayer(), b = instanceBounds(l, proj.currentFrame);
+    if (!b) return toast("no instance here");
+    tvCommit(() => {
+      const keys = E.layerKeys(l);
+      keys.forEach(k => { if (k > b.head) { l.frames[k - 1] = l.frames[k]; delete l.frames[k]; } });
+      l.frames[b.head].exposure = Math.max(1, (l.frames[b.head].exposure || 1) - 1);
+    });
+    toast("instance head removed");
+  },
+  "exposure.recompute": () => {
+    const l = tvCurrentLayer();
+    let ok = false;
+    tvCommit(() => { ok = E.recomputeExposure(proj, l, proj.currentFrame, 0, 0); });
+    toast(ok ? "exposure recomputed" : "nothing to recompute");
+  },
+  "exposure.recomputeThreshold": () => {
+    numDialog("Recompute Exposure with Threshold", "Threshold", 128,
+      v => {
+        const l = tvCurrentLayer();
+        let ok = false;
+        tvCommit(() => { ok = E.recomputeExposure(proj, l, proj.currentFrame, 0, v); });
+        toast(ok ? "exposure recomputed (threshold " + v + ")" : "nothing to recompute");
+      }, 0, 255);
+  },
+  "exposure.repeat2": () => { const l = tvCurrentLayer(); tvCommit(() => E.repeatImages(proj, l, 2, l.repeatMode || "Loop")); },
+  "exposure.repeat3": () => { const l = tvCurrentLayer(); tvCommit(() => E.repeatImages(proj, l, 3, l.repeatMode || "Loop")); },
+  "exposure.repeat4": () => { const l = tvCurrentLayer(); tvCommit(() => E.repeatImages(proj, l, 4, l.repeatMode || "Loop")); },
+  "exposure.repeatCustom": () => dlgRepeatValue(tvCurrentLayer()),
+
+  // --- Edit > Spare Image / ClipBoard ---
+  "spare.copy": () => {
+    const src = currentSurface();
+    if (!src) return toast("nothing to copy");
+    const s = E.makeSurface(proj.width, proj.height);
+    s.getContext("2d").drawImage(src, 0, 0);
+    proj.spare = s;
+    toast("copied to spare");
+  },
+  "spare.delete": () => { proj.spare = null; toast("spare cleared"); },
+  "spare.swap": () => {
+    const l = tvCurrentLayer(), k = E.effectiveFrameKey(l, proj.currentFrame);
+    if (k == null) return toast("no image on this frame");
+    if (!proj.spare) return toast("spare is empty");
+    const cur = l.frames[k].canvas;
+    const sp = spareSurface();
+    tvCommit(() => { l.frames[k].canvas = sp; });
+    proj.spare = cur;
+    renderAll();
+    toast("swapped with spare");
+  },
+  "spare.viewer": () => {
+    const sp = spareSurface();
+    if (!sp) return toast("spare is empty");
+    const url = sp.toDataURL();
+    openModal("Spare Image", `<img src="${url}" style="max-width:100%;display:block;background:#fff">`,
+      [{ label: "Close", fn: closeModal }]);
+  },
+  "clipboard.copyBrush": () => {
+    proj.brushClip = JSON.parse(JSON.stringify({
+      brush: proj.brush, apen: proj.apen, bpen: proj.bpen, tool
+    }));
+    toast("brush copied");
+  },
+  "clipboard.pasteBrush": () => {
+    if (!proj.brushClip) return toast("clipboard is empty");
+    proj.brush = JSON.parse(JSON.stringify(proj.brushClip.brush));
+    proj.apen = proj.brushClip.apen;
+    proj.bpen = proj.brushClip.bpen;
+    selectTool(proj.brushClip.tool || "penbrush");
+    renderAll();
+    toast("brush pasted");
+  },
+
+  // --- View ---
+  "view.rotateCCW": () => { view.rotate = (view.rotate || 0) - Math.PI / 2; renderAll(); toast("view rotated " + Math.round((view.rotate * 180 / Math.PI) % 360) + "\u00b0"); },
+  "view.rotateCW": () => { view.rotate = (view.rotate || 0) + Math.PI / 2; renderAll(); toast("view rotated " + Math.round((view.rotate * 180 / Math.PI) % 360) + "\u00b0"); },
+  "view.inlay": () => { view.inlay = !view.inlay; renderAll(); toast("inlay view " + (view.inlay ? "on" : "off")); },
+  "view.flipKeep": () => { proj.flipKeepPos = !proj.flipKeepPos; toast("keep position " + (proj.flipKeepPos ? "on" : "off")); },
+  "view.flipH": () => { proj.viewFlipH = !proj.viewFlipH; if (proj.flipKeepPos === false) fitView(); else renderAll(); toast("view flipped horizontally"); },
+  "view.flipV": () => { proj.viewFlipV = !proj.viewFlipV; if (proj.flipKeepPos === false) fitView(); else renderAll(); toast("view flipped vertically"); }
+});
 
 function runMenuCommand(it) {
   const fn = MENU_ACTIONS[it.cmd];
@@ -779,7 +1087,11 @@ function menuItems(items) {
     else o.checked = !!it.checked;
     o.disabled = typeof it.disabled === "function" ? it.disabled() : !!it.disabled;
     if (it.sw) o.sw = it.sw;
-    if (it.submenu) o.submenu = menuItems(it.submenu);
+    if (it.arg !== undefined) o.arg = it.arg;
+    // a submenu may be a function: the File > Recent* lists are built from the
+    // store every time the menu opens (the live app does the same)
+    const sub = typeof it.submenu === "function" ? it.submenu() : it.submenu;
+    if (sub) o.submenu = menuItems(sub);
     else o.action = () => runMenuCommand(it);
     out.push(o);
   });
@@ -3548,6 +3860,13 @@ function renderTimelineSoon() {
   }, 180);
 }
   function renderTimelineStatus() {
+  if (proj.closed || !proj.layers || !proj.layers.length) {
+    // File > Close Project leaves an empty workspace in the live app: no
+    // project tab text, no coordinates line.
+    const t = $("projTab"); if (t) t.textContent = "my-version";
+    const sb = $("sbInfo"); if (sb) sb.innerHTML = "";
+    return;
+  }
   const l = proj.layers[proj.currentLayer];
   const keys = Object.keys(l.frames).map(Number);
   const fK = keys.length ? Math.min(...keys) : 1;
@@ -5103,8 +5422,20 @@ window.toggleLoop = () => {
 // ================= input (stylus-safe; from v3) =================
 function toProj(e) {
   const r = art.getBoundingClientRect();
-  return { x: (e.clientX - r.left - view.x) / view.zoom,
-           y: (e.clientY - r.top - view.y) / view.zoom };
+  let x = (e.clientX - r.left - view.x) / view.zoom;
+  let y = (e.clientY - r.top - view.y) / view.zoom;
+  const cx = proj.width / 2, cy = proj.height / 2;
+  // invert the Flip submenu (mirror about the drawing-area centre)
+  if (proj.viewFlipH) x = 2 * cx - x;
+  if (proj.viewFlipV) y = 2 * cy - y;
+  // invert rotation (forward is ctx.rotate(view.rotate))
+  if (view.rotate) {
+    const a = -view.rotate, c = Math.cos(a), s = Math.sin(a);
+    const dx = x - cx, dy = y - cy;
+    x = cx + dx * c - dy * s;
+    y = cy + dx * s + dy * c;
+  }
+  return { x, y };
 }
 let gesturePts = new Map(), gestureBase = null, panBase = null;
 function trackGesture(e, phase) {
@@ -5821,7 +6152,6 @@ window.addEventListener("keydown", (e) => {
   if (/INPUT|TEXTAREA|SELECT/.test(tag) && e.key !== "Enter") return;
   if (e.ctrlKey && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? uiRedo() : uiUndo(); return; }
   if (e.ctrlKey && e.key.toLowerCase() === "y") { e.preventDefault(); uiRedo(); return; }
-  if (e.ctrlKey && e.key.toLowerCase() === "s") { e.preventDefault(); e.shiftKey ? uiSaveAs() : uiSave(); return; }
   if (e.ctrlKey && e.key.toLowerCase() === "a") {
     e.preventDefault();
     const l = tvCurrentLayer();

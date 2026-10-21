@@ -47,11 +47,12 @@ function createWindow() {
 }
 
 // ---- the file dialogs the File menu uses -------------------------------
+// (kept for older callers: same native dialog as Save Project, v11 capture)
 ipcMain.handle("tv:newProject", async () => {
   const r = await dialog.showSaveDialog(win, {
-    title: "New Project",
-    defaultPath: projectFile(),
-    filters: [{ name: "my-version project", extensions: ["myproj"] }]
+    title: "Save Project",
+    defaultPath: path.join(app.getPath("documents"), "Untitled_(1).tvpp"),
+    filters: [{ name: "All Files", extensions: ["*"] }]
   });
   return r.canceled ? null : r.filePath;
 });
@@ -60,49 +61,139 @@ ipcMain.handle("tv:openProject", async () => {
   const r = await dialog.showOpenDialog(win, {
     title: "Open Project",
     defaultPath: app.getPath("documents"),
-    filters: [{ name: "my-version project", extensions: ["myproj"] }]
+    filters: [
+      { name: "TVPaint Project", extensions: ["tvpp"] },
+      { name: "All Files", extensions: ["*"] }
+    ]
   });
   return r.canceled ? null : r.filePaths[0];
 });
 
-ipcMain.handle("tv:saveProject", async (e) => {
-  const data = e && e.data ? e.data : "";
+// TVPaint 11's Save dialog uses the native Windows dialog, the project name
+// (*.tvpp) pre-filled and the "All Files" filter (live capture, v11).
+ipcMain.handle("tv:saveProjectDialog", async (event, payload) => {
+  const name = (payload && payload.name) || "Untitled_(1).tvpp";
+  const r = await dialog.showSaveDialog(win, {
+    title: "Save Project",
+    defaultPath: path.join(app.getPath("documents"), name),
+    filters: [{ name: "All Files", extensions: ["*"] }]
+  });
+  return r.canceled ? null : r.filePath;
+});
+
+ipcMain.handle("tv:exportSaveDialog", async (event, payload) => {
+  const name = (payload && payload.name) || "Untitled_(1).png";
+  const r = await dialog.showSaveDialog(win, {
+    title: "Export Footage",
+    defaultPath: path.join(app.getPath("pictures"), name),
+    filters: (payload && payload.filters) || [{ name: "All Files", extensions: ["*"] }]
+  });
+  return r.canceled ? null : r.filePath;
+});
+
+ipcMain.handle("tv:pickFolder", async (event, payload) => {
+  const r = await dialog.showOpenDialog(win, {
+    title: "Export Footage",
+    defaultPath: (payload && payload.dir) || app.getPath("pictures"),
+    properties: ["openDirectory", "createDirectory"]
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+
+ipcMain.handle("tv:saveProject", async (event, payload) => {
+  const data = payload && payload.data ? payload.data : "";
   const r = await dialog.showSaveDialog(win, {
     title: "Save Project",
     defaultPath: projectFile(),
-    filters: [{ name: "my-version project", extensions: ["myproj"] }]
+    filters: [{ name: "All Files", extensions: ["*"] }]
   });
   if (r.canceled || !r.filePath) return null;
   fs.writeFileSync(r.filePath, data, "utf8");
   return r.filePath;
 });
 
-ipcMain.handle("tv:writeFile", async (e) => {
-  const { file, data } = e;
-  try { fs.writeFileSync(file, data); return true; } catch (err) { return false; }
+ipcMain.handle("tv:writeFile", async (event, payload) => {
+  const { file, data } = payload || {};
+  try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, data); return true; } catch (err) { return false; }
 });
 
-ipcMain.handle("tv:readFile", async (e) => {
-  try { return fs.readFileSync(e.file, "utf8"); } catch (err) { return null; }
+ipcMain.handle("tv:readFile", async (event, payload) => {
+  try { return fs.readFileSync((payload || {}).file, "utf8"); } catch (err) { return null; }
 });
 
-ipcMain.handle("tv:exportFile", async (e) => {
+// base64 data URLs (canvas exports)
+ipcMain.handle("tv:writeFileBinary", async (event, payload) => {
+  const { file, data } = payload || {};
+  try {
+    const b64 = String(data).split(",")[1];
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, Buffer.from(b64, "base64"));
+    return true;
+  } catch (err) { return false; }
+});
+
+ipcMain.handle("tv:exportFile", async (event, payload) => {
+  const p = payload || {};
   const r = await dialog.showSaveDialog(win, {
-    title: e.title || "Export",
-    defaultPath: path.join(app.getPath("pictures"), e.name || "frame.png"),
-    filters: e.filters || [{ name: "PNG image", extensions: ["png"] }]
+    title: p.title || "Export",
+    defaultPath: path.join(app.getPath("pictures"), p.name || "frame.png"),
+    filters: p.filters || [{ name: "PNG image", extensions: ["png"] }]
   });
   if (r.canceled || !r.filePath) return null;
   try {
-    fs.writeFileSync(r.filePath, Buffer.from(e.data.split(",")[1], "base64"));
+    fs.writeFileSync(r.filePath, Buffer.from(String(p.data).split(",")[1], "base64"));
     return r.filePath;
   } catch (err) { return null; }
 });
 
+ipcMain.handle("tv:openPath", async (event, payload) => {
+  const p = (payload || {}).path;
+  if (!p) return false;
+  try { await shell.openPath(p); return true; } catch (e) { return false; }
+});
+
+// File > Open Multi-Backup directory
+ipcMain.handle("tv:openBackupDir", async () => {
+  const dir = path.join(app.getPath("documents"), "TVPaint Multi-Backup");
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { /* ignore */ }
+  try { await shell.openPath(dir); return dir; } catch (e) { return null; }
+});
+
+ipcMain.handle("tv:openLibraryFile", async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: "Load Library File",
+    defaultPath: app.getPath("documents"),
+    filters: [{ name: "TVPaint Library", extensions: ["tvpl"] }, { name: "All Files", extensions: ["*"] }]
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+
+ipcMain.handle("tv:printerSetup", async () => {
+  try {
+    require("child_process").spawn("rundll32.exe", ["printui.dll,PrintUIEntry", "/il"], { detached: true, stdio: "ignore" }).unref();
+    return true;
+  } catch (e) { return false; }
+});
+
+// Print the composed page in a hidden window so only the artwork is printed.
+ipcMain.handle("tv:printImage", async (event, payload) => {
+  const dataUrl = (payload || {}).data;
+  if (!dataUrl) return false;
+  const w = new BrowserWindow({ show: false, webPreferences: { offscreen: true } });
+  const html = `<html><head><style>@page{margin:0}html,body{margin:0;padding:0}img{width:100%;display:block}</style></head><body><img src="${dataUrl}"></body></html>`;
+  await w.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
+  return await new Promise(resolve => {
+    w.webContents.print({ silent: false, printBackground: true }, (ok) => { w.destroy(); resolve(!!ok); });
+  });
+});
+
+ipcMain.handle("tv:quit", async () => { app.quit(); return true; });
+
 ipcMain.handle("tv:appInfo", async () => ({
   version: app.getVersion(),
   platform: process.platform,
-  electron: process.versions.electron
+  electron: process.versions.electron,
+  documents: app.getPath("documents")
 }));
 
 app.whenReady().then(() => {

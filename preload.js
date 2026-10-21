@@ -5,8 +5,20 @@ contextBridge.exposeInMainWorld("tv", {
   newProject: () => ipcRenderer.invoke("tv:newProject"),
   openProject: () => ipcRenderer.invoke("tv:openProject"),
   saveProject: (data) => ipcRenderer.invoke("tv:saveProject", { data }),
+  saveProjectDialog: (name) => ipcRenderer.invoke("tv:saveProjectDialog", { name }),
+  exportSaveDialog: (name, filters) => ipcRenderer.invoke("tv:exportSaveDialog", { name, filters }),
+  pickFolder: (dir) => ipcRenderer.invoke("tv:pickFolder", { dir }),
   writeFile: (file, data) => ipcRenderer.invoke("tv:writeFile", { file, data }),
+  writeFileBinary: (file, data) => ipcRenderer.invoke("tv:writeFileBinary", { file, data }),
   readFile: (file) => ipcRenderer.invoke("tv:readFile", { file }),
   exportFile: (name, data, filters) => ipcRenderer.invoke("tv:exportFile", { name, data, filters }),
-  appInfo: () => ipcRenderer.invoke("tv:appInfo")
+  openPath: (path) => ipcRenderer.invoke("tv:openPath", { path }),
+  openBackupDir: () => ipcRenderer.invoke("tv:openBackupDir"),
+  openLibraryFile: () => ipcRenderer.invoke("tv:openLibraryFile"),
+  printerSetup: () => ipcRenderer.invoke("tv:printerSetup"),
+  printImage: (data) => ipcRenderer.invoke("tv:printImage", { data }),
+  quit: () => ipcRenderer.invoke("tv:quit"),
+  appInfo: () => ipcRenderer.invoke("tv:appInfo"),
+  documentsPath: null,
+  browser: false
 });
