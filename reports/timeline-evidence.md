@@ -2112,3 +2112,40 @@ project (the string `.tvpp` and `_tvpp_backup` are in the binary), the
 place where the recent files are stored, and the exact behaviour of the
 export.  No file of the installation is modified: the experiments happen
 on copies, and the demonstration above was reverted with the copy.
+
+### v52 pass - the real export, observed on a full TVPaint 11 Pro
+
+The demo of TVPaint 12 gates Save / Export / Print behind its licence, so
+the behaviour was observed on the **full TVPaint 11 Pro** that is
+installed on this machine (`C:\TVPaint11\TVPaint11.exe`,
+11.0.8-64 bits) - no patching, no gate, the real thing.
+
+**The export panel of the live (captured, `shots/tv11-export-panel.png`):**
+
+* the tabs: `Project: Display` | `Clip: Display` | `Clip: Layers structure`
+  | `Custom Brush: Display`;
+* the first row: `Browse` + the path field, then `As` (`Sequence`) and,
+  on the right, the `Export` and `Cancel` buttons;
+* the settings: `Format` (PNG) with its gear, `Mode` (RGBA), `Alpha`
+  (No PreMult.), `Compression (lossless)` (5);
+* `View` (Project), `Convert to` (No Conversion), `Width` (2880),
+  `Height` (2160), `Frame Rate` (24.000), `Pixel Aspect Ratio` (1.000),
+  `Field` (Progressive);
+* `Background`, `Notes`, `Slate` (with its gear), `Correct Aspect`,
+  `Stretch to Frame Rate`, `Time Interpolation`, `Split Scenes`;
+* the preview on the right carries the slate - the title
+  `Untitled (1) - Untitled - (1/1)`, the frame number and the date - and
+  the `Mark In` / `Mark Out` fields below it.
+
+**The export really ran**: `Export` was pressed and the file
+`C:\Users\riju\OneDrive\Documents\Untitled (1).png` (103 276 bytes) was
+written - the name comes from the path field, and a sequence appends the
+frame number to it.  That is the ground truth for our own export, whose
+pattern field (`%pfn %cn %ln %li %in %ii %di %fi`, the live's
+`%ln%05in` -> `A00002`) is the same idea in its explicit form.
+
+So the export of our clone now has a complete specification: the tab
+strip, the row order, the defaults (2880x2160, 24.000 fps, RGBA, No
+PreMult., compression 5), the slate preview with the title / frame number
+/ date, the mark in / mark out fields, the `Export` and `Cancel` buttons
+at the top right, and the naming.
