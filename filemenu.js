@@ -1051,6 +1051,7 @@
      The text between brackets [] is optional, the symbol | means "or" and
      the number is the width of the zero padded number.  The example of the
      live:  "%ln%05in"  ->  "A00002"  (the layer "A", the instance 2).     */
+  const safeName = (s) => String(s || "layer").replace(/[\\/:*?"<>|]+/g, "_");
   function tvPatternValue(tok, width, ctx) {
     let v = ctx[tok];
     if (v == null || v === "") v = ctx["_" + tok];
@@ -1071,6 +1072,7 @@
     return out.replace(/[\\/:*?"<>|]/g, "_");
   }
 
+  window.tvExportDialog = tvExportDialog;
   function tvExportDialog() {
     const dlg = tvWin("Export Footage", 1008, 569);
     const b = bodyOf(dlg);
@@ -1092,7 +1094,6 @@
   const mkBig = (x, y, on) => { const c = at(check(!!on), x, y, 21, 18); c.classList.add("big"); return c; };
     const projName = () => (proj && proj.name ? proj.name.replace(/^\*/, "").replace(/\.tvpp$/i, "") : "Untitled_(1)");
     const withExt = (p, ext) => String(p).replace(/\.[a-z0-9]+$/i, "") + "." + ext;
-    const safeName = (s) => String(s || "layer").replace(/[\\/:*?"<>|]+/g, "_");
     const csvEsc = (s) => /[",\r\n]/.test(String(s)) ? '"' + String(s).replace(/"/g, '""') + '"' : String(s);
 
     /* --- tabs (live widths) --- */
@@ -1922,8 +1923,9 @@
       }
       // sequence
       if (!TVP) return toast("sequence export needs the desktop build");
-      const dir = await TVP.pickFolder(path.replace(/[\\/][^\\/]*$/, ""));
-      if (!dir) return;
+      // the live writes the sequence next to the path of the panel - it does not ask for a folder
+      const dir = dirName(path);
+      if (!dir) return toast("choose an export path first");
       pushRecent("folders", dir);
       const stem = baseName(path).replace(/\.[a-z0-9]+$/i, "") || "frame";
       let n = 0;
