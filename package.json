@@ -4,7 +4,7 @@
   "description": "TVPaint-style animation studio prototype (rebuilt from REA evidence)",
   "main": "main.js",
   "scripts": {
-    "test": "node test/engine.test.js && node test/menus.test.js",
+    "test": "node test/engine.test.js && node test/menus.test.js && node test/fsafe.test.js",
     "start": "electron .",
     "dist": "electron-packager . \"my-version\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --prune=true",
     "dist:dir": "electron-packager . \"my-version\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --prune=true"

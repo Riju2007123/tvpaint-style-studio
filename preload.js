@@ -18,6 +18,11 @@ contextBridge.exposeInMainWorld("tv", {
   printerSetup: () => ipcRenderer.invoke("tv:printerSetup"),
   printImage: (data) => ipcRenderer.invoke("tv:printImage", { data }),
   quit: () => ipcRenderer.invoke("tv:quit"),
+  setDirty: (dirty) => ipcRenderer.invoke("tv:setDirty", { dirty }),
+  writeRecovery: (meta, data) => ipcRenderer.invoke("tv:writeRecovery", { meta, data }),
+  readRecovery: () => ipcRenderer.invoke("tv:readRecovery"),
+  clearRecovery: () => ipcRenderer.invoke("tv:clearRecovery"),
+  onCloseRequested: (cb) => ipcRenderer.on("tv:closeRequested", () => cb()),
   appInfo: () => ipcRenderer.invoke("tv:appInfo"),
   documentsPath: null,
   browser: false

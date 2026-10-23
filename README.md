@@ -44,6 +44,7 @@ Works from `file://` too — just open `index.html`.
 | `index.html` | Shell: menubar, panels, timeline, transport, statusbar, CSS ported from TVPaint's shipped `colorschemes/Night.ini` values |
 | `engine.js` | Pure logic: frames/exposures, stroke engine, wet pickup, gradient flood, camera keys/paths, George handlers |
 | `ui.js` | Wiring: dialogs, panels, timeline render, live-paint stroke loop, selection/cut brush |
+| `fsafe.js` | Crash-safe saving: atomic file writes and the crash-recovery snapshot |
 | `serve.js` | Tiny static server (port 8471) |
 | `test/engine.test.js` | Node test suite (no dependencies) |
 | `tools/make-icon.js` | Builds `build.ico` (16/32/48/256) for the executable |
@@ -206,6 +207,12 @@ Works from `file://` too — just open `index.html`.
   None / Color / Check rendering, start frame, and the footer Notes / Sound /
   Color Group panes. Per-layer lock / light table / preserve-transparency /
   stencil dots, row collapse, global layer flags and image-mark ruler ticks.
+
+- **Safe saving** (desktop build): every save writes a temp file and renames it over
+  the project, so a crash mid-save can't corrupt it. While there are unsaved changes a
+  recovery snapshot is written every minute to the app's data folder; after a crash
+  the next start offers to restore it. Closing the window with unsaved changes asks
+  first, using the same Save / Quit dialog as File > Quit.
 
 50 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
 modes, add-exposure, layer order, selected-image reversal, camera

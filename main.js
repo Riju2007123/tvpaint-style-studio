@@ -10,8 +10,14 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require("electron")
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const fsafe = require("./fsafe");
 
 let win = null;
+// the page tells the shell whether the project has unsaved changes, so the
+// window's X button can ask instead of silently throwing the work away
+let projectDirty = false;
+let closeConfirmed = false;
+const recoveryDir = () => path.join(app.getPath("userData"), "recovery");
 
 // where the project files live on disk
 function projectFile() {
@@ -44,6 +50,14 @@ function createWindow() {
     // than the drawing area of the live app
     try { win.setMenuBarVisibility(false); } catch (e) { /* ignore */ }
   });
+  // X button / Alt+F4: with unsaved changes the page's own Quit dialog decides
+  win.on("close", (e) => {
+    if (closeConfirmed || !projectDirty) return;
+    e.preventDefault();
+    try { win.webContents.send("tv:closeRequested"); } catch (err) { closeConfirmed = true; win.close(); }
+  });
+  // a frozen page must never make the window impossible to close
+  win.webContents.on("unresponsive", () => { closeConfirmed = true; });
   win.on("closed", () => { win = null; });
 }
 
@@ -109,14 +123,25 @@ ipcMain.handle("tv:saveProject", async (event, payload) => {
     filters: [{ name: "All Files", extensions: ["*"] }]
   });
   if (r.canceled || !r.filePath) return null;
-  fs.writeFileSync(r.filePath, data, "utf8");
+  fsafe.atomicWrite(r.filePath, data);
   return r.filePath;
 });
 
 ipcMain.handle("tv:writeFile", async (event, payload) => {
   const { file, data } = payload || {};
-  try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, data); return true; } catch (err) { return false; }
+  try { fsafe.atomicWrite(file, data); return true; } catch (err) { return false; }
 });
+
+// ---- crash recovery / close guard ---------------------------------------
+ipcMain.handle("tv:setDirty", async (event, payload) => {
+  projectDirty = !!(payload && payload.dirty);
+  return true;
+});
+ipcMain.handle("tv:writeRecovery", async (event, payload) => {
+  try { fsafe.writeRecovery(recoveryDir(), payload && payload.meta, payload && payload.data); return true; } catch (err) { return false; }
+});
+ipcMain.handle("tv:readRecovery", async () => fsafe.readRecovery(recoveryDir()));
+ipcMain.handle("tv:clearRecovery", async () => fsafe.clearRecovery(recoveryDir()));
 
 ipcMain.handle("tv:readFile", async (event, payload) => {
   try { return fs.readFileSync((payload || {}).file, "utf8"); } catch (err) { return null; }
@@ -127,8 +152,7 @@ ipcMain.handle("tv:writeFileBinary", async (event, payload) => {
   const { file, data } = payload || {};
   try {
     const b64 = String(data).split(",")[1];
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, Buffer.from(b64, "base64"));
+    fsafe.atomicWrite(file, Buffer.from(b64, "base64"));
     return true;
   } catch (err) { return false; }
 });
@@ -188,7 +212,13 @@ ipcMain.handle("tv:printImage", async (event, payload) => {
   });
 });
 
-ipcMain.handle("tv:quit", async () => { app.quit(); return true; });
+ipcMain.handle("tv:quit", async () => {
+  // a clean quit: nothing left to recover, and the close guard steps aside
+  fsafe.clearRecovery(recoveryDir());
+  closeConfirmed = true;
+  app.quit();
+  return true;
+});
 
 ipcMain.handle("tv:appInfo", async () => ({
   version: app.getVersion(),

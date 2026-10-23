@@ -715,6 +715,8 @@
     proj.filePath = file;
     proj.name = baseName(file);
     proj.dirty = false;
+    syncDirtyToShell();
+    if (TVP && TVP.clearRecovery) TVP.clearRecovery();
     pushRecent("projects", file);
     pushRecent("folders", dirName(file));
     renderTimelineStatus();
@@ -761,6 +763,58 @@
   }
   window.tvOpenLastProject = tvOpenLastProject;
   window.tvSaveAlarm = tvSaveAlarm;
+
+  /* ---------------- crash recovery + close guard ----------------------
+     While the project has unsaved changes a snapshot is written to the app's
+     data folder every minute (never over the user's own file). After a crash
+     or a power cut the next start offers to restore it. The shell is also
+     told when the project is dirty so the window's X button can ask first. */
+  let lastDirtySent = null;
+  function syncDirtyToShell() {
+    if (!TVP || !TVP.setDirty) return;
+    const d = !!(proj && !proj.closed && proj.dirty);
+    if (d === lastDirtySent) return;
+    lastDirtySent = d;
+    try { TVP.setDirty(d); } catch (e) { /* ignore */ }
+  }
+  let recoveryBusy = false;
+  async function writeRecoverySnapshot() {
+    if (!TVP || !TVP.writeRecovery || recoveryBusy) return;
+    if (!proj || proj.closed || !proj.dirty) return;
+    recoveryBusy = true;
+    try {
+      await TVP.writeRecovery({ name: proj.name, filePath: proj.filePath || null }, E.serializeProject(proj));
+    } catch (e) { /* a failed snapshot never interrupts drawing */ }
+    recoveryBusy = false;
+  }
+  async function offerRecovery() {
+    if (!TVP || !TVP.readRecovery) return;
+    let rec = null;
+    try { rec = await TVP.readRecovery(); } catch (e) { return; }
+    if (!rec) return;
+    const when = new Date(rec.savedAt).toLocaleString();
+    const r = await tvConfirm("Recover Project",
+      `TVPaint-style Space did not close cleanly. Restore "${rec.name}" as it was at ${when}?`,
+      [{ label: "Restore", value: "yes", primary: true }, { label: "Discard", value: "no" }], 420);
+    if (r === "yes") {
+      try {
+        openProjectData(rec.data);
+        proj.filePath = rec.filePath || null;
+        proj.name = rec.name;
+        proj.dirty = true;               // unsaved until the user saves it
+        renderTimelineStatus();
+        toast("recovered " + rec.name);
+        return;                           // keep the snapshot until a real save
+      } catch (e) { toast("recovery failed: " + e.message); }
+    }
+    if (TVP.clearRecovery) TVP.clearRecovery();
+  }
+  if (TVP) {
+    setInterval(syncDirtyToShell, 1500);
+    setInterval(writeRecoverySnapshot, 60000);
+    if (TVP.onCloseRequested) TVP.onCloseRequested(() => { tvQuit(); });
+    setTimeout(offerRecovery, 700);
+  }
 
   function tvSaveTemplate() {
     const dlg = tvWin("Template name", 150, 92);
