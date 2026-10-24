@@ -741,6 +741,125 @@
   }
 
   /* ------------------------------------------------------------------
+     Camera[Pro] tool form (measured on the live recording, 19 px rows).
+     The visible rows are the dock's own controls; every value goes through
+     the camera controls that already carry the engine wiring (camX, camRot,
+     camMode ...), which stay in the page, hidden.
+     ------------------------------------------------------------------ */
+  const SVG_LOCK = (open) => `<svg width="11" height="14" viewBox="0 0 11 14"><rect x="1" y="6" width="9" height="7" rx="1" fill="#d8d8dc"/>` +
+    (open ? `<path d="M3 6V4a2.5 2.5 0 0 1 5 0" fill="none" stroke="#d8d8dc" stroke-width="1.5" transform="translate(2.5 -1.5)"/>`
+          : `<path d="M2.5 6V4a3 3 0 0 1 6 0v2" fill="none" stroke="#d8d8dc" stroke-width="1.5"/>`) +
+    `<rect x="4.7" y="8.2" width="1.6" height="2.6" fill="#46464d"/></svg>`;
+  const SVG_KEY = `<svg width="15" height="13" viewBox="0 0 15 13"><circle cx="4" cy="4" r="3" fill="none" stroke="#d0d0d4" stroke-width="1.8"/>` +
+    `<path d="M6.2 6.2 13 12M10 9l1.8-1.6M11.6 10.6l1.6-1.4" stroke="#d0d0d4" stroke-width="1.8" fill="none"/></svg>`;
+  let camUI = null;
+  function buildCameraForm() {
+    const old = $("ldForm"); if (old) old.remove();
+    const root = el("div"); root.id = "ldForm"; root.dataset.cam = "1";
+    const wrap = el("div"); wrap.id = "ldRows"; wrap.style.cssText = "position:relative;width:192px;height:232px;margin-top:6px";
+    root.appendChild(wrap); toolBody.appendChild(root);
+    const abs = (cls, css, html) => { const e = el("div", cls, html); e.style.cssText = "position:absolute;" + css; wrap.appendChild(e); return e; };
+    const lab = (txt, y, edge) => abs("ldlab", `right:${192 - (edge == null ? 89 : edge)}px;top:${y}px;line-height:19px;color:var(--ld-text);white-space:nowrap;text-align:right`, txt);
+    const H = (id) => $(id);
+    const fire = (id) => { const h = H(id); if (h) h.dispatchEvent(new Event("change")); };
+    const Y = { cmd: 0, lock: 23, book: 42, tog: 61, mode: 80, blur: 99, x: 123, y: 142, ratio: 161, rot: 180, zoom: 199, fx: 222, fy: 241, par: 260 };
+    wrap.style.height = "285px";
+    const ui = camUI = { upd: [] };
+
+    // pill dropdowns
+    const dd = (y, text, items, getVal) => {
+      const d = abs("ldsel", `left:98px;top:${y}px;width:88px;padding-right:0;text-overflow:clip`, text);
+      d.onclick = () => {
+        const b = d.getBoundingClientRect();
+        showMenu(b.left, b.bottom, items.map(it => ({ label: it.label, checked: getVal && getVal() === it.val, act: it.act })), b.width);
+      };
+      return d;
+    };
+    lab("", Y.cmd);
+    dd(Y.cmd, "Command", [["Invert", "invert"], ["Load...", "load"], ["Save...", "save"], ["Reset", "reset"], ["Reset and Fit to project", "resetfit"]]
+      .map(([label, val]) => ({ label, val, act: () => { H("camCmd").value = val; fire("camCmd"); } })));
+    const modeItems = [["Linear", "linear"], ["Spline", "spline"], ["Bezier curve", "bezier"], ["Smart Spline", "smart"]];
+    lab("Mode", Y.mode);
+    const modeDD = dd(Y.mode, "Linear", modeItems.map(([label, val]) => ({ label, val,
+      act: () => { H("camMode").value = val; fire("camMode"); ui.sync(); } })), () => H("camMode").value);
+    ui.upd.push(() => { const v = H("camMode").value; modeDD.textContent = (modeItems.find(m => m[1] === v) || modeItems[0])[0]; });
+
+    // check boxes (flat dark square, a bare tick when on)
+    const chk = (label, y, left, w, hid, edge) => {
+      lab(label, y, edge);
+      const c = abs("ldchk off", `left:${left}px;top:${y + 1}px;width:${w}px`, "");
+      c.onclick = () => { const h = H(hid); h.checked = !h.checked; fire(hid); ui.sync(); };
+      ui.upd.push(() => { const on = H(hid).checked; c.className = "ldchk" + (on ? "" : " off"); c.innerHTML = on ? "&#10003;" : ""; });
+    };
+    chk("Lock All", Y.lock, 98, 21, "camLockAll");
+    chk("See bookmarks", Y.book, 98, 21, "camBookmarks");
+    chk("Modify ratio", Y.ratio, 113, 21, "camRatio", 106);
+    chk("Flip X", Y.fx, 75, 17, "camFlipX", 70);
+    chk("Flip Y", Y.fy, 75, 17, "camFlipY", 70);
+
+    // key buttons
+    const keyBtn = (left, y, h, act, tip) => {
+      const b = abs("ldbtn", `left:${left}px;top:${y}px;width:21px;height:${h}px;line-height:${h}px;padding:0;display:flex;align-items:center;justify-content:center`, SVG_KEY);
+      b.title = tip; b.onclick = act; return b;
+    };
+    lab("Toggle all", Y.tog);
+    keyBtn(98, Y.tog + 1, 17, () => H("camToggle").click(), "Toggle all");
+    const chan = (ch) => () => {
+      const f = proj.currentFrame, k = E.cameraKeyAt(proj, f);
+      if (!(proj.cameraKeys && proj.cameraKeys.length)) { toast("camera has no key"); return; }
+      if (k && (E.camFlags(k) & ch)) E.cameraDeleteKey(proj, f, ch); else E.cameraAddKey(proj, f, ch);
+      renderAll(); ui.sync();
+    };
+    keyBtn(164, Y.x + 11, 17, chan(E.CAM_CH.POS), "Key the camera position");
+    keyBtn(164, Y.rot + 1, 17, chan(E.CAM_CH.ROT), "Key the camera rotation");
+    keyBtn(164, Y.zoom + 1, 17, chan(E.CAM_CH.ZOOM), "Key the camera zoom");
+
+    // padlocks
+    const lock = (y, hid) => {
+      const b = abs("ldlock", `left:77px;top:${y + 2}px;width:13px;height:15px;cursor:pointer;display:flex;align-items:center;justify-content:center`, SVG_LOCK(true));
+      b.onclick = () => { H(hid).click(); ui.sync(); };
+      ui.upd.push(() => { const on = /🔒/.test(H(hid).textContent); b.innerHTML = SVG_LOCK(!on); });
+    };
+    lock(Y.x, "camLockX"); lock(Y.y, "camLockY"); lock(Y.rot, "camLockRot"); lock(Y.zoom, "camLockZoom");
+
+    // number fields: text, step arrows, unit suffix shown inside the value
+    const num = (label, y, left, w, hid, read, write, step, edge) => {
+      lab(label, y, edge);
+      const inp = el("input", "ldnum"); inp.type = "text"; inp.spellcheck = false;
+      inp.style.cssText = `left:${left}px;top:${y + 1}px;width:${w}px`;
+      wrap.appendChild(inp);
+      const commit = () => {
+        const v = parseFloat(String(inp.value).replace(/[^0-9eE.+-]/g, ""));
+        if (isFinite(v)) { H(hid).value = String(write(v)); fire(hid); }
+        ui.sync();
+      };
+      inp.onkeydown = (e) => { if (e.key === "Enter") { commit(); inp.blur(); } e.stopPropagation(); };
+      inp.onchange = commit; inp.onfocus = () => inp.select();
+      const arr = abs("ldarr", `left:${left + w + 8}px;top:${y + 3}px`, "");
+      arr.onclick = (e) => {
+        const b = arr.getBoundingClientRect(), d = e.clientX - b.left < b.width / 2 ? -1 : 1;
+        const cur = parseFloat(String(inp.value).replace(/[^0-9eE.+-]/g, "")) || 0;
+        inp.value = String(cur + d * step); commit();
+      };
+      ui.upd.push(() => { if (doc.activeElement !== inp) inp.value = read(); inp.classList.toggle("dis", H(hid).disabled); });
+    };
+    const camNow = () => E.cameraEvaluate(proj, proj.currentFrame);
+    num("Motion Blur", Y.blur, 99, 60, "camBlur", () => (+(proj.cameraBlur || 0)).toFixed(2) + "%", v => v, 0.5, 89);
+    num("X", Y.x, 96, 40, "camX", () => (proj.width / 2 + camNow().x).toFixed(2), v => v, 1, 70);
+    num("Y", Y.y, 96, 40, "camY", () => (proj.height / 2 + camNow().y).toFixed(2), v => v, 1, 70);
+    num("Rotation", Y.rot, 96, 40, "camRot", () => camNow().rotation.toFixed(2) + "°", v => v, 0.1, 70);
+    num("Zoom", Y.zoom, 96, 40, "camZoom", () => (camNow().zoom * 100).toFixed(2) + "%", v => v, 1, 70);
+
+    const par = abs("ldbtn", `left:98px;top:${Y.par}px;width:88px`, "Parameters ...");
+    par.onclick = () => H("camParams").click();
+
+    ui.sync = () => { const b = q("[data-panel-key=camera] .pbody"); if (b && b._syncCamera) b._syncCamera(); ui.upd.forEach(f => f()); };
+    ui.upd.forEach(f => f());
+    return root;
+  }
+
+
+  /* ------------------------------------------------------------------
      hook into the application
      ------------------------------------------------------------------ */
   const origSelectTool = selectTool;
@@ -750,7 +869,7 @@
     if (id === "fill") { const v = S("fill").range; proj.brush.tolerance = v === undefined ? 25 : v; }
     if (id === "camera") {
       const pt = q("#toolPanel .pt"); if (pt) pt.textContent = "Tool : Camera[Pro]";
-      const f = $("ldForm"); if (f) f.remove();
+      buildCameraForm();
       if (brushGrid) brushGrid.style.display = "none";
       refreshMain(); return;
     }
@@ -771,9 +890,13 @@
     buildToolShell();
     rebuild();
     refreshMain();
+    // the old camera controls carry the wiring and stay hidden; the visible form mirrors them
+    window.__showCameraOptions = () => { const cp = q("[data-panel-key=camera]"); if (cp) cp.style.display = "none"; };
+    const cb = q("[data-panel-key=camera] .pbody");
+    if (cb && cb._syncCamera) { const o = cb._syncCamera; cb._syncCamera = () => { o(); if (camUI && $("ldForm") && $("ldForm").dataset.cam) camUI.upd.forEach(f => f()); }; }
     const ws = q("#workarea"); if (ws) ws.style.gridTemplateColumns = "205px 1fr";
   }
   boot();
   window.__ldMenu = showMenu;
-  window.__leftdock = { rebuild, refreshMain, G, TILES, FORMS, cur };
+  window.__leftdock = { buildCameraForm, rebuild, refreshMain, G, TILES, FORMS, cur };
 })();

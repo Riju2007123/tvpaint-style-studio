@@ -1,0 +1,243 @@
+From 2c8e4e5d5f27e61dddc546faa6fbc361e9a36b1e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 23 Oct 2026 11:57:01 +0000
+Subject: [PATCH] Left dock: Main, Color, Tool order, merged wheel, compact
+ rows, group dropdowns
+
+New leftdock.js/leftdock.css (loaded after ui.js, ui.js untouched):
+- panel order Main Panel, Color Panel, Tool : <name>
+- chromatic wheel moved into the Color Panel
+- 19 px option rows, small grey inputs, plain check marks
+- right click / press and hold on Main Panel group buttons opens a
+  dropdown with the labels from english.tvpaint.loc (shapes, cutting,
+  selection); the chosen item becomes the cell's tool
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013m3SiSyEnvnuZymZfce1bD
+---
+ index.html   |   2 +
+ leftdock.css |  46 +++++++++++++++++
+ leftdock.js  | 138 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 186 insertions(+)
+ create mode 100644 leftdock.css
+ create mode 100644 leftdock.js
+
+diff --git a/index.html b/index.html
+index 3ef60a3..5e58c8e 100644
+--- a/index.html
++++ b/index.html
+@@ -632,6 +632,7 @@
+   .tr-hand .arw:hover { color: #e0e0e6; }
+   .tr-hand .tib { position: static; width: 22px; height: 22px; }
+ </style>
++<link rel="stylesheet" href="leftdock.css">
+ </head>
+ <body>
+ <div id="app">
+@@ -706,6 +707,7 @@
+ <script src="i18n.js"></script>
+ <script src="i18n.js"></script>
+ <script src="ui.js"></script>
++<script src="leftdock.js"></script>
+ <script src="filemenu.js"></script>
+ <script src="prefs.js"></script>
+ </body>
+diff --git a/leftdock.css b/leftdock.css
+new file mode 100644
+index 0000000..8b35c43
+--- /dev/null
++++ b/leftdock.css
+@@ -0,0 +1,46 @@
++/* leftdock.css - the left dock of TVPaint 12 (Main / Color / Tool), measured from
++   the live application: rows 19 px apart, small grey input boxes, plain check
++   marks.  Loaded after index.html's own styles so it only overrides them. */
++
++/* ---- compact option rows (live app: 19 px pitch, the clone had 24 px) ---- */
++#panels .orow { margin: 0; min-height: 19px; gap: 4px; }
++#panels .orow label { flex: 0 0 96px; color: #aab1b8; font-size: 12px; line-height: 19px; }
++#panels .orow input[type=number],
++#panels .orow input[type=text],
++#panels .orow select {
++  height: 17px; padding: 0 4px; font-size: 12px; border-radius: 2px;
++  background: #3a393f; border: 1px solid #2b2b30; color: var(--tv-text);
++}
++#panels .orow select { padding-right: 2px; }
++#panels .pbody { padding: 4px 6px; }
++
++/* ---- plain check marks instead of the big native checkboxes ---- */
++#panels .orow input[type=checkbox] {
++  -webkit-appearance: none; appearance: none; width: 13px; height: 13px; margin: 0 6px 0 auto;
++  background: #3a393f; border: 1px solid #2b2b30; border-radius: 2px; position: relative; cursor: pointer;
++}
++#panels .orow input[type=checkbox]:checked::after {
++  content: ""; position: absolute; left: 3px; top: 0; width: 4px; height: 8px;
++  border: solid #c8d2da; border-width: 0 2px 2px 0; transform: rotate(40deg);
++}
++
++/* ---- the Color panel with the chromatic wheel merged in ---- */
++[data-panel-key="wheel"] { display: none !important; }
++#panels .colorwheelhost { padding: 2px 0 0; }
++#panels .colorwheelhost canvas { display: block; margin: 0 auto; }
++
++/* ---- group dropdown of the Main Panel (right click / press and hold) ---- */
++.mgcell.hasgroup::after {
++  content: ""; position: absolute; right: -1px; bottom: -1px; width: 0; height: 0; z-index: 2;
++  border-left: 4px solid transparent; border-bottom: 4px solid #8a95a8;
++}
++.groupmenu {
++  position: fixed; z-index: 500; min-width: 170px; padding: 2px 0;
++  background: #2f3237; border: 1px solid #1c1c20; box-shadow: 0 4px 14px #000a;
++  color: var(--tv-text); font-size: 12px;
++}
++.groupmenu .gmi { display: flex; align-items: center; gap: 8px; padding: 2px 10px 2px 6px; cursor: pointer; white-space: nowrap; }
++.groupmenu .gmi img { width: 20px; height: 20px; flex: none; }
++.groupmenu .gmi:hover { background: var(--tv-action-selected); }
++.groupmenu .gmi.on { color: #c8d2da; }
++.groupmenu .gmsep { height: 1px; background: #1c1c20; margin: 2px 0; }
+diff --git a/leftdock.js b/leftdock.js
+new file mode 100644
+index 0000000..4527d69
+--- /dev/null
++++ b/leftdock.js
+@@ -0,0 +1,138 @@
++/* leftdock.js - the left dock of TVPaint 12, layered on top of ui.js.
++ *  - panel order Main Panel, Color Panel, Tool : <name> (the live app order)
++ *  - the chromatic wheel lives inside the Color Panel
++ *  - the Main Panel group buttons get the dropdown of the live app (right click
++ *    or press and hold) with the real labels of Resources/data/english.tvpaint.loc
++ * It only moves existing DOM nodes and calls selectTool(), so ui.js is untouched. */
++(function () {
++  "use strict";
++  const $ = (id) => document.getElementById(id);
++  const host = $("panels");
++  if (!host || typeof selectTool !== "function") return;
++
++  // ---------------- order + merged colour panel ----------------
++  const ORDER = ["main", "color", "tool", "lt", "timesheet", "remote", "navigator",
++    "fxstack", "share", "guideline", "library", "camera", "wheel"];
++  ORDER.forEach((k) => {
++    const el = host.querySelector('[data-panel-key="' + k + '"]');
++    if (el) host.appendChild(el);
++  });
++
++  const colorBody = host.querySelector('[data-panel-key="color"] .pbody');
++  const wheelBody = host.querySelector('[data-panel-key="wheel"] .pbody');
++  if (colorBody && wheelBody && !colorBody.querySelector(".colorwheelhost")) {
++    const box = document.createElement("div");
++    box.className = "colorwheelhost";
++    while (wheelBody.firstChild) box.appendChild(wheelBody.firstChild);
++    colorBody.appendChild(box);
++  }
++
++  // ---------------- group dropdowns of the Main Panel ----------------
++  // [tool id, icon base name, label from english.tvpaint.loc]
++  const G = {
++    penbrush: [
++      ["penbrush", "Shape-FreeHand-Line", "Stroke"],
++      ["dot", "Shape-FreeHand-Dot", "Dot"],
++      ["dotsingle", "Shape-FreeHand-Dot-Single", "One Point Dot"]],
++    line: [
++      ["line", "Shape-Line", "Line"],
++      ["fline", "Shape-Fill-Line", "Filled Line"]],
++    rect: [
++      ["rectangle", "Shape-Rectangle", "Rectangle"],
++      ["frectangle", "Shape-Fill-Rectangle", "Filled Rectangle"]],
++    ellipse: [
++      ["ellipse", "Shape-Ellipse", "Ellipse"],
++      ["fellipse", "Shape-Fill-Ellipse", "Filled Ellipse"],
++      null,
++      ["circlec", "Shape-CircleC", "Circle"],
++      ["fcirclec", "Shape-Fill-CircleC", "Filled Circle"],
++      ["circle2pts", "Shape-Circle2Pts", "2 Pts Circle"],
++      ["fcircle2pts", "Shape-Fill-Circle2Pts", "Filled 2 Pts Circle"],
++      ["circle3pts", "Shape-Circle3Pts", "3 Pts Circle"],
++      ["fcircle3pts", "Shape-Fill-Circle3Pts", "Filled 3 Pts Circle"]],
++    spline: [
++      ["spline3pts", "Shape-Spline3Pts", "3 Pts Spline"],
++      ["fspline3pts", "Shape-Fill-Spline3Pts", "Filled 3 Pts Spline"],
++      null,
++      ["bezier", "Shape-Bezier", "Bezier Spline"],
++      ["fbezier", "Shape-Fill-Bezier", "Filled Bezier Spline"],
++      ["bspline", "Shape-B-Spline", "B-Spline Spline"],
++      ["fbspline", "Shape-Fill-B-Spline", "Filled B-Spline Spline"]],
++    cutrect: [
++      ["cutrect", "Shape-CutBrush-Rectangle", "Cutting tool: Rectangle"],
++      ["cutfreehand", "Shape-CutBrush-FreeHand", "Cutting tool: FreeHand"]],
++    selrect: [
++      ["selrect", "Shape-Selection-Rectangle", "Selection: Rectangle"],
++      ["selfreehand", "Shape-Selection-FreeHand", "Selection: FreeHand"]]
++  };
++
++  // the "Tool : <name>" header uses the names of the live app
++  if (typeof TOOL_LABELS === "object") {
++    Object.values(G).forEach((items) => items.forEach((it) => { if (it) TOOL_LABELS[it[0]] = it[2]; }));
++    TOOL_LABELS.penbrush = "Pen Brush";
++  }
++
++  let menu = null;
++  function closeMenu() { if (menu) { menu.remove(); menu = null; } }
++  window.addEventListener("pointerdown", (e) => {
++    if (menu && !menu.contains(e.target)) closeMenu();
++  }, true);
++  window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
++
++  function openGroup(cell, items) {
++    closeMenu();
++    menu = document.createElement("div");
++    menu.className = "groupmenu";
++    items.forEach((it) => {
++      if (!it) {
++        const s = document.createElement("div"); s.className = "gmsep"; menu.appendChild(s); return;
++      }
++      const row = document.createElement("div");
++      row.className = "gmi" + (cell.dataset.tool === it[0] ? " on" : "");
++      row.innerHTML = '<img src="icons/' + it[1] + '-x20.png" alt=""><span>' + it[2] + "</span>";
++      row.onclick = () => {
++        cell.dataset.tool = it[0];
++        cell.title = it[2];
++        cell.querySelector("img").src = "icons/" + it[1] + "-x20.png";
++        closeMenu();
++        selectTool(it[0]);
++      };
++      menu.appendChild(row);
++    });
++    document.body.appendChild(menu);
++    const r = cell.getBoundingClientRect();
++    menu.style.left = Math.round(r.left) + "px";
++    menu.style.top = Math.round(r.bottom + 2) + "px";
++    const m = menu.getBoundingClientRect();
++    if (m.bottom > window.innerHeight) menu.style.top = Math.max(0, window.innerHeight - m.height) + "px";
++  }
++
++  // the group of each cell is fixed by the ORIGINAL tool id of the cell
++  const grid = $("mainGrid");
++  if (!grid) return;
++  grid.querySelectorAll(".mgcell").forEach((cell) => {
++    const base = cell.dataset.tool;
++    const items = G[base];
++    if (!items) return;
++    cell.classList.add("hasgroup");
++    // a plain click selects the tool the cell shows (the first of its group
++    // until another one is picked from the dropdown)
++    cell.dataset.tool = items.find(Boolean)[0];
++    let timer = null, held = false;
++    cell.addEventListener("contextmenu", (e) => { e.preventDefault(); openGroup(cell, items); });
++    cell.addEventListener("pointerdown", (e) => {
++      if (e.button !== 0) return;
++      held = false;
++      timer = setTimeout(() => { held = true; openGroup(cell, items); }, 450);
++    });
++    const cancel = () => { clearTimeout(timer); };
++    cell.addEventListener("pointerup", cancel);
++    cell.addEventListener("pointerleave", cancel);
++    // runs before ui.js's own handler, which only knows the base tools
++    cell.addEventListener("click", (e) => {
++      e.stopImmediatePropagation();
++      if (held) { held = false; return; }   // the click ending a press-and-hold
++      selectTool(cell.dataset.tool);
++    }, true);
++  });
++})();
+-- 
+2.43.0
+

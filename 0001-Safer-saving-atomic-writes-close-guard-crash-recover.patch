@@ -1,0 +1,382 @@
+From c371dd74322d1eda9b7e125d5e9f8f6c5886c615 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 23 Oct 2026 11:04:48 +0000
+Subject: [PATCH] Safer saving: atomic writes, close guard, crash recovery
+
+- fsafe.js: atomic write (temp file + rename) and recovery snapshot helpers
+- main.js: all file writes atomic; X button asks when the project is dirty
+- filemenu.js: dirty state synced to the shell, 60 s recovery snapshot,
+  restore prompt on next start
+- tests: test/fsafe.test.js
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012Pwj93PLpfdPHz7nps4p6z
+---
+ README.md          |  7 +++++
+ filemenu.js        | 54 ++++++++++++++++++++++++++++++++++++++
+ fsafe.js           | 63 ++++++++++++++++++++++++++++++++++++++++++++
+ main.js            | 40 ++++++++++++++++++++++++----
+ package.json       |  2 +-
+ preload.js         |  5 ++++
+ test/fsafe.test.js | 65 ++++++++++++++++++++++++++++++++++++++++++++++
+ 7 files changed, 230 insertions(+), 6 deletions(-)
+ create mode 100644 fsafe.js
+ create mode 100644 test/fsafe.test.js
+
+diff --git a/README.md b/README.md
+index c8a6b7e..fe27a89 100644
+--- a/README.md
++++ b/README.md
+@@ -44,6 +44,7 @@ Works from `file://` too — just open `index.html`.
+ | `index.html` | Shell: menubar, panels, timeline, transport, statusbar, CSS ported from TVPaint's shipped `colorschemes/Night.ini` values |
+ | `engine.js` | Pure logic: frames/exposures, stroke engine, wet pickup, gradient flood, camera keys/paths, George handlers |
+ | `ui.js` | Wiring: dialogs, panels, timeline render, live-paint stroke loop, selection/cut brush |
++| `fsafe.js` | Crash-safe saving: atomic file writes and the crash-recovery snapshot |
+ | `serve.js` | Tiny static server (port 8471) |
+ | `test/engine.test.js` | Node test suite (no dependencies) |
+ | `tools/make-icon.js` | Builds `build.ico` (16/32/48/256) for the executable |
+@@ -207,6 +208,12 @@ Works from `file://` too — just open `index.html`.
+   Color Group panes. Per-layer lock / light table / preserve-transparency /
+   stencil dots, row collapse, global layer flags and image-mark ruler ticks.
+ 
++- **Safe saving** (desktop build): every save writes a temp file and renames it over
++  the project, so a crash mid-save can't corrupt it. While there are unsaved changes a
++  recovery snapshot is written every minute to the app's data folder; after a crash
++  the next start offers to restore it. Closing the window with unsaved changes asks
++  first, using the same Save / Quit dialog as File > Quit.
++
+ 50 Node tests cover the timeline operations, exposure ripple/trim/slide, delete
+ modes, add-exposure, layer order, selected-image reversal, camera
+ interpolation, camera movement types, camera key moves and the camera render,
+diff --git a/filemenu.js b/filemenu.js
+index 1944ef9..e6fed4d 100644
+--- a/filemenu.js
++++ b/filemenu.js
+@@ -715,6 +715,8 @@
+     proj.filePath = file;
+     proj.name = baseName(file);
+     proj.dirty = false;
++    syncDirtyToShell();
++    if (TVP && TVP.clearRecovery) TVP.clearRecovery();
+     pushRecent("projects", file);
+     pushRecent("folders", dirName(file));
+     renderTimelineStatus();
+@@ -762,6 +764,58 @@
+   window.tvOpenLastProject = tvOpenLastProject;
+   window.tvSaveAlarm = tvSaveAlarm;
+ 
++  /* ---------------- crash recovery + close guard ----------------------
++     While the project has unsaved changes a snapshot is written to the app's
++     data folder every minute (never over the user's own file). After a crash
++     or a power cut the next start offers to restore it. The shell is also
++     told when the project is dirty so the window's X button can ask first. */
++  let lastDirtySent = null;
++  function syncDirtyToShell() {
++    if (!TVP || !TVP.setDirty) return;
++    const d = !!(proj && !proj.closed && proj.dirty);
++    if (d === lastDirtySent) return;
++    lastDirtySent = d;
++    try { TVP.setDirty(d); } catch (e) { /* ignore */ }
++  }
++  let recoveryBusy = false;
++  async function writeRecoverySnapshot() {
++    if (!TVP || !TVP.writeRecovery || recoveryBusy) return;
++    if (!proj || proj.closed || !proj.dirty) return;
++    recoveryBusy = true;
++    try {
++      await TVP.writeRecovery({ name: proj.name, filePath: proj.filePath || null }, E.serializeProject(proj));
++    } catch (e) { /* a failed snapshot never interrupts drawing */ }
++    recoveryBusy = false;
++  }
++  async function offerRecovery() {
++    if (!TVP || !TVP.readRecovery) return;
++    let rec = null;
++    try { rec = await TVP.readRecovery(); } catch (e) { return; }
++    if (!rec) return;
++    const when = new Date(rec.savedAt).toLocaleString();
++    const r = await tvConfirm("Recover Project",
++      `TVPaint-style Space did not close cleanly. Restore "${rec.name}" as it was at ${when}?`,
++      [{ label: "Restore", value: "yes", primary: true }, { label: "Discard", value: "no" }], 420);
++    if (r === "yes") {
++      try {
++        openProjectData(rec.data);
++        proj.filePath = rec.filePath || null;
++        proj.name = rec.name;
++        proj.dirty = true;               // unsaved until the user saves it
++        renderTimelineStatus();
++        toast("recovered " + rec.name);
++        return;                           // keep the snapshot until a real save
++      } catch (e) { toast("recovery failed: " + e.message); }
++    }
++    if (TVP.clearRecovery) TVP.clearRecovery();
++  }
++  if (TVP) {
++    setInterval(syncDirtyToShell, 1500);
++    setInterval(writeRecoverySnapshot, 60000);
++    if (TVP.onCloseRequested) TVP.onCloseRequested(() => { tvQuit(); });
++    setTimeout(offerRecovery, 700);
++  }
++
+   function tvSaveTemplate() {
+     const dlg = tvWin("Template name", 150, 92);
+     const b = bodyOf(dlg);
+diff --git a/fsafe.js b/fsafe.js
+new file mode 100644
+index 0000000..34260f6
+--- /dev/null
++++ b/fsafe.js
+@@ -0,0 +1,63 @@
++/* ------------------------------------------------------------------
++   fsafe.js - crash-safe file helpers for the desktop shell (no Electron
++   dependency, so the node tests can load it).
++
++   atomicWrite: the data goes to a temporary file in the same folder and is
++   renamed over the target, so a crash or power cut in the middle of a save
++   leaves either the old project or the new one - never half of each.
++
++   Recovery files: the page hands the shell a snapshot of the project every
++   minute while it has unsaved changes. The snapshot lives in the app's own
++   data folder and is removed on a clean save / quit. If the application
++   dies, the next start finds it and offers to restore it.
++   ------------------------------------------------------------------ */
++const fs = require("fs");
++const path = require("path");
++
++function atomicWrite(file, data, encoding) {
++  const dir = path.dirname(file);
++  fs.mkdirSync(dir, { recursive: true });
++  const tmp = path.join(dir, "." + path.basename(file) + "." + process.pid + "." + Date.now() + ".tmp");
++  try {
++    const fd = fs.openSync(tmp, "w");
++    try {
++      if (typeof data === "string") fs.writeSync(fd, data, null, encoding || "utf8");
++      else fs.writeSync(fd, data);
++      try { fs.fsyncSync(fd); } catch (e) { /* not supported everywhere */ }
++    } finally { fs.closeSync(fd); }
++    fs.renameSync(tmp, file);
++  } catch (err) {
++    try { fs.unlinkSync(tmp); } catch (e) { /* already gone */ }
++    throw err;
++  }
++}
++
++const RECOVERY_NAME = "recovery.json";
++
++function recoveryPath(dir) { return path.join(dir, RECOVERY_NAME); }
++
++// meta: { name, filePath } of the project the snapshot belongs to
++function writeRecovery(dir, meta, data) {
++  const payload = JSON.stringify({
++    savedAt: Date.now(),
++    name: (meta && meta.name) || "Untitled",
++    filePath: (meta && meta.filePath) || null,
++    data: data
++  });
++  atomicWrite(recoveryPath(dir), payload);
++}
++
++// returns null when there is nothing (or nothing readable) to recover
++function readRecovery(dir) {
++  try {
++    const o = JSON.parse(fs.readFileSync(recoveryPath(dir), "utf8"));
++    if (!o || typeof o.data !== "string" || !o.data) return null;
++    return o;
++  } catch (e) { return null; }
++}
++
++function clearRecovery(dir) {
++  try { fs.unlinkSync(recoveryPath(dir)); return true; } catch (e) { return false; }
++}
++
++module.exports = { atomicWrite, writeRecovery, readRecovery, clearRecovery, recoveryPath };
+diff --git a/main.js b/main.js
+index c09d6e2..bd59e45 100644
+--- a/main.js
++++ b/main.js
+@@ -10,8 +10,14 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require("electron")
+ const path = require("path");
+ const fs = require("fs");
+ const os = require("os");
++const fsafe = require("./fsafe");
+ 
+ let win = null;
++// the page tells the shell whether the project has unsaved changes, so the
++// window's X button can ask instead of silently throwing the work away
++let projectDirty = false;
++let closeConfirmed = false;
++const recoveryDir = () => path.join(app.getPath("userData"), "recovery");
+ 
+ // where the project files live on disk
+ function projectFile() {
+@@ -44,6 +50,14 @@ function createWindow() {
+     // than the drawing area of the live app
+     try { win.setMenuBarVisibility(false); } catch (e) { /* ignore */ }
+   });
++  // X button / Alt+F4: with unsaved changes the page's own Quit dialog decides
++  win.on("close", (e) => {
++    if (closeConfirmed || !projectDirty) return;
++    e.preventDefault();
++    try { win.webContents.send("tv:closeRequested"); } catch (err) { closeConfirmed = true; win.close(); }
++  });
++  // a frozen page must never make the window impossible to close
++  win.webContents.on("unresponsive", () => { closeConfirmed = true; });
+   win.on("closed", () => { win = null; });
+ }
+ 
+@@ -109,15 +123,26 @@ ipcMain.handle("tv:saveProject", async (event, payload) => {
+     filters: [{ name: "All Files", extensions: ["*"] }]
+   });
+   if (r.canceled || !r.filePath) return null;
+-  fs.writeFileSync(r.filePath, data, "utf8");
++  fsafe.atomicWrite(r.filePath, data);
+   return r.filePath;
+ });
+ 
+ ipcMain.handle("tv:writeFile", async (event, payload) => {
+   const { file, data } = payload || {};
+-  try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, data); return true; } catch (err) { return false; }
++  try { fsafe.atomicWrite(file, data); return true; } catch (err) { return false; }
+ });
+ 
++// ---- crash recovery / close guard ---------------------------------------
++ipcMain.handle("tv:setDirty", async (event, payload) => {
++  projectDirty = !!(payload && payload.dirty);
++  return true;
++});
++ipcMain.handle("tv:writeRecovery", async (event, payload) => {
++  try { fsafe.writeRecovery(recoveryDir(), payload && payload.meta, payload && payload.data); return true; } catch (err) { return false; }
++});
++ipcMain.handle("tv:readRecovery", async () => fsafe.readRecovery(recoveryDir()));
++ipcMain.handle("tv:clearRecovery", async () => fsafe.clearRecovery(recoveryDir()));
++
+ ipcMain.handle("tv:readFile", async (event, payload) => {
+   try { return fs.readFileSync((payload || {}).file, "utf8"); } catch (err) { return null; }
+ });
+@@ -127,8 +152,7 @@ ipcMain.handle("tv:writeFileBinary", async (event, payload) => {
+   const { file, data } = payload || {};
+   try {
+     const b64 = String(data).split(",")[1];
+-    fs.mkdirSync(path.dirname(file), { recursive: true });
+-    fs.writeFileSync(file, Buffer.from(b64, "base64"));
++    fsafe.atomicWrite(file, Buffer.from(b64, "base64"));
+     return true;
+   } catch (err) { return false; }
+ });
+@@ -188,7 +212,13 @@ ipcMain.handle("tv:printImage", async (event, payload) => {
+   });
+ });
+ 
+-ipcMain.handle("tv:quit", async () => { app.quit(); return true; });
++ipcMain.handle("tv:quit", async () => {
++  // a clean quit: nothing left to recover, and the close guard steps aside
++  fsafe.clearRecovery(recoveryDir());
++  closeConfirmed = true;
++  app.quit();
++  return true;
++});
+ 
+ ipcMain.handle("tv:appInfo", async () => ({
+   version: app.getVersion(),
+diff --git a/package.json b/package.json
+index 60443ac..afd5bfb 100644
+--- a/package.json
++++ b/package.json
+@@ -4,7 +4,7 @@
+   "description": "TVPaint-style animation studio prototype (rebuilt from REA evidence)",
+   "main": "main.js",
+   "scripts": {
+-    "test": "node test/engine.test.js && node test/menus.test.js",
++    "test": "node test/engine.test.js && node test/menus.test.js && node test/fsafe.test.js",
+     "start": "electron .",
+     "dist": "electron-packager . \"my-version\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --prune=true",
+     "dist:dir": "electron-packager . \"my-version\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --prune=true"
+diff --git a/preload.js b/preload.js
+index 83b834d..486a855 100644
+--- a/preload.js
++++ b/preload.js
+@@ -18,6 +18,11 @@ contextBridge.exposeInMainWorld("tv", {
+   printerSetup: () => ipcRenderer.invoke("tv:printerSetup"),
+   printImage: (data) => ipcRenderer.invoke("tv:printImage", { data }),
+   quit: () => ipcRenderer.invoke("tv:quit"),
++  setDirty: (dirty) => ipcRenderer.invoke("tv:setDirty", { dirty }),
++  writeRecovery: (meta, data) => ipcRenderer.invoke("tv:writeRecovery", { meta, data }),
++  readRecovery: () => ipcRenderer.invoke("tv:readRecovery"),
++  clearRecovery: () => ipcRenderer.invoke("tv:clearRecovery"),
++  onCloseRequested: (cb) => ipcRenderer.on("tv:closeRequested", () => cb()),
+   appInfo: () => ipcRenderer.invoke("tv:appInfo"),
+   documentsPath: null,
+   browser: false
+diff --git a/test/fsafe.test.js b/test/fsafe.test.js
+new file mode 100644
+index 0000000..b8201c9
+--- /dev/null
++++ b/test/fsafe.test.js
+@@ -0,0 +1,65 @@
++/* Node tests for fsafe.js - atomic writes and crash-recovery snapshots */
++"use strict";
++const assert = require("assert");
++const fs = require("fs");
++const os = require("os");
++const path = require("path");
++const F = require("../fsafe.js");
++
++let passed = 0, failed = 0;
++function test(name, fn) {
++  try { fn(); console.log("  PASS " + name); passed++; }
++  catch (e) { console.log("  FAIL " + name + " :: " + e.message); failed++; }
++}
++const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fsafe-"));
++const leftovers = (dir) => fs.readdirSync(dir).filter(n => n.endsWith(".tmp"));
++
++test("atomicWrite creates folders and writes text", () => {
++  const f = path.join(tmp, "a", "b", "p.tvpp");
++  F.atomicWrite(f, "hello");
++  assert.strictEqual(fs.readFileSync(f, "utf8"), "hello");
++});
++test("atomicWrite replaces an existing file and leaves no temp file", () => {
++  const f = path.join(tmp, "p2.tvpp");
++  F.atomicWrite(f, "old"); F.atomicWrite(f, "new");
++  assert.strictEqual(fs.readFileSync(f, "utf8"), "new");
++  assert.deepStrictEqual(leftovers(tmp), []);
++});
++test("atomicWrite writes binary buffers unchanged", () => {
++  const f = path.join(tmp, "x.png");
++  const buf = Buffer.from([0, 255, 1, 254, 137, 80, 78, 71]);
++  F.atomicWrite(f, buf);
++  assert.ok(fs.readFileSync(f).equals(buf));
++});
++test("a failed write keeps the old file and removes the temp file", () => {
++  const f = path.join(tmp, "keep.tvpp");
++  F.atomicWrite(f, "precious");
++  assert.throws(() => F.atomicWrite(f, 12345));   // not a string or buffer
++  assert.strictEqual(fs.readFileSync(f, "utf8"), "precious");
++  assert.deepStrictEqual(leftovers(tmp), []);
++});
++test("recovery: write, read back, clear", () => {
++  const dir = path.join(tmp, "rec");
++  assert.strictEqual(F.readRecovery(dir), null);
++  F.writeRecovery(dir, { name: "scene.tvpp", filePath: "C:\\x\\scene.tvpp" }, '{"app":"my-version"}');
++  const r = F.readRecovery(dir);
++  assert.strictEqual(r.name, "scene.tvpp");
++  assert.strictEqual(r.filePath, "C:\\x\\scene.tvpp");
++  assert.strictEqual(r.data, '{"app":"my-version"}');
++  assert.ok(r.savedAt > 0);
++  assert.strictEqual(F.clearRecovery(dir), true);
++  assert.strictEqual(F.readRecovery(dir), null);
++  assert.strictEqual(F.clearRecovery(dir), false);
++});
++test("a corrupt or empty recovery file is ignored, not fatal", () => {
++  const dir = path.join(tmp, "rec2");
++  fs.mkdirSync(dir, { recursive: true });
++  fs.writeFileSync(F.recoveryPath(dir), "{not json");
++  assert.strictEqual(F.readRecovery(dir), null);
++  fs.writeFileSync(F.recoveryPath(dir), JSON.stringify({ savedAt: 1, name: "n", data: "" }));
++  assert.strictEqual(F.readRecovery(dir), null);
++});
++
++fs.rmSync(tmp, { recursive: true, force: true });
++console.log("\n" + passed + " passed, " + failed + " failed");
++process.exit(failed ? 1 : 0);
+-- 
+2.43.0
+

@@ -1,0 +1,474 @@
+From 4ea9874edd161b1374e2e9fe8fe6d96f5a1c69b2 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 24 Oct 2026 13:57:54 +0000
+Subject: [PATCH] Camera tool: exact Camera[Pro] panel, canvas path and Camera
+ Layer rules
+
+New camera.js/camera.css (loaded after ui.js):
+- option rows at the measured positions: label column, rounded drop downs,
+  flat check boxes, padlock and wrench icons, steppers, X/Y with 2 decimals,
+  values shown with their unit (0.00%, 0.00 deg, 66.67%)
+- wrench buttons create/delete the key of that channel; Toggle all toggles
+  every channel
+- canvas with the Camera tool: motion path through the keys, green frame of
+  the previous key, red frame of the next key, a ring on every other key,
+  ring handle at the right end of the rotation guide
+- Camera Layer: other tools are greyed out in the Main Panel and give
+  "You cannot use this tool on a Camera Layer."; picking a layer returns to
+  the Pen Brush
+- timeline: the camera layer is one box from the first key to the clip end
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013m3SiSyEnvnuZymZfce1bD
+---
+ camera.css | 144 ++++++++++++++++++++++++++++++++
+ camera.js  | 235 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ index.html |   2 +
+ ui.js      |  10 ++-
+ 4 files changed, 387 insertions(+), 4 deletions(-)
+ create mode 100644 camera.css
+ create mode 100644 camera.js
+
+diff --git a/camera.css b/camera.css
+new file mode 100644
+index 0000000..976b87e
+--- /dev/null
++++ b/camera.css
+@@ -0,0 +1,144 @@
++/* camera.css - the Camera[Pro] tool panel of TVPaint 12 (measured on the live
++   application at 1920x1080, row pitch 19 px, panel text 12 px). */
++
++/* ---- panel header: a dot, a round chevron disc and a round close disc ---- */
++#panels .phead .pw {
++  width: 13px; height: 13px; padding: 0; margin-left: 5px; border: 0; border-radius: 50%;
++  background: #7f7e84; color: #302f34; font-size: 8px; line-height: 13px; text-align: center;
++  cursor: pointer; flex: none;
++}
++#panels .phead .pw[title="panel options"] {
++  width: 4px; height: 4px; background: #7f7e84; font-size: 0; margin-right: 4px; margin-left: 4px;
++}
++#panels .phead .pw:hover { background: #a3a2a8; }
++#panels .phead .pt { color: #8e8d93; font-size: 12px; }
++
++/* ---- the option rows of the camera tool ---- */
++#panels .camopts, #panels .camopts.pbody { padding: 0 !important; }
++#panels .camopts .orow {
++  display: flex; align-items: center; position: relative;
++  height: 19px; min-height: 19px; margin: 0 !important; gap: 0 !important; padding: 0;
++  font-size: 12px; color: #a9a8ae;
++}
++#panels .camopts .orow > label {
++  flex: 0 0 85px !important; width: 85px; padding: 0; text-align: right; white-space: nowrap;
++  color: #a9a8ae; font-size: 12px; line-height: 19px; overflow: visible;
++}
++#panels .camopts .orow.wide > label { text-align: left; flex: 0 0 109px !important; width: 109px; }
++#panels .camopts .orow.gap { margin-top: 4px !important; }
++#panels .camopts .orow.gap2 { margin-top: 3px !important; }
++
++/* number fields: flat grey boxes, value left aligned */
++#panels .camopts input[type=text], #panels .camopts input[type=number] {
++  box-sizing: border-box; height: 17px; padding: 0 4px; margin: 0 0 0 5px; border: 0; border-radius: 3px;
++  background: #47464d; color: #c3c2c8; font-size: 12px; font-family: inherit; text-align: left;
++  min-width: 0; flex: none; outline: 0;
++}
++#panels .camopts input:focus { background: #53525a; }
++#panels .camopts input:disabled { color: #77767c; }
++#panels .camopts #camBlur { width: 58px; }
++#panels .camopts #camX, #panels .camopts #camY { width: 50px; margin-left: 7px; }
++#panels .camopts #camRot, #panels .camopts #camZoom { width: 55px; margin-left: 7px; }
++#panels .camopts input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
++
++/* the two small triangles to the right of a field */
++#panels .camopts .camarr { display: inline-flex; width: 9px; height: 17px; margin-left: 6px; cursor: pointer; flex: none; position: relative; }
++#panels .camopts .camarr i { position: absolute; top: 5px; width: 0; height: 0; border: 3.5px solid transparent; }
++#panels .camopts .camarr i.l { left: -2px; border-right: 4px solid #8b8a90; border-left: 0; }
++#panels .camopts .camarr i.r { left: 6px; border-left: 4px solid #8b8a90; border-right: 0; }
++#panels .camopts .camarr:hover i.l { border-right-color: #c3c2c8; }
++#panels .camopts .camarr:hover i.r { border-left-color: #c3c2c8; }
++
++/* drop downs: rounded grey pill with a round chevron disc */
++#panels .camopts .camdd {
++  position: relative; display: inline-block; width: 91px; height: 17px; margin-left: 5px; flex: none;
++  background: #47464d; border-radius: 9px;
++}
++#panels .camopts .camdd select {
++  -webkit-appearance: none; appearance: none; width: 100%; height: 17px; padding: 0 20px 0 7px; border: 0;
++  background: transparent; color: #c3c2c8; font-size: 12px; font-family: inherit; outline: 0; cursor: pointer;
++}
++#panels .camopts .camdd select option { background: #36353b; color: #c3c2c8; }
++#panels .camopts .camdd::after {
++  content: ""; position: absolute; right: 3px; top: 3px; width: 11px; height: 11px; border-radius: 50%;
++  background: #8b8a90; pointer-events: none;
++}
++#panels .camopts .camdd::before {
++  content: ""; position: absolute; right: 6.5px; top: 6px; border: 4px solid transparent; border-top: 5px solid #47464d;
++  border-bottom: 0; z-index: 1; pointer-events: none;
++}
++
++/* check boxes: flat boxes, the check mark is drawn inside */
++#panels .camopts input[type=checkbox] {
++  -webkit-appearance: none; appearance: none; box-sizing: border-box; width: 20px; height: 17px; margin: 0 0 0 8px;
++  border: 0; border-radius: 3px; background: #3c3b41; position: relative; cursor: pointer; flex: none;
++}
++#panels .camopts input[type=checkbox]:checked::after {
++  content: ""; position: absolute; left: 7px; top: 2px; width: 4px; height: 8px;
++  border: solid #d0d0d6; border-width: 0 2px 2px 0; transform: rotate(40deg);
++}
++#panels .camopts input[type=checkbox]:disabled { opacity: .5; }
++
++/* small square buttons: wrench / lock / Parameters */
++#panels .camopts .revbtn {
++  -webkit-appearance: none; appearance: none; border: 0; border-radius: 3px; background: #47464d;
++  color: transparent; font-size: 0 !important; padding: 0 !important; height: 17px; cursor: pointer;
++  background-repeat: no-repeat; background-position: center; flex: none;
++}
++#panels .camopts .revbtn:hover { background-color: #55545c; }
++#panels .camopts #camToggle {
++  width: 20px; margin-left: 8px; background-color: #3c3b41;
++}
++#panels .camopts #camParams {
++  width: 88px; margin: 3px 0 0 114px; color: #c3c2c8 !important; font-size: 12px !important; font-family: inherit;
++  background-image: none !important;
++}
++#panels .camopts #camToggle, #panels .camopts .camwr {
++  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><path d='M2 12 L7 7 M7.2 6.8 a3 3 0 1 1 1 1 z' fill='none' stroke='%23b7b6bc' stroke-width='1.8' stroke-linecap='round'/><circle cx='10' cy='3.6' r='1.2' fill='%2347464d'/></svg>");
++}
++#panels .camopts .camwr {
++  position: absolute; left: 162px; width: 17px; height: 15px; border: 0; border-radius: 3px;
++  background-color: #47464d; background-repeat: no-repeat; background-position: center; cursor: pointer;
++}
++#panels .camopts .camwr.tall { height: 15px; top: 23px; }
++#panels .camopts .camwr.mid { top: 2px; }
++
++/* the padlocks */
++#panels .camopts #camLockX, #panels .camopts #camLockY, #panels .camopts #camLockRot, #panels .camopts #camLockZoom {
++  width: 12px; height: 15px; margin-left: 7px; background-color: transparent !important;
++  background-size: 11px 13px;
++}
++#panels .camopts [data-lock="0"] { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='11' height='13' viewBox='0 0 11 13'><path d='M3 6 V3.6 a2.5 2.5 0 0 1 5 0' fill='none' stroke='%23b7b6bc' stroke-width='1.4'/><rect x='1.2' y='6' width='8.6' height='6' rx='1' fill='%23b7b6bc'/></svg>"); }
++#panels .camopts [data-lock="1"] { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='11' height='13' viewBox='0 0 11 13'><path d='M2.8 6 V3.6 a2.7 2.7 0 0 1 5.4 0 V6' fill='none' stroke='%23b7b6bc' stroke-width='1.4'/><rect x='1.2' y='6' width='8.6' height='6' rx='1' fill='%23b7b6bc'/></svg>"); }
++
++/* the box that appears when a tool is used on the camera layer */
++.camdlg {
++  position: fixed; z-index: 900; width: 232px; background: #3b3a40; border: 1px solid #1f1e23;
++  box-shadow: 0 6px 18px #000b; color: #c3c2c8; font-size: 12px;
++}
++.camdlg .cdh { height: 20px; display: flex; align-items: center; justify-content: flex-end; background: #34333a; padding: 0 4px; }
++.camdlg .cdh i { width: 11px; height: 11px; border-radius: 50%; background: #7f7e84; cursor: pointer; }
++.camdlg .cdb { padding: 8px 12px 8px; text-align: left; }
++.camdlg .cdo { margin: 0 auto 10px; width: 126px; height: 17px; line-height: 17px; text-align: center; border-radius: 3px;
++  background: #4b4a53; cursor: pointer; }
++.camdlg .cdo:hover { background: #5b5a64; }
++
++/* tools that cannot be used on the camera layer are dimmed in the Main Panel */
++#mainGrid.camdim .mgcell.cdim img { opacity: .35; }
++
++/* the camera layer in the timeline: one rounded box from the first key to the end of the clip */
++.strip.cam .camrange {
++  top: 0; bottom: 0; border: 1px solid #66656d !important; border-radius: 2px;
++  background: rgba(62, 61, 68, .85);
++}
++.strip.cam .camrange { z-index: 0; }
++.cell.camcell .camplus { color: #c3c2c8; }
++
++/* the camera options sit flush with the panel edge */
++#panels [data-panel-key="tool"] [data-panel-key="camera"] { margin: 0 -6px; }
++
++/* the rows with a padlock have a shorter label column */
++#panels .camopts .orow.lk > label { flex: 0 0 62px !important; width: 62px; }
++#panels .camopts .orow.lk button[id^="camLock"] { margin-left: 11px; }
++#panels .camopts .camwr.tall { top: 11px; }
++#panels .camopts .camwr.mid { left: 168px; }
+diff --git a/camera.js b/camera.js
+new file mode 100644
+index 0000000..a3831ba
+--- /dev/null
++++ b/camera.js
+@@ -0,0 +1,235 @@
++/* camera.js - the Camera[Pro] tool of TVPaint 12, layered on top of ui.js.
++ *  - the option rows of the tool panel at the measured positions (steppers, round
++ *    drop downs, padlocks, wrench buttons, values with their unit)
++ *  - the canvas: the motion path through the keys, the previous key frame (green),
++ *    the next key frame (red) and a dot at every other key
++ *  - the Camera Layer: the other tools are greyed out in the Main Panel and give
++ *    "You cannot use this tool on a Camera Layer."
++ * ui.js keeps all camera logic; this file only restyles and adds on top. */
++(function () {
++  "use strict";
++  const $ = (id) => document.getElementById(id);
++  const body = document.querySelector('[data-panel-key="camera"] .pbody');
++  if (!body || !$("camX") || typeof E === "undefined") return;
++
++  // ------------------------------------------------------------------ rows
++  const rowOf = (id) => $(id).closest(".orow");
++  const labelOf = (row) => row.querySelector("label");
++
++  // the unit is part of the value ("0.00%", "52.10%", "0.00°") like in the live app
++  body.querySelectorAll(".orow").forEach((row) => {
++    [...row.childNodes].forEach((n) => {
++      if (n.nodeType === 3 && /^[\s%°]*$/.test(n.textContent) && n.textContent.trim()) n.remove();
++    });
++  });
++  ["camBlur", "camX", "camY", "camRot", "camZoom"].forEach((id) => { $(id).type = "text"; $(id).autocomplete = "off"; });
++  // the inline sizes of ui.js give way to the measured ones of camera.css
++  ["camBlur", "camX", "camY", "camRot", "camZoom", "camLockX", "camLockY", "camLockRot", "camLockZoom",
++    "camToggle", "camParams"].forEach((id) => $(id).removeAttribute("style"));
++
++  labelOf(rowOf("camCmd")).textContent = "";   // the Command row has no label
++  ["camX", "camY", "camRot", "camZoom"].forEach((id) => rowOf(id).classList.add("lk"));
++  rowOf("camX").classList.add("gap");
++  rowOf("camRatio").classList.add("wide");
++  rowOf("camFlipX").classList.add("gap2");
++
++  // round drop downs
++  ["camCmd", "camMode"].forEach((id) => {
++    const sel = $(id);
++    if (sel.parentNode.classList.contains("camdd")) return;
++    const w = document.createElement("span");
++    w.className = "camdd";
++    sel.parentNode.insertBefore(w, sel);
++    w.appendChild(sel);
++    sel.removeAttribute("style");
++  });
++
++  // steppers: the two small triangles right of a field
++  const FIELDS = { camBlur: [0.5, 2, "%"], camX: [1, 2, ""], camY: [1, 2, ""], camRot: [0.5, 2, "°"], camZoom: [1, 2, "%"] };
++  const num = (el) => parseFloat(String(el.value).replace(/[^0-9.+-]/g, ""));
++  const addStepper = (id) => {
++    const el = $(id);
++    if (el.nextSibling && el.nextSibling.classList && el.nextSibling.classList.contains("camarr")) return;
++    const a = document.createElement("span");
++    a.className = "camarr";
++    a.innerHTML = '<i class="l"></i><i class="r"></i>';
++    a.addEventListener("click", (e) => {
++      const r = a.getBoundingClientRect();
++      const dir = e.clientX < r.left + r.width / 2 ? -1 : 1;
++      if (el.disabled) return;
++      const v = (isNaN(num(el)) ? 0 : num(el)) + dir * FIELDS[id][0];
++      el.value = String(v);
++      el.dispatchEvent(new Event("change", { bubbles: true }));
++    });
++    el.after(a);
++  };
++  Object.keys(FIELDS).forEach(addStepper);
++  // a field is read back as a plain number before ui.js sees the change
++  Object.keys(FIELDS).forEach((id) => {
++    $(id).addEventListener("change", (e) => {
++      const n = num(e.target);
++      e.target.value = isNaN(n) ? "0" : String(n);
++    }, true);
++    $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
++  });
++
++  // padlocks: the emoji becomes an icon, driven by data-lock
++  const LOCKS = ["camLockX", "camLockY", "camLockRot", "camLockZoom"];
++  const lockObs = new MutationObserver((list) => {
++    list.forEach((m) => {
++      const b = m.target.nodeType === 3 ? m.target.parentNode : m.target;
++      if (!b || !b.id || !LOCKS.includes(b.id)) return;
++      const t = b.textContent;
++      if (t) { b.dataset.lock = t.includes("🔒") ? "1" : "0"; b.textContent = ""; }
++    });
++  });
++  LOCKS.forEach((id) => {
++    const b = $(id);
++    b.dataset.lock = b.textContent.includes("🔒") ? "1" : "0";
++    b.textContent = "";
++    lockObs.observe(b, { childList: true, characterData: true, subtree: true });
++  });
++  $("camToggle").textContent = "";
++
++  // wrench buttons: create / delete the key of that channel at this frame
++  const PART_CH = { Position: "POS", Rotation: "ROT", Zoom: "ZOOM", All: "ALL" };
++  const wrench = (row, part, cls) => {
++    const b = document.createElement("button");
++    b.className = "revbtn camwr " + cls;
++    b.dataset.part = part;
++    b.title = part === "Position" ? "Position key" : part + " key";
++    b.onclick = () => keyPart(part);
++    row.appendChild(b);
++  };
++  function keyPart(part) {
++    const f = proj.currentFrame;
++    const key = E.cameraKeyAt(proj, f);
++    const bit = E.CAM_CH[PART_CH[part]];
++    const full = key && (part === "All" ? E.camFlags(key) === E.CAM_CH.ALL : (E.camFlags(key) & bit));
++    camKeyPart(f, part, !full);
++  }
++  wrench(rowOf("camX"), "Position", "tall");
++  wrench(rowOf("camRot"), "Rotation", "mid");
++  wrench(rowOf("camZoom"), "Zoom", "mid");
++  $("camToggle").onclick = () => keyPart("All");
++  $("camToggle").title = "Toggle all keys";
++
++  // ------------------------------------------------------------- live values
++  function post() {
++    const cam = E.cameraEvaluate(proj, proj.currentFrame);
++    const set = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = v; };
++    set("camX", (proj.width / 2 + cam.x).toFixed(2));
++    set("camY", (proj.height / 2 + cam.y).toFixed(2));
++    set("camRot", cam.rotation.toFixed(2) + "°");
++    set("camZoom", (cam.zoom * 100).toFixed(2) + "%");
++    set("camBlur", (+proj.cameraBlur || 0).toFixed(2) + "%");
++  }
++  const origSync = body._syncCamera;
++  body._syncCamera = function () { if (origSync) origSync(); post(); };
++  post();
++
++  // -------------------------------------------------------- canvas overlay
++  const GREEN = "#20a021", RED = "#c42a2a", PATH = "#2a2a9c";
++  const cornersOf = (r) => {
++    const rot = (r.rot || 0) * Math.PI / 180, cs = Math.cos(rot), sn = Math.sin(rot);
++    const hw = r.w / 2, hh = r.h / 2;
++    return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([dx, dy]) => [
++      view.x + (r.cx + dx * cs - dy * sn) * view.zoom,
++      view.y + (r.cy + dx * sn + dy * cs) * view.zoom]);
++  };
++  const rectAt = (frame) => E.cameraRect(proj, E.cameraEvaluate(proj, frame));
++  const origDraw = window.drawCameraOverlay;
++  window.drawCameraOverlay = function () {
++    if (origDraw) origDraw.apply(this, arguments);
++    if (tool !== "camera" || !proj.cameraKeys || !proj.cameraKeys.length) return;
++    const frames = [...new Set(proj.cameraKeys.map((k) => Math.round(k.frame)))].sort((a, b) => a - b);
++    const cur = Math.round(proj.currentFrame);
++    const isKey = frames.includes(cur);
++    const prev = frames.filter((f) => f < cur).pop();
++    const next = frames.find((f) => f > cur);
++    octx.save();
++    octx.setTransform(1, 0, 0, 1, 0, 0);
++    octx.lineWidth = 1;
++    const frame = (f, col) => {
++      const c = cornersOf(rectAt(f));
++      octx.strokeStyle = col;
++      octx.beginPath();
++      c.forEach((p, i) => (i ? octx.lineTo(p[0], p[1]) : octx.moveTo(p[0], p[1])));
++      octx.closePath();
++      octx.stroke();
++    };
++    // the neighbouring key frames: green = the key before, red = the key after
++    // (on a key frame only the one before; on the first key the one after)
++    if (prev !== undefined) frame(prev, GREEN);
++    if (next !== undefined && (!isKey || prev === undefined)) frame(next, RED);
++    // the motion path through all keys
++    const first = frames[0], last = frames[frames.length - 1];
++    if (last > first && last - first < 2000) {
++      octx.strokeStyle = PATH;
++      octx.beginPath();
++      for (let f = first; f <= last; f++) {
++        const r = rectAt(f), x = view.x + r.cx * view.zoom, y = view.y + r.cy * view.zoom;
++        if (f === first) octx.moveTo(x, y); else octx.lineTo(x, y);
++      }
++      octx.stroke();
++    }
++    // a small red ring at every key but the current one
++    octx.strokeStyle = "#d93a3a";
++    frames.forEach((f) => {
++      if (f === cur) return;
++      const r = rectAt(f);
++      octx.beginPath();
++      octx.arc(view.x + r.cx * view.zoom, view.y + r.cy * view.zoom, 2.5, 0, Math.PI * 2);
++      octx.stroke();
++    });
++    octx.restore();
++  };
++
++  // ----------------------------------------------------------- camera layer
++  let onCam = false;
++  const ALLOWED = new Set(["camera", "pick", "selclear", "panning", "zoomrect"]);
++  // the cells of the Main Panel that stay usable (camera, skull and the lower row)
++  const KEEP = new Set([11, 12, 14, 15, 17]);
++  const grid = $("mainGrid");
++  const cells = grid ? [...grid.querySelectorAll(".mgcell")] : [];
++  function dim(on) {
++    if (!grid) return;
++    grid.classList.toggle("camdim", on);
++    cells.forEach((c, i) => c.classList.toggle("cdim", on && !KEEP.has(i)));
++  }
++  let dlg = null;
++  function showDialog() {
++    if (dlg) dlg.remove();
++    dlg = document.createElement("div");
++    dlg.className = "camdlg";
++    dlg.innerHTML = '<div class="cdh"><i></i></div><div class="cdb">You cannot use this tool on a Camera Layer.</div>' +
++      '<div class="cdo">OK</div>';
++    document.body.appendChild(dlg);
++    const r = ovl.getBoundingClientRect();
++    dlg.style.left = Math.round(r.left + r.width / 2 - 116) + "px";
++    dlg.style.top = Math.round(r.top + r.height * 0.7) + "px";
++    const close = () => { if (dlg) { dlg.remove(); dlg = null; } };
++    dlg.querySelector(".cdo").onclick = close;
++    dlg.querySelector("i").onclick = close;
++  }
++  const origSelect = window.selectTool;
++  window.selectTool = function (id) {
++    if (onCam && !ALLOWED.has(id)) { showDialog(); return; }
++    onCam = id === "camera";
++    dim(onCam);
++    return origSelect.apply(this, arguments);
++  };
++  const origPick = window.pickLayer;
++  if (typeof origPick === "function") {
++    window.pickLayer = function () {
++      if (onCam) { onCam = false; dim(false); origSelect("penbrush"); }
++      return origPick.apply(this, arguments);
++    };
++  }
++  if (grid) {
++    grid.addEventListener("click", (e) => {
++      const c = e.target.closest(".mgcell");
++      if (onCam && c && c.classList.contains("cdim")) { e.stopPropagation(); e.preventDefault(); showDialog(); }
++    }, true);
++  }
++})();
+diff --git a/index.html b/index.html
+index 5e58c8e..c5d2dbf 100644
+--- a/index.html
++++ b/index.html
+@@ -633,6 +633,7 @@
+   .tr-hand .tib { position: static; width: 22px; height: 22px; }
+ </style>
+ <link rel="stylesheet" href="leftdock.css">
++<link rel="stylesheet" href="camera.css">
+ </head>
+ <body>
+ <div id="app">
+@@ -708,6 +709,7 @@
+ <script src="i18n.js"></script>
+ <script src="ui.js"></script>
+ <script src="leftdock.js"></script>
++<script src="camera.js"></script>
+ <script src="filemenu.js"></script>
+ <script src="prefs.js"></script>
+ </body>
+diff --git a/ui.js b/ui.js
+index a802c06..e245c23 100644
+--- a/ui.js
++++ b/ui.js
+@@ -2730,9 +2730,9 @@ function drawCameraOverlay() {
+     octx.beginPath();
+     octx.moveTo(4, 0); octx.lineTo(hw, 0);
+     octx.stroke();
++    // the rotation handle at the right edge: a small ring
+     octx.beginPath();
+-    octx.moveTo(hw, 0); octx.lineTo(hw - 5, -4); octx.lineTo(hw - 5, 4);
+-    octx.closePath();
++    octx.arc(hw, 0, 3, 0, Math.PI * 2);
+     octx.stroke();
+     octx.restore();
+   }
+@@ -3547,8 +3547,10 @@ function renderTimeline() {
+         ? `<button class="plus always" data-camf="${f}" title="add camera key here">+</button>` : "";
+       camCells += `<div class="cell camcell${isKey ? " keyw" : ""}" data-f="${f}" data-l="cam">${glyph}${add}</div>`;
+     }
+-    const range = (camKeyFrames.size && camLast > camFirst)
+-      ? `<div class="camrange" style="left:${(camFirst - 1) * CW}px;width:${(camLast - camFirst + 1) * CW}px"></div>` : "";
++    // the live camera layer is one box from its first key to the end of the clip
++    const camEnd = Math.max(camLast, proj.outFrame || camLast);
++    const range = camKeyFrames.size
++      ? `<div class="camrange" style="left:${(camFirst - 1) * CW}px;width:${(camEnd - camFirst + 1) * CW}px"></div>` : "";
+     th += `<div class="strip cam"><div class="cells">${camCells}</div>${range}</div>`;
+   }
+   proj.layers.forEach((l, li) => {
+-- 
+2.43.0
+

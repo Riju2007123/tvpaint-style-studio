@@ -193,3 +193,9 @@ body.ldpopbody { margin: 0; background: var(--tv-desktop); overflow: hidden; }
 /* the padlock belongs to the docked column; a floating or detached panel has no use for it */
 .panel.ldfloat .padlock { display: none; }
 .panel.ldfloat[data-panel-key="main"] .phead { padding-right: 4px; }
+
+/* ---- Camera[Pro] form (live recording) ---- */
+#ldForm[data-cam] { padding-bottom: 6px; }
+#ldForm .ldlock:hover svg rect, #ldForm .ldlock:hover svg path { stroke: #fff; }
+#ldForm .ldbtn svg { display: block; }
+#ldForm .ldnum { overflow: hidden; text-overflow: clip; }
