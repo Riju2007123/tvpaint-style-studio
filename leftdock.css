@@ -23,28 +23,28 @@
 #panels > .panel { border-bottom: 0; flex: none; }
 
 /* panel header: title in the muted grey, then dot, round chevron, round cross */
-#panels .phead { height: 29px; padding: 0 4px 0 5px; gap: 0; border-bottom: 0;
+:is(#panels, .ldfloat) .phead { height: 29px; padding: 0 4px 0 5px; gap: 0; border-bottom: 0;
   background: var(--tv-desktop); position: relative; }
-#panels .phead .pt { font-size: 12px; color: var(--ld-dim); }
-#panels .phead .pw { width: 21px; height: 29px; font-size: 0; position: relative; color: transparent;
+:is(#panels, .ldfloat) .phead .pt { font-size: 12px; color: var(--ld-dim); }
+:is(#panels, .ldfloat) .phead .pw { width: 21px; height: 29px; font-size: 0; position: relative; color: transparent;
   background: none; flex: none; }
-#panels .phead .pw::before { content: ""; position: absolute; left: 50%; top: 50%;
+:is(#panels, .ldfloat) .phead .pw::before { content: ""; position: absolute; left: 50%; top: 50%;
   transform: translate(-50%, -50%); }
-#panels .phead .pw[title="panel options"]::before { width: 4px; height: 4px; border-radius: 50%;
+:is(#panels, .ldfloat) .phead .pw[title="panel options"]::before { width: 4px; height: 4px; border-radius: 50%;
   background: var(--ld-dim); }
-#panels .phead .pw[title="collapse"]::before, #panels .phead .pw[title="close"]::before {
+:is(#panels, .ldfloat) .phead .pw[title="collapse"]::before, :is(#panels, .ldfloat) .phead .pw[title="close"]::before {
   width: 15px; height: 15px; border-radius: 50%; background: #706f77; }
-#panels .phead .pw[title="collapse"]::after { content: ""; position: absolute; left: 50%; top: 50%;
+:is(#panels, .ldfloat) .phead .pw[title="collapse"]::after { content: ""; position: absolute; left: 50%; top: 50%;
   width: 5px; height: 5px; border-right: 2px solid var(--tv-desktop); border-bottom: 2px solid var(--tv-desktop);
   transform: translate(-50%, -70%) rotate(45deg); }
-#panels .phead .pw[title="close"]::after { content: "\00d7"; position: absolute; left: 50%; top: 50%;
+:is(#panels, .ldfloat) .phead .pw[title="close"]::after { content: "\00d7"; position: absolute; left: 50%; top: 50%;
   transform: translate(-50%, -52%); font-size: 14px; line-height: 14px; color: var(--tv-desktop); font-weight: 700; }
-#panels .phead .pw:hover::before { background: #6a6971; }
-#panels > .panel[data-panel-key="main"] .phead .pt { padding-left: 0; }
-#panels .padlock { position: absolute; right: 2px; top: 6px; width: 16px; height: 17px; opacity: .8;
+:is(#panels, .ldfloat) .phead .pw:hover::before { background: #6a6971; }
+.panel[data-panel-key="main"] .phead .pt { padding-left: 0; }
+:is(#panels, .ldfloat) .padlock { position: absolute; right: 2px; top: 6px; width: 16px; height: 17px; opacity: .8;
   pointer-events: none; }
-#panels > .panel[data-panel-key="main"] .phead { padding-right: 24px; }
-#panels .pbody { padding: 0; }
+.panel[data-panel-key="main"] .phead { padding-right: 24px; }
+:is(#panels, .ldfloat) .pbody { padding: 0; }
 
 /* ---- Main Panel: 6 x 3 grid, tiles at the measured centres ---- */
 .maingrid.ld { position: relative; width: 192px; height: 99px; margin: 0; }
@@ -181,3 +181,15 @@
   line-height: 17px; color: var(--ld-text); font-size: 13px; }
 .camopts .revbtn { background: var(--ld-field); border: 0; border-radius: 2px; height: 17px; color: var(--ld-text); }
 .camopts .orow label { white-space: nowrap; }
+
+/* ---- floating panels (panelfloat.js) ---- */
+.panel.ldfloat { position: fixed; width: 194px; max-height: calc(100vh - 6px); overflow-y: auto; overflow-x: hidden;
+  background: var(--tv-desktop); border: 1px solid #1d1d21; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; z-index: 700; }
+.panel.ldfloat .phead { cursor: default; }
+.panel.ldfloat.ldpop { position: static; width: 100%; max-height: none; border: 0; box-shadow: none; overflow: hidden; }
+body.ldpopbody { margin: 0; background: var(--tv-desktop); overflow: hidden; }
+#ldDropLine { position: fixed; height: 3px; background: #7f95ff; z-index: 1000; pointer-events: none; display: none; border-radius: 2px; }
+/* the padlock belongs to the docked column; a floating or detached panel has no use for it */
+.panel.ldfloat .padlock { display: none; }
+.panel.ldfloat[data-panel-key="main"] .phead { padding-right: 4px; }

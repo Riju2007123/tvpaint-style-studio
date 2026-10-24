@@ -79,7 +79,16 @@ let penFlip = false;
 let nsmooth = 4;
 let localSmooth = false;
 
-const $ = (id) => document.getElementById(id);
+// Panels can live in another window (a panel dragged out of the application):
+// every lookup that must find them goes through allDocs() / qAny().
+const allDocs = () => [document].concat(window.__popDocs ? window.__popDocs() : []);
+const $ = (id) => {
+  const a = document.getElementById(id);
+  if (a || !window.__popDocs) return a;
+  for (const d of window.__popDocs()) { const b = d.getElementById(id); if (b) return b; }
+  return null;
+};
+const qAny = (sel) => { for (const d of allDocs()) { const r = d.querySelector(sel); if (r) return r; } return null; };
 const art = $("art"), ovl = $("ovl");
 const actx = art.getContext("2d"), octx = ovl.getContext("2d");
 let ghostTmp = null;
@@ -392,7 +401,7 @@ function renderOverlayOnly() {
   octx.restore();
   if (camKeys) {
     if (proj.showCamera !== false) drawCameraOverlay();
-    const camBody = document.querySelector("[data-panel-key=camera] .pbody");
+    const camBody = qAny("[data-panel-key=camera] .pbody");
     if (camBody && camBody._syncCamera) camBody._syncCamera();
   }
   drawCanvasHud();
@@ -1448,7 +1457,7 @@ function tvPanelDef(key) { return TV_PANEL_DEFS.find(d => d.key === key); }
 // where the panel of a key lives in the prototype
 function tvPanelElement(key) {
   if (key === "timeline") return $("tlpanel");
-  return document.querySelector("[data-panel-key=\"" + key + "\"]");
+  return qAny("[data-panel-key=\"" + key + "\"]");
 }
 // shows or hides a dockable panel of the left column (the Toggle*Panel
 // commands of TVPaint - commands.js holds the real list)
@@ -5711,7 +5720,7 @@ ovl.addEventListener("pointermove", (e) => {
     E.setCameraKey(proj, proj.currentFrame,
       { x: conducting.ox + (p.x - conducting.sx), y: conducting.oy + (p.y - conducting.sy) });
     // the live app updates the X / Y fields of the camera panel while dragging
-    const cb2 = document.querySelector("[data-panel-key=camera] .pbody");
+    const cb2 = qAny("[data-panel-key=camera] .pbody");
     if (cb2 && cb2._syncCamera) cb2._syncCamera();
     return renderOverlayOnly();
   }

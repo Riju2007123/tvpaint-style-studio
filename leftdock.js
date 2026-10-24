@@ -21,8 +21,10 @@
   "use strict";
   if (typeof proj === "undefined" || typeof selectTool !== "function") return;
   const doc = document;
-  const q = (s, r) => (r || doc).querySelector(s);
-  const qa = (s, r) => Array.from((r || doc).querySelectorAll(s));
+  // panels may live in another window (see panelfloat.js): search every document
+  const q = (s, r) => (r ? r.querySelector(s) : qAny(s));
+  const qa = (s, r) => (r ? Array.from(r.querySelectorAll(s))
+    : allDocs().reduce((a, d) => a.concat(Array.from(d.querySelectorAll(s))), []));
   const el = (tag, cls, html) => { const e = doc.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
   /* ------------------------------------------------------------------
@@ -140,9 +142,17 @@
      ------------------------------------------------------------------ */
   let openMenu = null;
   function closeMenu() { if (openMenu) { openMenu.remove(); openMenu = null; } }
-  doc.addEventListener("pointerdown", (e) => { if (openMenu && !openMenu.contains(e.target)) closeMenu(); }, true);
-  doc.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
-  function showMenu(x, y, rows, minW) {
+  const hooked = new WeakSet();
+  function hookDoc(d) {
+    if (hooked.has(d)) return; hooked.add(d);
+    d.addEventListener("pointerdown", (e) => { if (openMenu && !openMenu.contains(e.target)) closeMenu(); }, true);
+    d.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+  }
+  hookDoc(doc);
+  // ref = the element the menu hangs from, so the menu opens in ITS window
+  function showMenu(x, y, rows, minW, ref) {
+    const md = (ref && ref.ownerDocument) || doc, mw = md.defaultView || window;
+    hookDoc(md);
     closeMenu();
     const m = el("div", "ldmenu");
     if (minW) m.style.minWidth = minW + "px";
@@ -155,10 +165,10 @@
       it.onclick = () => { closeMenu(); if (!r.dis && r.act) r.act(); };
       m.appendChild(it);
     });
-    doc.body.appendChild(m);
+    md.body.appendChild(m);
     const w = m.offsetWidth, h = m.offsetHeight;
-    m.style.left = Math.max(0, Math.min(x, innerWidth - w - 2)) + "px";
-    m.style.top = Math.max(0, Math.min(y, innerHeight - h - 2)) + "px";
+    m.style.left = Math.max(0, Math.min(x, mw.innerWidth - w - 2)) + "px";
+    m.style.top = Math.max(0, Math.min(y, mw.innerHeight - h - 2)) + "px";
     openMenu = m;
     return m;
   }
@@ -226,7 +236,7 @@
     }));
     if (g.clear) { rows.push("-"); rows.push({ label: "Clear Selection", icon: "icons/SelectionClear-x15.png", act: clearSelection }); }
     else { rows.push("-"); rows.push({ label: "Shape Settings", icon: "icons/Shape-Options-x15.png", act: () => stub("Shape Settings") }); }
-    showMenu(r.left + 13, r.bottom - 2, rows, 190);
+    showMenu(r.left + 13, r.bottom - 2, rows, 190, c);
   }
   function chooseMember(grp, id) {
     const it = G[grp].items.find(x => x.id === id);
@@ -305,7 +315,7 @@
       const r = e.currentTarget.getBoundingClientRect();
       showMenu(r.left, r.bottom, ["Chromatic Wheel", "Color Sliders", "Palette", "Colors Mixer", "Harmony"].map(n => ({
         label: n, checked: n === "Chromatic Wheel", act: () => { if (n !== "Chromatic Wheel") stub(n); }
-      })), r.width);
+      })), r.width, e.currentTarget);
     };
     if (typeof syncTVPanels === "function") syncTVPanels();
   }
@@ -583,7 +593,7 @@
           const d = abs("ldsel", `left:${x}px;top:${ry}px;width:${w}px`, v);
           d.onclick = (e) => {
             const b = d.getBoundingClientRect();
-            showMenu(b.left, b.bottom, r.items.map(n => ({ label: n, checked: n === v, act: () => { put(r, n); rebuild(); } })), b.width);
+            showMenu(b.left, b.bottom, r.items.map(n => ({ label: n, checked: n === v, act: () => { put(r, n); rebuild(); } })), b.width, d);
           };
           ry += 19; break;
         }
@@ -622,7 +632,7 @@
         }
         case "font": {
           const d = abs("ldsel", `left:5px;top:${ry}px;width:158px`, st.font || "Arial");
-          d.onclick = () => { const b = d.getBoundingClientRect(); showMenu(b.left, b.bottom, ["Arial", "Segoe UI", "Times New Roman", "Courier New", "Verdana"].map(n => ({ label: n, checked: n === (st.font || "Arial"), act: () => { st.font = n; rebuild(); } })), b.width); };
+          d.onclick = () => { const b = d.getBoundingClientRect(); showMenu(b.left, b.bottom, ["Arial", "Segoe UI", "Times New Roman", "Courier New", "Verdana"].map(n => ({ label: n, checked: n === (st.font || "Arial"), act: () => { st.font = n; rebuild(); } })), b.width, d); };
           abs("ldbtn", `left:166px;top:${ry}px;width:17px;height:19px;line-height:15px`, "...").onclick = () => stub("Font requester");
           ry += 23; break;
         }
@@ -698,7 +708,7 @@
     colorBtn = el("div", "ldsel", "Color"); colorBtn.style.cssText = "position:absolute;left:27px;top:56px;width:136px";
     colorBtn.onclick = () => {
       const b = colorBtn.getBoundingClientRect();
-      showMenu(b.left, b.bottom, ["Color", "Brush Texture", "Pattern"].map(n => ({ label: n, checked: n === "Color", act: () => { if (n !== "Color") stub(n); } })), b.width);
+      showMenu(b.left, b.bottom, ["Color", "Brush Texture", "Pattern"].map(n => ({ label: n, checked: n === "Color", act: () => { if (n !== "Color") stub(n); } })), b.width, colorBtn);
     };
     brushGrid.appendChild(colorBtn);
     brushGrid.style.height = "74px";
@@ -764,5 +774,6 @@
     const ws = q("#workarea"); if (ws) ws.style.gridTemplateColumns = "205px 1fr";
   }
   boot();
+  window.__ldMenu = showMenu;
   window.__leftdock = { rebuild, refreshMain, G, TILES, FORMS, cur };
 })();

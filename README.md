@@ -217,6 +217,13 @@ Works from `file://` too — just open `index.html`.
   Select and Crop. Controls the engine already has (size, power, opacity,
   anti-aliasing, smoothing, fill range) drive it; the rest keep their value per tool
   but do not change the drawing yet.
+- **Floating panels** (`panelfloat.js`): drag any dock panel by its title bar and it floats
+  over the application; a blue line shows the slot while you drag it back over the dock,
+  and dropping it there docks it at that spot (the same drag re-orders docked panels).
+  Double click a title bar to dock / undock a panel at its original spot, or use the dot in
+  the title bar (Dock / Float / Separate window). In the desktop build, dropping a panel
+  outside the application window turns it into a window of its own; drag that window
+  back over the application and it floats or docks again. The layout is remembered.
 - **Safe saving** (desktop build): every save writes a temp file and renames it over
   the project, so a crash mid-save can't corrupt it. While there are unsaved changes a
   recovery snapshot is written every minute to the app's data folder; after a crash

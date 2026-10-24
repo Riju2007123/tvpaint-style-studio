@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("tv", {
   printerSetup: () => ipcRenderer.invoke("tv:printerSetup"),
   printImage: (data) => ipcRenderer.invoke("tv:printImage", { data }),
   quit: () => ipcRenderer.invoke("tv:quit"),
+  // move / resize / close the window a panel was dragged out into: { name, x, y, w, h, close }
+  panelWin: (o) => ipcRenderer.invoke("tv:panelWin", o),
   setDirty: (dirty) => ipcRenderer.invoke("tv:setDirty", { dirty }),
   writeRecovery: (meta, data) => ipcRenderer.invoke("tv:writeRecovery", { meta, data }),
   readRecovery: () => ipcRenderer.invoke("tv:readRecovery"),
