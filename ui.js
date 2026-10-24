@@ -1951,7 +1951,7 @@ function buildPanels() {
   const wheelGeom = () => {
     const cv = $("wheelCv");
     const R = cv.width / 2;
-    return { R, rIn: R * 0.60, rOut: R - 3 };
+    return { R, rIn: R * 0.72, ringIn: R * 0.80, rOut: R * 0.94 };
   };
   function drawWheel() {
     const cv = $("wheelCv");
@@ -1971,13 +1971,11 @@ function buildPanels() {
         const px = x + 0.5, py = y + 0.5;
         const dx = px - G.R, dy = py - G.R;
         const d = Math.hypot(dx, dy);
-        if (d >= G.rIn && d <= G.rOut) {
-          const a = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
+        if (d >= G.ringIn && d <= G.rOut) {
+          const a = (360 - (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360) % 360;
           const h = a / 360;
-          // the inner ring is saturated, the outside ring fades to black
-          const t = (d - G.rIn) / (G.rOut - G.rIn);
-          const v = 1 - t * 0.88;
-          const [r, gg, b] = hsv2rgb(h, 1, v);
+          // the live wheel: a thin, fully saturated hue ring on a black disc
+          const [r, gg, b] = hsv2rgb(h, 1, 1);
           img.data[i] = r; img.data[i + 1] = gg; img.data[i + 2] = b; img.data[i + 3] = 255;
           continue;
         }
@@ -1999,8 +1997,8 @@ function buildPanels() {
       g.strokeStyle = "#6a6a6a"; g.lineWidth = 1; g.stroke();
     };
     // the marker on the ring (the hue, its radius = the luminosity)
-    const ang = (wheelState.h * 360 - 90) * Math.PI / 180;
-    const rr = G.rIn + (1 - wheelState.v) / 0.88 * (G.rOut - G.rIn);
+    const ang = (-wheelState.h * 360 - 90) * Math.PI / 180;
+    const rr = (G.ringIn + G.rOut) / 2;
     mark(G.R + Math.cos(ang) * rr, G.R + Math.sin(ang) * rr);
     // the marker in the triangle (the saturation and the value)
     const wl = 1 - wheelState.v, wv = wheelState.s * wheelState.v, wr = wheelState.v * (1 - wheelState.s);
@@ -2025,13 +2023,10 @@ function buildPanels() {
     const G = wheelGeom();
     const dx = x - G.R, dy = y - G.R;
     const d = Math.hypot(dx, dy);
-    if (d >= G.rIn && d <= G.rOut) {
-      // the ring: the angle is the hue, the radius is the luminosity
-      const a = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
+    if (d >= G.ringIn && d <= G.rOut + 3) {
+      // the ring: the angle is the hue; saturation and value stay as they are
+      const a = (360 - (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360) % 360;
       wheelState.h = a / 360;
-      const t = (d - G.rIn) / (G.rOut - G.rIn);
-      wheelState.v = Math.max(0.02, 1 - t * 0.88);
-      wheelState.s = 1;
     } else {
       const p = pointInTri(x, y, G.R, G.R - G.rIn, G.R - G.rIn * 0.87, G.R + G.rIn * 0.5,
         G.R + G.rIn * 0.87, G.R + G.rIn * 0.5);

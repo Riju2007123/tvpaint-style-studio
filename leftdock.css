@@ -1,0 +1,183 @@
+/* ------------------------------------------------------------------
+   leftdock.css - the left dock of TVPaint 12 (Main Panel, Color Panel,
+   Tool panel), measured on the 1920x1080 capture of the live application.
+
+   Rows are 19 px apart, fields are flat grey boxes, check boxes are bare
+   check marks, the active tool sits on a 25x24 blue-grey tile.
+   Loaded after the inline styles of index.html so it wins.
+   ------------------------------------------------------------------ */
+:root {
+  --ld-field: rgb(70,70,77);
+  --ld-field-dark: rgb(45,44,49);
+  --ld-tile: rgb(62,71,107);
+  --ld-text: rgb(182,182,182);
+  --ld-dim: rgb(137,137,137);
+  --ld-shortcut: rgb(112,121,157);
+}
+
+/* ---- the dock itself: panels stacked, 12 px scroll track on the right ---- */
+#tabbar { display: none !important; }
+#panels { background: var(--tv-desktop); overflow-y: scroll; overflow-x: hidden; }
+#panels::-webkit-scrollbar { width: 12px; background: var(--ld-field-dark); }
+#panels::-webkit-scrollbar-thumb { background: var(--ld-field); border-radius: 0; }
+#panels > .panel { border-bottom: 0; flex: none; }
+
+/* panel header: title in the muted grey, then dot, round chevron, round cross */
+#panels .phead { height: 29px; padding: 0 4px 0 5px; gap: 0; border-bottom: 0;
+  background: var(--tv-desktop); position: relative; }
+#panels .phead .pt { font-size: 12px; color: var(--ld-dim); }
+#panels .phead .pw { width: 21px; height: 29px; font-size: 0; position: relative; color: transparent;
+  background: none; flex: none; }
+#panels .phead .pw::before { content: ""; position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%); }
+#panels .phead .pw[title="panel options"]::before { width: 4px; height: 4px; border-radius: 50%;
+  background: var(--ld-dim); }
+#panels .phead .pw[title="collapse"]::before, #panels .phead .pw[title="close"]::before {
+  width: 15px; height: 15px; border-radius: 50%; background: #706f77; }
+#panels .phead .pw[title="collapse"]::after { content: ""; position: absolute; left: 50%; top: 50%;
+  width: 5px; height: 5px; border-right: 2px solid var(--tv-desktop); border-bottom: 2px solid var(--tv-desktop);
+  transform: translate(-50%, -70%) rotate(45deg); }
+#panels .phead .pw[title="close"]::after { content: "\00d7"; position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -52%); font-size: 14px; line-height: 14px; color: var(--tv-desktop); font-weight: 700; }
+#panels .phead .pw:hover::before { background: #6a6971; }
+#panels > .panel[data-panel-key="main"] .phead .pt { padding-left: 0; }
+#panels .padlock { position: absolute; right: 2px; top: 6px; width: 16px; height: 17px; opacity: .8;
+  pointer-events: none; }
+#panels > .panel[data-panel-key="main"] .phead { padding-right: 24px; }
+#panels .pbody { padding: 0; }
+
+/* ---- Main Panel: 6 x 3 grid, tiles at the measured centres ---- */
+.maingrid.ld { position: relative; width: 192px; height: 99px; margin: 0; }
+.maingrid.ld .mgcell { width: 25px; height: 25px; margin: 0; }
+.maingrid.ld .mgcell img { position: absolute; left: 2px; top: 2px; width: 21px; height: 21px; z-index: 1; }
+.maingrid.ld .mgcell.on::before { left: 0; top: 0; width: 25px; height: 24px; background: var(--ld-tile);
+  z-index: 0; content: ""; position: absolute; }
+.maingrid.ld .mgcell.on img { filter: none; }
+.maingrid.ld .mgcell:hover img { filter: brightness(1.35); }
+.maingrid.ld .mgcell .grptri { position: absolute; right: 1px; bottom: 1px; width: 0; height: 0; z-index: 2;
+  border-left: 4px solid transparent; border-bottom: 4px solid #101012; }
+.maingrid.ld .mgcell.dis img { opacity: .38; }
+
+/* ---- group / drop-down menus ---- */
+.ldmenu { position: fixed; z-index: 900; background: #2b2a30; border: 1px solid #3c3b42;
+  box-shadow: 0 6px 18px #000a; padding: 4px 0; color: var(--ld-text); font-size: 12px; min-width: 150px;
+  max-height: 80vh; overflow-y: auto; }
+.ldmenu .ldi { display: flex; align-items: center; height: 25px; padding: 0 12px 0 0; white-space: nowrap;
+  cursor: default; }
+.ldmenu .ldi .ldck { width: 26px; text-align: center; flex: none; font-size: 12px; }
+.ldmenu .ldi .ldic { width: 28px; height: 23px; flex: none; display: flex; align-items: center;
+  justify-content: center; }
+.ldmenu .ldi .ldic img { width: 21px; height: 21px; }
+.ldmenu .ldi .ldlb { flex: 1; padding-right: 22px; }
+.ldmenu .ldi .ldsc { color: var(--ld-shortcut); margin-left: 12px; }
+.ldmenu .ldi:hover { background: #d6d6da; color: #18181c; }
+.ldmenu .ldi:hover .ldsc { color: #3a4268; }
+.ldmenu .ldsep { height: 12px; }
+.ldmenu .ldi.dis { color: #6a6a72; }
+
+/* ---- Color Panel ---- */
+.cpanel { position: relative; width: 192px; height: 188px; }
+.cpanel .cp-eye { position: absolute; width: 20px; height: 20px; cursor: pointer; }
+.cpanel .cp-eye img { width: 20px; height: 20px; display: block; }
+.cpanel .cp-down { position: absolute; width: 15px; height: 15px; border-radius: 50%; background: #706f77;
+  cursor: pointer; }
+.cpanel .cp-down::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px;
+  border-right: 2px solid var(--tv-desktop); border-bottom: 2px solid var(--tv-desktop);
+  transform: translate(-50%, -70%) rotate(45deg); }
+.cpanel .cp-sw { position: absolute; top: 2px; height: 23px; border: 1px solid #000; cursor: pointer; }
+.cpanel .cp-mid { position: absolute; width: 15px; height: 15px; border-radius: 50%; background: #706f77;
+  cursor: pointer; text-align: center; line-height: 15px; font-size: 10px; color: var(--tv-desktop); }
+.cpanel .ldsel { position: absolute; left: 5px; top: 29px; width: 178px; }
+.cpanel canvas#wheelCv { position: absolute; left: 39px; top: 53px; width: 110px; height: 110px; background: #000;
+  border-radius: 50%; }
+.cpanel #wheelRGB { position: absolute; left: 5px; top: 166px; width: 178px; height: 17px; line-height: 17px;
+  background: var(--ld-field-dark); text-align: center; color: var(--ld-text); padding: 0; }
+
+/* ---- Tool panel ---- */
+#toolPanel .pbody { padding: 0; }
+#toolPanel .brushgrid { position: relative; width: 192px; height: 62px; margin: 0; }
+#toolPanel .brushgrid .bcell { width: 25px; height: 24px; }
+#toolPanel .brushgrid .bcell img { position: absolute; left: 2px; top: 2px; width: 21px; height: 21px; z-index: 1; }
+#toolPanel .brushgrid .bcell.on::before { left: 0; top: 0; width: 25px; height: 24px; background: var(--ld-tile); }
+#toolPanel .brushgrid .bcell.on img { filter: none; }
+
+.ldsel { position: relative; height: 18px; line-height: 18px; background: var(--ld-field);
+  border-radius: 6px; color: var(--ld-text); padding: 0 24px 0 8px; font-size: 12px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ldsel::after { content: ""; position: absolute; right: 4px; top: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: #8a8991; }
+.ldsel::before { content: ""; position: absolute; right: 8px; top: 5px; width: 4px; height: 4px; z-index: 1;
+  border-right: 2px solid var(--ld-field); border-bottom: 2px solid var(--ld-field);
+  transform: translateY(0) rotate(45deg); }
+.ldsel.dis { opacity: .5; }
+
+#ldForm { position: relative; width: 192px; }
+#ldForm .ldtabs { position: relative; height: 21px; margin: 0; }
+#ldForm .ldtab { position: absolute; top: 0; height: 21px; line-height: 21px; padding: 0 8px; cursor: pointer;
+  color: var(--ld-text); border-radius: 5px 5px 0 0; }
+#ldForm .ldtab.on { background: var(--ld-tile); }
+#ldForm .ldtab.off { background: var(--tv-desktop); color: var(--ld-dim); }
+
+
+#ldForm .ldlab { position: absolute; right: 130px; top: 0; line-height: 19px; color: var(--ld-text);
+  white-space: nowrap; text-align: right; }
+#ldForm .ldcurve { position: absolute; left: 72px; top: 1px; width: 18px; height: 17px;
+  background: var(--ld-field); color: var(--ld-text); font-size: 11px; line-height: 17px; text-align: center;
+  cursor: pointer; overflow: hidden; }
+#ldForm .ldcurve::after { content: ""; position: absolute; left: -2px; top: 8px; width: 26px; height: 1px;
+  background: #1b1b1e; transform: rotate(-40deg); transform-origin: left center; }
+#ldForm .ldnum { position: absolute; left: 95px; top: 1px; width: 63px; height: 17px;
+  background: var(--ld-field); border-radius: 3px; border: 0; color: var(--ld-text); font: inherit;
+  padding: 0 4px; outline: none; user-select: text; }
+#ldForm .ldnum:focus { background: #56555d; }
+#ldForm .ldnum.dis { opacity: .45; }
+#ldForm .ldarr { position: absolute; left: 166px; top: 3px; width: 12px; height: 13px; cursor: pointer; }
+#ldForm .ldarr::before, #ldForm .ldarr::after { content: ""; position: absolute; top: 2px;
+  border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+#ldForm .ldarr::before { left: 0; border-right: 5px solid var(--ld-dim); }
+#ldForm .ldarr::after { left: 7px; border-left: 5px solid var(--ld-dim); }
+#ldForm .ldarr i { position: absolute; top: 0; width: 6px; height: 13px; }
+#ldForm .ldarr i.l { left: 0; } #ldForm .ldarr i.r { left: 6px; }
+
+#ldForm .ldchk { position: absolute; top: 1px; width: 17px; height: 17px; cursor: pointer; text-align: center;
+  line-height: 17px; font-size: 13px; color: var(--ld-text); border-radius: 2px; }
+#ldForm .ldchk.off { background: var(--ld-field); }
+#ldForm .ldchk.dis { opacity: .45; cursor: default; }
+#ldForm .ldgrad { position: absolute; left: 92px; top: 1px; width: 91px; height: 17px; background: var(--ld-field-dark); }
+#ldForm .ldbtn { position: absolute; height: 17px; line-height: 17px; text-align: center; background: var(--ld-field);
+  color: var(--ld-text); cursor: pointer; border-radius: 2px; }
+#ldForm .ldbtn:hover { background: #56555d; }
+#ldForm .ldbtn.dis { opacity: .45; cursor: default; }
+#ldForm .ldsel.field { position: absolute; left: 72px; top: 0; width: 111px; border-radius: 9px; }
+#ldForm .lddd { position: absolute; left: 72px; top: 0; width: 111px; }
+#ldForm .ldtext { position: absolute; left: 4px; top: 1px; height: 17px; background: var(--ld-field);
+  border-radius: 3px; border: 0; color: var(--ld-text); font: inherit; padding: 0 5px; outline: none;
+  user-select: text; }
+#ldForm .ldprev { position: absolute; background: #fff; overflow: hidden; }
+#ldForm .ldprev canvas { display: block; width: 100%; height: 100%; }
+#ldForm .ldprev .ratio { position: absolute; left: 2px; bottom: 0; color: #d33; font-size: 10px; line-height: 12px; }
+#ldForm .ldstrip { position: absolute; left: 4px; top: 6px; width: 84px; height: 17px; background: #000; }
+#ldForm .ldwedge { position: absolute; width: 14px; height: 14px; background:
+  linear-gradient(135deg, transparent 50%, var(--ld-field) 50%); }
+
+/* the old option form and brush grid stay in the page (they carry the wiring) but are never shown */
+#toolOpts, #toolGrid { display: none !important; }
+
+/* every control of a form is placed absolutely inside #ldRows */
+#ldRows .ldsel, #ldRows .ldbtn, #ldRows .ldchk, #ldRows .ldcurve, #ldRows .ldarr, #ldRows .ldgrad,
+#ldRows .ldnum, #ldRows .ldtext, #ldRows .ldprev, #ldRows .ldwedge, #ldRows .ldlab { position: absolute; }
+
+/* ---- Camera[Pro] options skinned like the other forms ---- */
+.camopts .pbody { padding: 4px 0 8px; }
+.camopts .orow { height: 19px; margin: 0; gap: 4px; padding: 0 5px 0 0; }
+.camopts .orow label { flex: 0 0 70px !important; text-align: right; color: var(--ld-text); font-size: 12px; }
+.camopts input[type=number], .camopts select { background: var(--ld-field) !important; border: 0 !important;
+  border-radius: 3px !important; height: 17px; color: var(--ld-text) !important; font-size: 12px; padding: 0 4px !important; }
+.camopts select { appearance: none; border-radius: 9px !important; }
+.camopts input[type=checkbox] { appearance: none; -webkit-appearance: none; width: 21px; height: 17px; margin: 0 0 0 0 !important;
+  background: var(--ld-field); border-radius: 2px; position: relative; flex: none; }
+.camopts input[type=checkbox]:checked { background: transparent; }
+.camopts input[type=checkbox]:checked::after { content: "\2713"; position: absolute; inset: 0; text-align: center;
+  line-height: 17px; color: var(--ld-text); font-size: 13px; }
+.camopts .revbtn { background: var(--ld-field); border: 0; border-radius: 2px; height: 17px; color: var(--ld-text); }
+.camopts .orow label { white-space: nowrap; }
