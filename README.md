@@ -45,6 +45,7 @@ Works from `file://` too — just open `index.html`.
 | `engine.js` | Pure logic: frames/exposures, stroke engine, wet pickup, gradient flood, camera keys/paths, George handlers |
 | `ui.js` | Wiring: dialogs, panels, timeline render, live-paint stroke loop, selection/cut brush |
 | `fsafe.js` | Crash-safe saving: atomic file writes and the crash-recovery snapshot |
+| `leftdock.js` / `leftdock.css` | The left dock rebuilt from a screen recording of the live app: Main Panel with group menus, Color Panel with the wheel, Tool panel with one option form per tool |
 | `serve.js` | Tiny static server (port 8471) |
 | `test/engine.test.js` | Node test suite (no dependencies) |
 | `tools/make-icon.js` | Builds `build.ico` (16/32/48/256) for the executable |
@@ -208,6 +209,21 @@ Works from `file://` too — just open `index.html`.
   Color Group panes. Per-layer lock / light table / preserve-transparency /
   stencil dots, row collapse, global layer flags and image-mark ruler ticks.
 
+- **Left dock** (matched to a 1920x1080 recording of TVPaint 12): dock order Main /
+  Color / Tool, 19 px option rows, flat grey fields with bare check marks, the ten
+  brushes in the live order, and the shape tiles as groups (click = current member,
+  right click / hold / corner = the group menu with the shipped labels). Forms exist
+  for Pen, Pencil-family, Air, Custom, Text, Paint bucket, Filling Shape, Cut Brush,
+  Select and Crop. Controls the engine already has (size, power, opacity,
+  anti-aliasing, smoothing, fill range) drive it; the rest keep their value per tool
+  but do not change the drawing yet.
+- **Floating panels** (`panelfloat.js`): drag any dock panel by its title bar and it floats
+  over the application; a blue line shows the slot while you drag it back over the dock,
+  and dropping it there docks it at that spot (the same drag re-orders docked panels).
+  Double click a title bar to dock / undock a panel at its original spot, or use the dot in
+  the title bar (Dock / Float / Separate window). In the desktop build, dropping a panel
+  outside the application window turns it into a window of its own; drag that window
+  back over the application and it floats or docks again. The layout is remembered.
 - **Safe saving** (desktop build): every save writes a temp file and renames it over
   the project, so a crash mid-save can't corrupt it. While there are unsaved changes a
   recovery snapshot is written every minute to the app's data folder; after a crash

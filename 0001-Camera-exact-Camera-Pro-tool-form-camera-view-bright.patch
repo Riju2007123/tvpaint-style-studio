@@ -1,0 +1,300 @@
+From 36e9965cb038f881b465c1754f78eb25e0cdce6f Mon Sep 17 00:00:00 2001
+From: Fox <fox@local>
+Date: Sat, 24 Oct 2026 14:22:59 +0000
+Subject: [PATCH] Camera: exact Camera[Pro] tool form, camera view brightness
+ fix, timeline camera rows
+
+---
+ index.html   |  16 +++++--
+ leftdock.css |   6 +++
+ leftdock.js  | 127 ++++++++++++++++++++++++++++++++++++++++++++++++++-
+ ui.js        |  37 +++++++++++----
+ 4 files changed, 171 insertions(+), 15 deletions(-)
+
+diff --git a/index.html b/index.html
+index cc3a466..403492c 100644
+--- a/index.html
++++ b/index.html
+@@ -375,8 +375,8 @@
+   .cell.camcell .camplus.cur { color: var(--tv-key-inuse); }
+   .cell.camcell .camplus.drag { color: #9fd0ff; }
+   .cell.camcell .camplus.drop { color: var(--tv-key-inuse); }
+-  .strip.cam { height: 20px; }
+-  .strip.cam .cell { height: 20px; }
++  .strip.cam { height: 70px; }
++  .strip.cam .cell { height: 70px; }
+   .strip.cam .cell .plus { color: var(--tv-key-inuse); }
+   .strip.cam .camrange { position: absolute; top: 1px; bottom: 1px; border: 1px solid var(--tv-stat);
+     border-left-width: 0; border-right-width: 0; z-index: 1; pointer-events: none; }
+@@ -484,7 +484,7 @@
+   .fpsarrow { position: absolute; right: 3px; width: 14px; height: 14px; border-radius: 50%;
+     background: var(--tv-stat); color: var(--tv-text); font-size: 8px; line-height: 14px; text-align: center;
+     pointer-events: none; }
+-  .strip.cam { height: 20px; }
++  .strip.cam { height: 70px; }
+   .strip.cam .cell { background: transparent; }
+   .plus.always { display: block; top: -7px; }
+   /* footer: two rows like TVPaint (tabs row + Background / Start Frame row) */
+@@ -631,6 +631,16 @@
+     font-size: 8px; cursor: pointer; padding: 0; }
+   .tr-hand .arw:hover { color: #e0e0e6; }
+   .tr-hand .tib { position: static; width: 22px; height: 22px; }
++  /* live timeline: the Camera Layer row is a header, an icon strip and the Speed curve row */
++  .camrow.cam1 { height: 26px; }
++  .camrow.cam2 { height: 22px; gap: 5px; padding-left: 22px; }
++  .camrow.cam2 .sq { width: 16px; height: 16px; }
++  .camrow.speed { height: 22px; }
++  .strip.cam .camrange { top: 3px; bottom: 25px; border: 1px solid #8f8f95; border-radius: 2px;
++    background: linear-gradient(#4a4a50, #38383d 55%, #45454b); }
++  .strip.cam .camend { position: absolute; top: 18px; color: var(--tv-stat); font-size: 13px; line-height: 1; }
++  .cell.camcell .camplus { top: 25px; }
++  .cell.camcell .plus.always { top: 14px; }
+ </style>
+ <link rel="stylesheet" href="leftdock.css">
+ </head>
+diff --git a/leftdock.css b/leftdock.css
+index 8768fad..72b3e2d 100644
+--- a/leftdock.css
++++ b/leftdock.css
+@@ -181,3 +181,9 @@
+   line-height: 17px; color: var(--ld-text); font-size: 13px; }
+ .camopts .revbtn { background: var(--ld-field); border: 0; border-radius: 2px; height: 17px; color: var(--ld-text); }
+ .camopts .orow label { white-space: nowrap; }
++
++/* ---- Camera[Pro] form (live recording) ---- */
++#ldForm[data-cam] { padding-bottom: 6px; }
++#ldForm .ldlock:hover svg rect, #ldForm .ldlock:hover svg path { stroke: #fff; }
++#ldForm .ldbtn svg { display: block; }
++#ldForm .ldnum { overflow: hidden; text-overflow: clip; }
+diff --git a/leftdock.js b/leftdock.js
+index 937b6fb..1a73287 100644
+--- a/leftdock.js
++++ b/leftdock.js
+@@ -730,6 +730,125 @@
+     if (colorBtn.parentNode !== brushGrid) brushGrid.appendChild(colorBtn);
+   }
+ 
++
++  /* ------------------------------------------------------------------
++     Camera[Pro] tool form (measured on the live recording, 19 px rows).
++     The visible rows are the dock's own controls; every value goes through
++     the camera controls that already carry the engine wiring (camX, camRot,
++     camMode ...), which stay in the page, hidden.
++     ------------------------------------------------------------------ */
++  const SVG_LOCK = (open) => `<svg width="11" height="14" viewBox="0 0 11 14"><rect x="1" y="6" width="9" height="7" rx="1" fill="#d8d8dc"/>` +
++    (open ? `<path d="M3 6V4a2.5 2.5 0 0 1 5 0" fill="none" stroke="#d8d8dc" stroke-width="1.5" transform="translate(2.5 -1.5)"/>`
++          : `<path d="M2.5 6V4a3 3 0 0 1 6 0v2" fill="none" stroke="#d8d8dc" stroke-width="1.5"/>`) +
++    `<rect x="4.7" y="8.2" width="1.6" height="2.6" fill="#46464d"/></svg>`;
++  const SVG_KEY = `<svg width="15" height="13" viewBox="0 0 15 13"><circle cx="4" cy="4" r="3" fill="none" stroke="#d0d0d4" stroke-width="1.8"/>` +
++    `<path d="M6.2 6.2 13 12M10 9l1.8-1.6M11.6 10.6l1.6-1.4" stroke="#d0d0d4" stroke-width="1.8" fill="none"/></svg>`;
++  let camUI = null;
++  function buildCameraForm() {
++    const old = $("ldForm"); if (old) old.remove();
++    const root = el("div"); root.id = "ldForm"; root.dataset.cam = "1";
++    const wrap = el("div"); wrap.id = "ldRows"; wrap.style.cssText = "position:relative;width:192px;height:232px;margin-top:6px";
++    root.appendChild(wrap); toolBody.appendChild(root);
++    const abs = (cls, css, html) => { const e = el("div", cls, html); e.style.cssText = "position:absolute;" + css; wrap.appendChild(e); return e; };
++    const lab = (txt, y, edge) => abs("ldlab", `right:${192 - (edge == null ? 89 : edge)}px;top:${y}px;line-height:19px;color:var(--ld-text);white-space:nowrap;text-align:right`, txt);
++    const H = (id) => $(id);
++    const fire = (id) => { const h = H(id); if (h) h.dispatchEvent(new Event("change")); };
++    const Y = { cmd: 0, lock: 23, book: 42, tog: 61, mode: 80, blur: 99, x: 123, y: 142, ratio: 161, rot: 180, zoom: 199, fx: 222, fy: 241, par: 260 };
++    wrap.style.height = "285px";
++    const ui = camUI = { upd: [] };
++
++    // pill dropdowns
++    const dd = (y, text, items, getVal) => {
++      const d = abs("ldsel", `left:98px;top:${y}px;width:88px;padding-right:0;text-overflow:clip`, text);
++      d.onclick = () => {
++        const b = d.getBoundingClientRect();
++        showMenu(b.left, b.bottom, items.map(it => ({ label: it.label, checked: getVal && getVal() === it.val, act: it.act })), b.width);
++      };
++      return d;
++    };
++    lab("", Y.cmd);
++    dd(Y.cmd, "Command", [["Invert", "invert"], ["Load...", "load"], ["Save...", "save"], ["Reset", "reset"], ["Reset and Fit to project", "resetfit"]]
++      .map(([label, val]) => ({ label, val, act: () => { H("camCmd").value = val; fire("camCmd"); } })));
++    const modeItems = [["Linear", "linear"], ["Spline", "spline"], ["Bezier curve", "bezier"], ["Smart Spline", "smart"]];
++    lab("Mode", Y.mode);
++    const modeDD = dd(Y.mode, "Linear", modeItems.map(([label, val]) => ({ label, val,
++      act: () => { H("camMode").value = val; fire("camMode"); ui.sync(); } })), () => H("camMode").value);
++    ui.upd.push(() => { const v = H("camMode").value; modeDD.textContent = (modeItems.find(m => m[1] === v) || modeItems[0])[0]; });
++
++    // check boxes (flat dark square, a bare tick when on)
++    const chk = (label, y, left, w, hid, edge) => {
++      lab(label, y, edge);
++      const c = abs("ldchk off", `left:${left}px;top:${y + 1}px;width:${w}px`, "");
++      c.onclick = () => { const h = H(hid); h.checked = !h.checked; fire(hid); ui.sync(); };
++      ui.upd.push(() => { const on = H(hid).checked; c.className = "ldchk" + (on ? "" : " off"); c.innerHTML = on ? "&#10003;" : ""; });
++    };
++    chk("Lock All", Y.lock, 98, 21, "camLockAll");
++    chk("See bookmarks", Y.book, 98, 21, "camBookmarks");
++    chk("Modify ratio", Y.ratio, 113, 21, "camRatio", 106);
++    chk("Flip X", Y.fx, 75, 17, "camFlipX", 70);
++    chk("Flip Y", Y.fy, 75, 17, "camFlipY", 70);
++
++    // key buttons
++    const keyBtn = (left, y, h, act, tip) => {
++      const b = abs("ldbtn", `left:${left}px;top:${y}px;width:21px;height:${h}px;line-height:${h}px;padding:0;display:flex;align-items:center;justify-content:center`, SVG_KEY);
++      b.title = tip; b.onclick = act; return b;
++    };
++    lab("Toggle all", Y.tog);
++    keyBtn(98, Y.tog + 1, 17, () => H("camToggle").click(), "Toggle all");
++    const chan = (ch) => () => {
++      const f = proj.currentFrame, k = E.cameraKeyAt(proj, f);
++      if (!(proj.cameraKeys && proj.cameraKeys.length)) { toast("camera has no key"); return; }
++      if (k && (E.camFlags(k) & ch)) E.cameraDeleteKey(proj, f, ch); else E.cameraAddKey(proj, f, ch);
++      renderAll(); ui.sync();
++    };
++    keyBtn(164, Y.x + 11, 17, chan(E.CAM_CH.POS), "Key the camera position");
++    keyBtn(164, Y.rot + 1, 17, chan(E.CAM_CH.ROT), "Key the camera rotation");
++    keyBtn(164, Y.zoom + 1, 17, chan(E.CAM_CH.ZOOM), "Key the camera zoom");
++
++    // padlocks
++    const lock = (y, hid) => {
++      const b = abs("ldlock", `left:77px;top:${y + 2}px;width:13px;height:15px;cursor:pointer;display:flex;align-items:center;justify-content:center`, SVG_LOCK(true));
++      b.onclick = () => { H(hid).click(); ui.sync(); };
++      ui.upd.push(() => { const on = /🔒/.test(H(hid).textContent); b.innerHTML = SVG_LOCK(!on); });
++    };
++    lock(Y.x, "camLockX"); lock(Y.y, "camLockY"); lock(Y.rot, "camLockRot"); lock(Y.zoom, "camLockZoom");
++
++    // number fields: text, step arrows, unit suffix shown inside the value
++    const num = (label, y, left, w, hid, read, write, step, edge) => {
++      lab(label, y, edge);
++      const inp = el("input", "ldnum"); inp.type = "text"; inp.spellcheck = false;
++      inp.style.cssText = `left:${left}px;top:${y + 1}px;width:${w}px`;
++      wrap.appendChild(inp);
++      const commit = () => {
++        const v = parseFloat(String(inp.value).replace(/[^0-9eE.+-]/g, ""));
++        if (isFinite(v)) { H(hid).value = String(write(v)); fire(hid); }
++        ui.sync();
++      };
++      inp.onkeydown = (e) => { if (e.key === "Enter") { commit(); inp.blur(); } e.stopPropagation(); };
++      inp.onchange = commit; inp.onfocus = () => inp.select();
++      const arr = abs("ldarr", `left:${left + w + 8}px;top:${y + 3}px`, "");
++      arr.onclick = (e) => {
++        const b = arr.getBoundingClientRect(), d = e.clientX - b.left < b.width / 2 ? -1 : 1;
++        const cur = parseFloat(String(inp.value).replace(/[^0-9eE.+-]/g, "")) || 0;
++        inp.value = String(cur + d * step); commit();
++      };
++      ui.upd.push(() => { if (doc.activeElement !== inp) inp.value = read(); inp.classList.toggle("dis", H(hid).disabled); });
++    };
++    const camNow = () => E.cameraEvaluate(proj, proj.currentFrame);
++    num("Motion Blur", Y.blur, 99, 60, "camBlur", () => (+(proj.cameraBlur || 0)).toFixed(2) + "%", v => v, 0.5, 89);
++    num("X", Y.x, 96, 40, "camX", () => (proj.width / 2 + camNow().x).toFixed(2), v => v, 1, 70);
++    num("Y", Y.y, 96, 40, "camY", () => (proj.height / 2 + camNow().y).toFixed(2), v => v, 1, 70);
++    num("Rotation", Y.rot, 96, 40, "camRot", () => camNow().rotation.toFixed(2) + "°", v => v, 0.1, 70);
++    num("Zoom", Y.zoom, 96, 40, "camZoom", () => (camNow().zoom * 100).toFixed(2) + "%", v => v, 1, 70);
++
++    const par = abs("ldbtn", `left:98px;top:${Y.par}px;width:88px`, "Parameters ...");
++    par.onclick = () => H("camParams").click();
++
++    ui.sync = () => { const b = q("[data-panel-key=camera] .pbody"); if (b && b._syncCamera) b._syncCamera(); ui.upd.forEach(f => f()); };
++    ui.upd.forEach(f => f());
++    return root;
++  }
++
+   /* ------------------------------------------------------------------
+      hook into the application
+      ------------------------------------------------------------------ */
+@@ -740,8 +859,8 @@
+     if (id === "fill") { const v = S("fill").range; proj.brush.tolerance = v === undefined ? 25 : v; }
+     if (id === "camera") {
+       const pt = q("#toolPanel .pt"); if (pt) pt.textContent = "Tool : Camera[Pro]";
+-      const f = $("ldForm"); if (f) f.remove();
+       if (brushGrid) brushGrid.style.display = "none";
++      buildCameraForm();
+       refreshMain(); return;
+     }
+     rebuild(); refreshMain();
+@@ -761,8 +880,12 @@
+     buildToolShell();
+     rebuild();
+     refreshMain();
++    // the old camera controls carry the wiring and stay hidden; the visible form mirrors them
++    window.__showCameraOptions = () => { const cp = q("[data-panel-key=camera]"); if (cp) cp.style.display = "none"; };
++    const cb = q("[data-panel-key=camera] .pbody");
++    if (cb && cb._syncCamera) { const o = cb._syncCamera; cb._syncCamera = () => { o(); if (camUI && $("ldForm") && $("ldForm").dataset.cam) camUI.upd.forEach(f => f()); }; }
+     const ws = q("#workarea"); if (ws) ws.style.gridTemplateColumns = "205px 1fr";
+   }
+   boot();
+-  window.__leftdock = { rebuild, refreshMain, G, TILES, FORMS, cur };
++  window.__leftdock = { buildCameraForm, rebuild, refreshMain, G, TILES, FORMS, cur };
+ })();
+diff --git a/ui.js b/ui.js
+index 931a6c9..361c68b 100644
+--- a/ui.js
++++ b/ui.js
+@@ -365,7 +365,10 @@ function renderOverlayOnly() {
+     octx.fillStyle = "rgba(0,0,0," + (1 - TV_CAMERA_DIM) + ")";
+     octx.fillRect(0, 0, ovl.width, ovl.height);
+     // punch the camera field of view back to full brightness
++    // destination-out removes alpha in proportion to the fill's own alpha, so the
++    // punch must be fully opaque or the inside of the camera stays half dimmed
+     octx.globalCompositeOperation = "destination-out";
++    octx.fillStyle = "#000";
+     applyViewTransform(octx);
+     octx.beginPath();
+     cameraPath(octx, r);
+@@ -2708,6 +2711,18 @@ function drawCameraOverlay() {
+   // cross in it) and the horizontal guide that runs to the right edge of the
+   // frame (live capture of the Camera[Pro] tool).
+   if (tool === "camera") {
++    // the camera frames of the other keys are drawn as thin green rectangles
++    (proj.cameraKeys || []).forEach(k => {
++      if (k.frame === Math.round(proj.currentFrame)) return;
++      const kr = E.cameraRect(proj, E.cameraEvaluate(proj, k.frame));
++      const a = (kr.rot || 0) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
++      const pts = [[-kr.w / 2, -kr.h / 2], [kr.w / 2, -kr.h / 2], [kr.w / 2, kr.h / 2], [-kr.w / 2, kr.h / 2]]
++        .map(([dx, dy]) => [view.x + (kr.cx + dx * ca - dy * sa) * view.zoom, view.y + (kr.cy + dx * sa + dy * ca) * view.zoom]);
++      octx.save();
++      octx.strokeStyle = "rgb(60,220,60)"; octx.lineWidth = 1;
++      octx.beginPath(); pts.forEach((c2, i) => i ? octx.lineTo(c2[0], c2[1]) : octx.moveTo(c2[0], c2[1])); octx.closePath(); octx.stroke();
++      octx.restore();
++    });
+     octx.save();
+     octx.translate(mx, my);
+     octx.rotate((curR.rot || 0) * Math.PI / 180);
+@@ -3360,20 +3375,21 @@ function renderTimeline() {
+       <button class="flag" title="Manage stencils" onclick="event.stopPropagation();stencilMenu(this)"><img src="icons/LayerStencil-x20.png"></button>
+       <button class="flag" title="Layer display options" onclick="event.stopPropagation();displayMenu(this)"><img src="icons/LayerSquigglesOn-x20.png"></button>
+     </div></div>
+-  ${camOn ? `<div class="camrow" onclick="selectTool(&quot;camera&quot;)" title="Camera Layer">
+-      <img class="sq" src="icons/Shape-Camera-x20.png" title="Camera Layer">
+-      <span class="lminus" title="Collapse/Uncollapse Layer" onclick="event.stopPropagation();toast('the camera row is always visible')">−</span>
+-      <img class="sq" src="icons/ClipTimeline-x20.png" title="Camera keys">
++  ${camOn ? `<div class="camrow cam1" onclick="selectTool(&quot;camera&quot;)" title="Camera Layer">
++      <span class="lminus" title="Collapse/Uncollapse Layer" onclick="event.stopPropagation();toast('the camera row is always visible')">⊖</span>
+       <span class="nm">Camera Layer</span>
+-      <span class="lmore" title="Camera view: show or hide the camera frame" onclick="event.stopPropagation();toggleCameraFrame()">⊘</span>
++      <span class="lmore" title="Camera view: show or hide the camera frame" onclick="event.stopPropagation();toggleCameraFrame()">${proj.showCamera !== false ? "👁" : "⊘"}</span>
+       <span class="lmid-dot"></span>
+     </div>
++    <div class="camrow cam2" title="Camera layer tools">
++      <img class="sq" src="icons/CreateCameraA-x20.png" title="Add a camera key">
++      <img class="sq" src="icons/CreateCameraB-x20.png" title="Camera keys">
++      <img class="sq" src="icons/Remote-Recenter-Timeline-x20.png" title="Fit the camera to the animation">
++      <img class="sq" src="icons/ClipTimeline-x20.png" title="Camera settings">
++    </div>
+     <div class="camrow speed" title="Speed curve">
+-      <span class="lminus" title="Collapse/Uncollapse Layer" onclick="event.stopPropagation();toast('the speed curve row is always visible')">−</span>
+-      <img class="sq" src="icons/ClipTimeline-x20.png" title="Speed curve points">
+-      <img class="sq" src="icons/Remote-Recenter-Timeline-x20.png" title="Fit the speed curve to the animation">
++      <span class="lminus" title="Expand the speed curve" onclick="event.stopPropagation();toast('the speed curve is not in this prototype')">⊕</span>
+       <span class="nm">Speed curve</span>
+-      <span class="lmore" title="Speed curve options" onclick="event.stopPropagation();toast('the speed curve is not in this prototype')">⚙</span>
+     </div>` : ""}`;
+   proj.layers.forEach((l, i) => {
+     const cur = i === proj.currentLayer;
+@@ -3543,7 +3559,8 @@ function renderTimeline() {
+       camCells += `<div class="cell camcell${isKey ? " keyw" : ""}" data-f="${f}" data-l="cam">${glyph}${add}</div>`;
+     }
+     const range = (camKeyFrames.size && camLast > camFirst)
+-      ? `<div class="camrange" style="left:${(camFirst - 1) * CW}px;width:${(camLast - camFirst + 1) * CW}px"></div>` : "";
++      ? `<div class="camrange" style="left:${(camFirst - 1) * CW}px;width:${(camLast - camFirst + 1) * CW}px"></div>` +
++        `<span class="camend l" style="left:${(camFirst - 1) * CW - 16}px">⌀</span><span class="camend r" style="left:${camLast * CW + 4}px">⌀</span>` : "";
+     th += `<div class="strip cam"><div class="cells">${camCells}</div>${range}</div>`;
+   }
+   proj.layers.forEach((l, li) => {
+-- 
+2.43.0
+

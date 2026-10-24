@@ -1,0 +1,672 @@
+From 6f991f56a50d228b2c2eebc8d6772e8778bcc97b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 24 Oct 2026 10:16:25 +0000
+Subject: [PATCH] Floating panels: float, re-dock at a slot, detach to a window
+
+- panelfloat.js: drag a panel by its title bar to float it, drop it on the dock
+  to dock it at that slot (drop line), re-order docked panels the same way,
+  double click / dot menu to dock at the original spot, layout remembered
+- dropping a panel outside the window opens it as its own frameless window
+  (desktop build); the DOM node moves, so every control keeps working
+- main.js / preload.js: child window options and tv.panelWin (move/resize/close)
+- ui.js: lookups go through qAny()/allDocs() so panels in other windows are found
+- leftdock.js/css: menus open in the panel's own window, styles apply to floating panels
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012Pwj93PLpfdPHz7nps4p6z
+---
+ README.md     |   7 ++
+ index.html    |   1 +
+ leftdock.css  |  38 +++---
+ leftdock.js   |  37 +++---
+ main.js       |  38 ++++++
+ panelfloat.js | 315 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ preload.js    |   2 +
+ ui.js         |  17 ++-
+ 8 files changed, 425 insertions(+), 30 deletions(-)
+ create mode 100644 panelfloat.js
+
+diff --git a/README.md b/README.md
+index ccec49a..013590f 100644
+--- a/README.md
++++ b/README.md
+@@ -217,6 +217,13 @@ Works from `file://` too — just open `index.html`.
+   Select and Crop. Controls the engine already has (size, power, opacity,
+   anti-aliasing, smoothing, fill range) drive it; the rest keep their value per tool
+   but do not change the drawing yet.
++- **Floating panels** (`panelfloat.js`): drag any dock panel by its title bar and it floats
++  over the application; a blue line shows the slot while you drag it back over the dock,
++  and dropping it there docks it at that spot (the same drag re-orders docked panels).
++  Double click a title bar to dock / undock a panel at its original spot, or use the dot in
++  the title bar (Dock / Float / Separate window). In the desktop build, dropping a panel
++  outside the application window turns it into a window of its own; drag that window
++  back over the application and it floats or docks again. The layout is remembered.
+ - **Safe saving** (desktop build): every save writes a temp file and renames it over
+   the project, so a crash mid-save can't corrupt it. While there are unsaved changes a
+   recovery snapshot is written every minute to the app's data folder; after a crash
+diff --git a/index.html b/index.html
+index cc3a466..ad0f12a 100644
+--- a/index.html
++++ b/index.html
+@@ -710,5 +710,6 @@
+ <script src="filemenu.js"></script>
+ <script src="prefs.js"></script>
+ <script src="leftdock.js"></script>
++<script src="panelfloat.js"></script>
+ </body>
+ </html>
+diff --git a/leftdock.css b/leftdock.css
+index 8768fad..6ac0dc3 100644
+--- a/leftdock.css
++++ b/leftdock.css
+@@ -23,28 +23,28 @@
+ #panels > .panel { border-bottom: 0; flex: none; }
+ 
+ /* panel header: title in the muted grey, then dot, round chevron, round cross */
+-#panels .phead { height: 29px; padding: 0 4px 0 5px; gap: 0; border-bottom: 0;
++:is(#panels, .ldfloat) .phead { height: 29px; padding: 0 4px 0 5px; gap: 0; border-bottom: 0;
+   background: var(--tv-desktop); position: relative; }
+-#panels .phead .pt { font-size: 12px; color: var(--ld-dim); }
+-#panels .phead .pw { width: 21px; height: 29px; font-size: 0; position: relative; color: transparent;
++:is(#panels, .ldfloat) .phead .pt { font-size: 12px; color: var(--ld-dim); }
++:is(#panels, .ldfloat) .phead .pw { width: 21px; height: 29px; font-size: 0; position: relative; color: transparent;
+   background: none; flex: none; }
+-#panels .phead .pw::before { content: ""; position: absolute; left: 50%; top: 50%;
++:is(#panels, .ldfloat) .phead .pw::before { content: ""; position: absolute; left: 50%; top: 50%;
+   transform: translate(-50%, -50%); }
+-#panels .phead .pw[title="panel options"]::before { width: 4px; height: 4px; border-radius: 50%;
++:is(#panels, .ldfloat) .phead .pw[title="panel options"]::before { width: 4px; height: 4px; border-radius: 50%;
+   background: var(--ld-dim); }
+-#panels .phead .pw[title="collapse"]::before, #panels .phead .pw[title="close"]::before {
++:is(#panels, .ldfloat) .phead .pw[title="collapse"]::before, :is(#panels, .ldfloat) .phead .pw[title="close"]::before {
+   width: 15px; height: 15px; border-radius: 50%; background: #706f77; }
+-#panels .phead .pw[title="collapse"]::after { content: ""; position: absolute; left: 50%; top: 50%;
++:is(#panels, .ldfloat) .phead .pw[title="collapse"]::after { content: ""; position: absolute; left: 50%; top: 50%;
+   width: 5px; height: 5px; border-right: 2px solid var(--tv-desktop); border-bottom: 2px solid var(--tv-desktop);
+   transform: translate(-50%, -70%) rotate(45deg); }
+-#panels .phead .pw[title="close"]::after { content: "\00d7"; position: absolute; left: 50%; top: 50%;
++:is(#panels, .ldfloat) .phead .pw[title="close"]::after { content: "\00d7"; position: absolute; left: 50%; top: 50%;
+   transform: translate(-50%, -52%); font-size: 14px; line-height: 14px; color: var(--tv-desktop); font-weight: 700; }
+-#panels .phead .pw:hover::before { background: #6a6971; }
+-#panels > .panel[data-panel-key="main"] .phead .pt { padding-left: 0; }
+-#panels .padlock { position: absolute; right: 2px; top: 6px; width: 16px; height: 17px; opacity: .8;
++:is(#panels, .ldfloat) .phead .pw:hover::before { background: #6a6971; }
++.panel[data-panel-key="main"] .phead .pt { padding-left: 0; }
++:is(#panels, .ldfloat) .padlock { position: absolute; right: 2px; top: 6px; width: 16px; height: 17px; opacity: .8;
+   pointer-events: none; }
+-#panels > .panel[data-panel-key="main"] .phead { padding-right: 24px; }
+-#panels .pbody { padding: 0; }
++.panel[data-panel-key="main"] .phead { padding-right: 24px; }
++:is(#panels, .ldfloat) .pbody { padding: 0; }
+ 
+ /* ---- Main Panel: 6 x 3 grid, tiles at the measured centres ---- */
+ .maingrid.ld { position: relative; width: 192px; height: 99px; margin: 0; }
+@@ -181,3 +181,15 @@
+   line-height: 17px; color: var(--ld-text); font-size: 13px; }
+ .camopts .revbtn { background: var(--ld-field); border: 0; border-radius: 2px; height: 17px; color: var(--ld-text); }
+ .camopts .orow label { white-space: nowrap; }
++
++/* ---- floating panels (panelfloat.js) ---- */
++.panel.ldfloat { position: fixed; width: 194px; max-height: calc(100vh - 6px); overflow-y: auto; overflow-x: hidden;
++  background: var(--tv-desktop); border: 1px solid #1d1d21; box-shadow: 0 4px 16px rgba(0,0,0,.5);
++  display: flex; flex-direction: column; z-index: 700; }
++.panel.ldfloat .phead { cursor: default; }
++.panel.ldfloat.ldpop { position: static; width: 100%; max-height: none; border: 0; box-shadow: none; overflow: hidden; }
++body.ldpopbody { margin: 0; background: var(--tv-desktop); overflow: hidden; }
++#ldDropLine { position: fixed; height: 3px; background: #7f95ff; z-index: 1000; pointer-events: none; display: none; border-radius: 2px; }
++/* the padlock belongs to the docked column; a floating or detached panel has no use for it */
++.panel.ldfloat .padlock { display: none; }
++.panel.ldfloat[data-panel-key="main"] .phead { padding-right: 4px; }
+diff --git a/leftdock.js b/leftdock.js
+index 937b6fb..d1f9209 100644
+--- a/leftdock.js
++++ b/leftdock.js
+@@ -21,8 +21,10 @@
+   "use strict";
+   if (typeof proj === "undefined" || typeof selectTool !== "function") return;
+   const doc = document;
+-  const q = (s, r) => (r || doc).querySelector(s);
+-  const qa = (s, r) => Array.from((r || doc).querySelectorAll(s));
++  // panels may live in another window (see panelfloat.js): search every document
++  const q = (s, r) => (r ? r.querySelector(s) : qAny(s));
++  const qa = (s, r) => (r ? Array.from(r.querySelectorAll(s))
++    : allDocs().reduce((a, d) => a.concat(Array.from(d.querySelectorAll(s))), []));
+   const el = (tag, cls, html) => { const e = doc.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+ 
+   /* ------------------------------------------------------------------
+@@ -140,9 +142,17 @@
+      ------------------------------------------------------------------ */
+   let openMenu = null;
+   function closeMenu() { if (openMenu) { openMenu.remove(); openMenu = null; } }
+-  doc.addEventListener("pointerdown", (e) => { if (openMenu && !openMenu.contains(e.target)) closeMenu(); }, true);
+-  doc.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+-  function showMenu(x, y, rows, minW) {
++  const hooked = new WeakSet();
++  function hookDoc(d) {
++    if (hooked.has(d)) return; hooked.add(d);
++    d.addEventListener("pointerdown", (e) => { if (openMenu && !openMenu.contains(e.target)) closeMenu(); }, true);
++    d.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
++  }
++  hookDoc(doc);
++  // ref = the element the menu hangs from, so the menu opens in ITS window
++  function showMenu(x, y, rows, minW, ref) {
++    const md = (ref && ref.ownerDocument) || doc, mw = md.defaultView || window;
++    hookDoc(md);
+     closeMenu();
+     const m = el("div", "ldmenu");
+     if (minW) m.style.minWidth = minW + "px";
+@@ -155,10 +165,10 @@
+       it.onclick = () => { closeMenu(); if (!r.dis && r.act) r.act(); };
+       m.appendChild(it);
+     });
+-    doc.body.appendChild(m);
++    md.body.appendChild(m);
+     const w = m.offsetWidth, h = m.offsetHeight;
+-    m.style.left = Math.max(0, Math.min(x, innerWidth - w - 2)) + "px";
+-    m.style.top = Math.max(0, Math.min(y, innerHeight - h - 2)) + "px";
++    m.style.left = Math.max(0, Math.min(x, mw.innerWidth - w - 2)) + "px";
++    m.style.top = Math.max(0, Math.min(y, mw.innerHeight - h - 2)) + "px";
+     openMenu = m;
+     return m;
+   }
+@@ -226,7 +236,7 @@
+     }));
+     if (g.clear) { rows.push("-"); rows.push({ label: "Clear Selection", icon: "icons/SelectionClear-x15.png", act: clearSelection }); }
+     else { rows.push("-"); rows.push({ label: "Shape Settings", icon: "icons/Shape-Options-x15.png", act: () => stub("Shape Settings") }); }
+-    showMenu(r.left + 13, r.bottom - 2, rows, 190);
++    showMenu(r.left + 13, r.bottom - 2, rows, 190, c);
+   }
+   function chooseMember(grp, id) {
+     const it = G[grp].items.find(x => x.id === id);
+@@ -305,7 +315,7 @@
+       const r = e.currentTarget.getBoundingClientRect();
+       showMenu(r.left, r.bottom, ["Chromatic Wheel", "Color Sliders", "Palette", "Colors Mixer", "Harmony"].map(n => ({
+         label: n, checked: n === "Chromatic Wheel", act: () => { if (n !== "Chromatic Wheel") stub(n); }
+-      })), r.width);
++      })), r.width, e.currentTarget);
+     };
+     if (typeof syncTVPanels === "function") syncTVPanels();
+   }
+@@ -583,7 +593,7 @@
+           const d = abs("ldsel", `left:${x}px;top:${ry}px;width:${w}px`, v);
+           d.onclick = (e) => {
+             const b = d.getBoundingClientRect();
+-            showMenu(b.left, b.bottom, r.items.map(n => ({ label: n, checked: n === v, act: () => { put(r, n); rebuild(); } })), b.width);
++            showMenu(b.left, b.bottom, r.items.map(n => ({ label: n, checked: n === v, act: () => { put(r, n); rebuild(); } })), b.width, d);
+           };
+           ry += 19; break;
+         }
+@@ -622,7 +632,7 @@
+         }
+         case "font": {
+           const d = abs("ldsel", `left:5px;top:${ry}px;width:158px`, st.font || "Arial");
+-          d.onclick = () => { const b = d.getBoundingClientRect(); showMenu(b.left, b.bottom, ["Arial", "Segoe UI", "Times New Roman", "Courier New", "Verdana"].map(n => ({ label: n, checked: n === (st.font || "Arial"), act: () => { st.font = n; rebuild(); } })), b.width); };
++          d.onclick = () => { const b = d.getBoundingClientRect(); showMenu(b.left, b.bottom, ["Arial", "Segoe UI", "Times New Roman", "Courier New", "Verdana"].map(n => ({ label: n, checked: n === (st.font || "Arial"), act: () => { st.font = n; rebuild(); } })), b.width, d); };
+           abs("ldbtn", `left:166px;top:${ry}px;width:17px;height:19px;line-height:15px`, "...").onclick = () => stub("Font requester");
+           ry += 23; break;
+         }
+@@ -698,7 +708,7 @@
+     colorBtn = el("div", "ldsel", "Color"); colorBtn.style.cssText = "position:absolute;left:27px;top:56px;width:136px";
+     colorBtn.onclick = () => {
+       const b = colorBtn.getBoundingClientRect();
+-      showMenu(b.left, b.bottom, ["Color", "Brush Texture", "Pattern"].map(n => ({ label: n, checked: n === "Color", act: () => { if (n !== "Color") stub(n); } })), b.width);
++      showMenu(b.left, b.bottom, ["Color", "Brush Texture", "Pattern"].map(n => ({ label: n, checked: n === "Color", act: () => { if (n !== "Color") stub(n); } })), b.width, colorBtn);
+     };
+     brushGrid.appendChild(colorBtn);
+     brushGrid.style.height = "74px";
+@@ -764,5 +774,6 @@
+     const ws = q("#workarea"); if (ws) ws.style.gridTemplateColumns = "205px 1fr";
+   }
+   boot();
++  window.__ldMenu = showMenu;
+   window.__leftdock = { rebuild, refreshMain, G, TILES, FORMS, cur };
+ })();
+diff --git a/main.js b/main.js
+index bd59e45..220db89 100644
+--- a/main.js
++++ b/main.js
+@@ -13,6 +13,9 @@ const os = require("os");
+ const fsafe = require("./fsafe");
+ 
+ let win = null;
++// panels dragged out of the application live in windows of their own
++const panelWins = {};
++const isPanelName = (n) => /^tvpanel-[a-z0-9_-]+$/i.test(String(n || ""));
+ // the page tells the shell whether the project has unsaved changes, so the
+ // window's X button can ask instead of silently throwing the work away
+ let projectDirty = false;
+@@ -50,6 +53,29 @@ function createWindow() {
+     // than the drawing area of the live app
+     try { win.setMenuBarVisibility(false); } catch (e) { /* ignore */ }
+   });
++  // a panel dragged out of the window: a small frameless window that belongs to
++  // the main one (it closes with it and stays on top of it). The page moves the
++  // panel's DOM node into it - it opens as about:blank so it shares the origin.
++  win.webContents.setWindowOpenHandler(({ frameName }) => {
++    if (!isPanelName(frameName)) return { action: "deny" };
++    return {
++      action: "allow",
++      overrideBrowserWindowOptions: {
++        frame: false, parent: win, skipTaskbar: true, show: true, useContentSize: true,
++        resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
++        backgroundColor: "#313136", hasShadow: true,
++        webPreferences: { contextIsolation: true, nodeIntegration: false, spellcheck: false }
++      }
++    };
++  });
++  win.webContents.on("did-create-window", (child, details) => {
++    const name = details && details.frameName;
++    if (!isPanelName(name)) return;
++    panelWins[name] = child;
++    try { child.setMenuBarVisibility(false); } catch (e) { /* ignore */ }
++    child.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
++    child.on("closed", () => { if (panelWins[name] === child) delete panelWins[name]; });
++  });
+   // X button / Alt+F4: with unsaved changes the page's own Quit dialog decides
+   win.on("close", (e) => {
+     if (closeConfirmed || !projectDirty) return;
+@@ -212,6 +238,18 @@ ipcMain.handle("tv:printImage", async (event, payload) => {
+   });
+ });
+ 
++ipcMain.handle("tv:panelWin", async (event, o) => {
++  o = o || {};
++  const w = panelWins[o.name];
++  if (!w || w.isDestroyed()) return false;
++  try {
++    if (o.close) { w.close(); return true; }
++    if (o.w > 0 && o.h > 0) w.setContentSize(Math.max(60, Math.round(o.w)), Math.max(24, Math.min(4000, Math.round(o.h))));
++    if (typeof o.x === "number" && typeof o.y === "number") w.setPosition(Math.round(o.x), Math.round(o.y));
++    return true;
++  } catch (e) { return false; }
++});
++
+ ipcMain.handle("tv:quit", async () => {
+   // a clean quit: nothing left to recover, and the close guard steps aside
+   fsafe.clearRecovery(recoveryDir());
+diff --git a/panelfloat.js b/panelfloat.js
+new file mode 100644
+index 0000000..b6db956
+--- /dev/null
++++ b/panelfloat.js
+@@ -0,0 +1,315 @@
++/* ------------------------------------------------------------------
++   panelfloat.js - floating panels, like the live TVPaint 12.
++
++     * drag a panel by its title bar: it leaves the dock and floats
++     * drop it back on the dock: it docks again at the slot you drop it on
++       (a blue line shows the slot while you drag); drag docked panels up or
++       down the same way to re-order them
++     * drag a panel OUT of the application window (desktop build): it
++       becomes a window of its own, outside the main window. Drag that window
++       back over the dock and it docks again
++     * double click the title bar: dock / undock; the layout is remembered
++
++   A panel that leaves the application is not copied: its DOM node moves to
++   the new window (same page origin), so every control keeps working and
++   keeps its handlers. ui.js looks panels up through qAny() / allDocs() and
++   `$` for that reason.
++   ------------------------------------------------------------------ */
++(function () {
++  "use strict";
++  const host = document.getElementById("panels");
++  if (!host) return;
++  const doc = document;
++  const TVP = (window.tv && window.tv.panelWin) ? window.tv : null;
++  const LS = "ld_layout_v1";
++  const SNAP = 4;                       // px of movement before a drag starts
++  const FLOAT_W = 194;
++  let zTop = 700;
++
++  const $$ = (s, r) => Array.from((r || doc).querySelectorAll(s));
++  const panels = () => $$(".panel[data-panel-key]", host);
++  const keyOf = (p) => p.dataset.panelKey;
++  const popped = {};                    // key -> { win, name, ro }
++
++  // ---- the windows panels live in (ui.js asks for these) ----
++  window.__popDocs = () => Object.keys(popped).map(k => {
++    try { const w = popped[k].win; return w && !w.closed ? w.document : null; } catch (e) { return null; }
++  }).filter(Boolean);
++
++  const isFloat = (p) => p.classList.contains("ldfloat") && !p.classList.contains("ldpop");
++  const isPop = (p) => p.classList.contains("ldpop");
++
++  /* ------------------------------------------------------------------
++     geometry helpers
++     ------------------------------------------------------------------ */
++  // a pointer event from any of our windows -> client coordinates of the main window
++  function mainPoint(ev) {
++    const tgt = ev.target;
++    if (ev.view === window || (tgt && tgt.ownerDocument === doc)) return { x: ev.clientX, y: ev.clientY };
++    const bx = (window.outerWidth - window.innerWidth) / 2;
++    const ox = window.screenX + bx;
++    const oy = window.screenY + (window.outerHeight - window.innerHeight) - bx;
++    return { x: ev.screenX - ox, y: ev.screenY - oy };
++  }
++  function overDock(pt) {
++    const r = host.getBoundingClientRect();
++    return pt.x >= r.left && pt.x <= r.right && pt.y >= r.top && pt.y <= r.bottom;
++  }
++  function outsideWindow(pt) {
++    return pt.x < 0 || pt.y < 0 || pt.x > window.innerWidth || pt.y > window.innerHeight;
++  }
++  // where in the dock a panel dropped at height `my` would land
++  function dockSlot(p, my) {
++    const kids = Array.from(host.children).filter(c => c !== p && c.classList &&
++      c.classList.contains("panel") && c.style.display !== "none" && getComputedStyle(c).display !== "none");
++    for (const c of kids) {
++      const r = c.getBoundingClientRect();
++      if (my < r.top + r.height / 2) return { ref: c, y: r.top };
++    }
++    const last = kids[kids.length - 1];
++    return { ref: null, y: last ? last.getBoundingClientRect().bottom : host.getBoundingClientRect().top };
++  }
++  let line = null;
++  function showLine(y) {
++    if (!line) { line = doc.createElement("div"); line.id = "ldDropLine"; doc.body.appendChild(line); }
++    const r = host.getBoundingClientRect();
++    line.style.cssText = `left:${r.left}px;top:${Math.round(y) - 1}px;width:${Math.min(r.width, 193)}px;display:block`;
++  }
++  function hideLine() { if (line) line.style.display = "none"; }
++
++  /* ------------------------------------------------------------------
++     float / dock
++     ------------------------------------------------------------------ */
++  function clamp(p) {
++    const r = p.getBoundingClientRect();
++    const x = Math.max(-r.width + 60, Math.min(window.innerWidth - 60, r.left));
++    const y = Math.max(0, Math.min(window.innerHeight - 30, r.top));
++    p.style.left = x + "px"; p.style.top = y + "px";
++  }
++  function floatAt(p, x, y) {
++    if (isPop(p)) return;
++    p.classList.add("ldfloat");
++    p.style.left = x + "px"; p.style.top = y + "px";
++    p.style.zIndex = ++zTop;
++    if (p.parentNode !== doc.body) doc.body.appendChild(p);
++    save();
++  }
++  function dockAt(p, ref) {
++    const wasPop = isPop(p);
++    p.classList.remove("ldfloat", "ldpop");
++    p.style.left = p.style.top = p.style.zIndex = "";
++    host.insertBefore(p, ref || null);       // adopts the node when it comes from another window
++    if (wasPop) endPop(keyOf(p));
++    save();
++  }
++  // the original spot of a panel: before the first docked panel that comes after it in the default order
++  const ORDER = ["main", "color", "tool", "wheel", "lt", "timesheet", "remote", "navigator", "fxstack", "share", "guideline", "library", "camera"];
++  function canonicalRef(p) {
++    const mine = ORDER.indexOf(keyOf(p));
++    const kids = Array.from(host.children).filter(c => c !== p && c.dataset && c.dataset.panelKey);
++    return kids.find(c => ORDER.indexOf(c.dataset.panelKey) > mine) || null;
++  }
++  function bringFront(p) { p.style.zIndex = ++zTop; }
++  // a panel window that was dropped on the application becomes a floating panel again
++  function floatFromPop(p, x, y) {
++    if (!isPop(p)) return;
++    const key = keyOf(p);
++    p.classList.remove("ldpop");
++    doc.body.appendChild(p);                  // adopts the node back into the main page
++    endPop(key);
++    floatAt(p, x, y); clamp(p);
++  }
++
++  /* ------------------------------------------------------------------
++     popping a panel out into a window of its own (desktop build)
++     ------------------------------------------------------------------ */
++  function copyLook(child) {
++    const cd = child.document;
++    const sync = () => { cd.documentElement.style.cssText = doc.documentElement.style.cssText; };
++    $$("style, link[rel=stylesheet]", doc.head).forEach(n => {
++      const c = cd.importNode(n, true);
++      if (c.tagName === "LINK") c.href = n.href;           // absolute: the blank page has no folder of its own
++      cd.head.appendChild(c);
++    });
++    sync();
++    // the colour scheme loads after the window may have opened: follow it
++    try {
++      const mo = new MutationObserver(sync);
++      mo.observe(doc.documentElement, { attributes: true, attributeFilter: ["style"] });
++      child.addEventListener("pagehide", () => mo.disconnect());
++    } catch (e) { /* ignore */ }
++    cd.body.className = "ldpopbody";
++    // keys typed in a panel window still reach the shortcuts of the application
++    cd.addEventListener("keydown", (e) => {
++      if (/INPUT|TEXTAREA|SELECT/.test((e.target && e.target.tagName) || "")) return;
++      doc.dispatchEvent(new KeyboardEvent("keydown", { key: e.key, code: e.code, ctrlKey: e.ctrlKey,
++        shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, bubbles: true, cancelable: true }));
++    });
++  }
++  function popOut(p, sx, sy) {
++    if (!TVP || isPop(p)) return false;
++    const key = keyOf(p), name = "tvpanel-" + key;
++    const r = p.getBoundingClientRect();
++    const w = Math.round(r.width || FLOAT_W), h = Math.round(r.height || 200);
++    let child = null;
++    try {
++      child = window.open("about:blank", name,
++        `popup=yes,left=${Math.round(sx)},top=${Math.round(sy)},width=${w},height=${h}`);
++    } catch (e) { child = null; }
++    if (!child) return false;
++    popped[key] = { win: child, name, ro: null };
++    let tries = 0;
++    const adopt = () => {
++      let ready = false;
++      try { ready = child.document && child.document.readyState === "complete" && child.document.body; } catch (e) { ready = false; }
++      if (!ready) { if (++tries < 200) setTimeout(adopt, 25); else endPop(key); return; }
++      copyLook(child);
++      p.classList.add("ldfloat", "ldpop");
++      p.style.left = p.style.top = p.style.zIndex = "";
++      child.document.body.appendChild(p);
++      // the window follows the size of the panel (the Tool panel changes height with the tool)
++      const fit = () => {
++        try { TVP.panelWin({ name, w: Math.ceil(p.offsetWidth), h: Math.ceil(p.offsetHeight) }); } catch (e) { /* ignore */ }
++      };
++      try { popped[key].ro = new child.ResizeObserver(fit); popped[key].ro.observe(p); } catch (e) { /* ignore */ }
++      fit();
++      // the window is closed from outside (Alt+F4, the app quits): the panel returns to the dock
++      child.addEventListener("pagehide", () => {
++        if (popped[key] && p.ownerDocument === child.document) { try { dockAt(p, canonicalRef(p)); } catch (e) { /* ignore */ } }
++      });
++    };
++    adopt();
++    save();
++    return true;
++  }
++  function endPop(key) {
++    const o = popped[key]; if (!o) return;
++    try { if (o.ro) o.ro.disconnect(); } catch (e) { /* ignore */ }
++    delete popped[key];
++    try { if (TVP) TVP.panelWin({ name: o.name, close: true }); else o.win.close(); } catch (e) { /* ignore */ }
++  }
++
++  /* ------------------------------------------------------------------
++     dragging by the title bar
++     ------------------------------------------------------------------ */
++  function bindPanel(p) {
++    if (p.dataset.ldBound) return; p.dataset.ldBound = "1";
++    const head = p.querySelector(".phead");
++    if (!head) return;
++    p.addEventListener("pointerdown", () => { if (isFloat(p)) bringFront(p); }, true);
++    head.addEventListener("dblclick", (e) => {
++      if (e.target.closest("button, .padlock")) return;
++      if (isFloat(p) || isPop(p)) dockAt(p, canonicalRef(p));
++      else { const r = p.getBoundingClientRect(); floatAt(p, r.left + 30, r.top + 30); }
++    });
++    // the tool bar toggles a panel by hiding it: a panel in its own window must take the window with it
++    try {
++      new MutationObserver(() => { if (p.style.display === "none" && isPop(p)) dockAt(p, canonicalRef(p)); })
++        .observe(p, { attributes: true, attributeFilter: ["style"] });
++    } catch (e) { /* ignore */ }
++    // closing a panel that lives in its own window closes that window as well
++    const cb = head.querySelector('button[title="close"]');
++    if (cb) cb.addEventListener("click", () => { if (isPop(p)) dockAt(p, canonicalRef(p)); }, true);
++
++    const dot = head.querySelector('button[title="panel options"]');
++    if (dot) dot.onclick = (e) => {
++      e.stopPropagation();
++      const r = dot.getBoundingClientRect();
++      const mode = isPop(p) ? "pop" : isFloat(p) ? "float" : "dock";
++      const rows = [
++        { label: "Dock", checked: mode === "dock", act: () => { if (mode !== "dock") dockAt(p, canonicalRef(p)); } },
++        { label: "Float", checked: mode === "float", act: () => {
++          if (mode === "dock") { const b = p.getBoundingClientRect(); floatAt(p, b.left + 30, b.top + 30); }
++          else if (mode === "pop") floatFromPop(p, 240, 120); } }
++      ];
++      if (TVP) rows.push({ label: "Separate window", checked: mode === "pop", act: () => {
++        if (mode === "pop") return;
++        const b = p.getBoundingClientRect();
++        popOut(p, window.screenX + b.left + 40, window.screenY + b.top + 40);
++      } });
++      if (window.__ldMenu) window.__ldMenu(r.left, r.bottom, rows, 150, dot);
++    };
++
++    head.addEventListener("pointerdown", (e) => {
++      if (e.button !== 0 || e.target.closest("button, .padlock")) return;
++      const sx = e.screenX, sy = e.screenY, cx = e.clientX, cy = e.clientY;
++      const r0 = p.getBoundingClientRect();
++      const grab = { x: cx - r0.left, y: cy - r0.top };
++      let drag = false;
++      try { head.setPointerCapture(e.pointerId); } catch (err) { /* synthetic events */ }
++      const where = () => (isPop(p) ? "pop" : isFloat(p) ? "float" : "dock");
++      const move = (ev) => {
++        if (!drag) {
++          if (Math.hypot(ev.screenX - sx, ev.screenY - sy) < SNAP) return;
++          drag = true;
++          if (where() === "dock") {
++            const r = p.getBoundingClientRect();
++            const pt = mainPoint(ev);
++            floatAt(p, pt.x - grab.x, pt.y - grab.y);
++            p.dataset.ldGrabbed = "1";
++            // re-parenting the panel released the pointer capture: take it again
++            try { head.setPointerCapture(ev.pointerId); } catch (err) { /* synthetic events */ }
++          }
++        }
++        const pt = mainPoint(ev);
++        if (where() === "pop") {
++          try { TVP.panelWin({ name: popped[keyOf(p)].name, x: Math.round(ev.screenX - grab.x), y: Math.round(ev.screenY - grab.y) }); } catch (err) { /* ignore */ }
++        } else {
++          p.style.left = (pt.x - grab.x) + "px";
++          p.style.top = (pt.y - grab.y) + "px";
++        }
++        if (overDock(pt)) showLine(dockSlot(p, pt.y).y); else hideLine();
++      };
++      const up = (ev) => {
++        head.removeEventListener("pointermove", move);
++        head.removeEventListener("pointerup", up);
++        head.removeEventListener("pointercancel", up);
++        try { head.releasePointerCapture(ev.pointerId); } catch (err) { /* ignore */ }
++        hideLine();
++        if (!drag) return;
++        const pt = mainPoint(ev);
++        if (overDock(pt)) { dockAt(p, dockSlot(p, pt.y).ref); return; }
++        if (where() === "pop" && !outsideWindow(pt)) { floatFromPop(p, pt.x - grab.x, pt.y - grab.y); return; }
++        if (where() === "float" && outsideWindow(pt) && TVP) {
++          if (popOut(p, ev.screenX - grab.x, ev.screenY - grab.y)) return;
++        }
++        if (where() === "float") { clamp(p); save(); }
++      };
++      head.addEventListener("pointermove", move);
++      head.addEventListener("pointerup", up);
++      head.addEventListener("pointercancel", up);
++    });
++  }
++
++  /* ------------------------------------------------------------------
++     remembering the layout
++     ------------------------------------------------------------------ */
++  function save() {
++    try {
++      const o = { order: [], floats: {} };
++      Array.from(host.children).forEach(c => { if (c.dataset && c.dataset.panelKey) o.order.push(c.dataset.panelKey); });
++      panels().concat($$(".panel.ldfloat[data-panel-key]", doc.body)).forEach(p => {
++        if (isFloat(p)) o.floats[keyOf(p)] = { x: parseFloat(p.style.left) || 0, y: parseFloat(p.style.top) || 0 };
++      });
++      localStorage.setItem(LS, JSON.stringify(o));
++    } catch (e) { /* storage unavailable */ }
++  }
++  function restore() {
++    let o = null;
++    try { o = JSON.parse(localStorage.getItem(LS)); } catch (e) { o = null; }
++    if (!o) return;
++    const all = {}; panels().forEach(p => { all[keyOf(p)] = p; });
++    (o.order || []).forEach(k => { if (all[k] && !(o.floats && o.floats[k])) host.appendChild(all[k]); });
++    Object.keys(o.floats || {}).forEach(k => {
++      if (all[k]) { floatAt(all[k], o.floats[k].x, o.floats[k].y); clamp(all[k]); }
++    });
++  }
++
++  /* ------------------------------------------------------------------
++     start up
++     ------------------------------------------------------------------ */
++  panels().forEach(bindPanel);
++  restore();
++  window.addEventListener("resize", () => $$(".panel.ldfloat", doc.body).forEach(p => { if (isFloat(p)) clamp(p); }));
++  window.__panelfloat = { floatAt, dockAt, floatFromPop, popOut, dockSlot, canonicalRef, popped, bindPanel, save, restore };
++})();
+diff --git a/preload.js b/preload.js
+index 486a855..de2ba8e 100644
+--- a/preload.js
++++ b/preload.js
+@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("tv", {
+   printerSetup: () => ipcRenderer.invoke("tv:printerSetup"),
+   printImage: (data) => ipcRenderer.invoke("tv:printImage", { data }),
+   quit: () => ipcRenderer.invoke("tv:quit"),
++  // move / resize / close the window a panel was dragged out into: { name, x, y, w, h, close }
++  panelWin: (o) => ipcRenderer.invoke("tv:panelWin", o),
+   setDirty: (dirty) => ipcRenderer.invoke("tv:setDirty", { dirty }),
+   writeRecovery: (meta, data) => ipcRenderer.invoke("tv:writeRecovery", { meta, data }),
+   readRecovery: () => ipcRenderer.invoke("tv:readRecovery"),
+diff --git a/ui.js b/ui.js
+index 931a6c9..039f8a5 100644
+--- a/ui.js
++++ b/ui.js
+@@ -79,7 +79,16 @@ let penFlip = false;
+ let nsmooth = 4;
+ let localSmooth = false;
+ 
+-const $ = (id) => document.getElementById(id);
++// Panels can live in another window (a panel dragged out of the application):
++// every lookup that must find them goes through allDocs() / qAny().
++const allDocs = () => [document].concat(window.__popDocs ? window.__popDocs() : []);
++const $ = (id) => {
++  const a = document.getElementById(id);
++  if (a || !window.__popDocs) return a;
++  for (const d of window.__popDocs()) { const b = d.getElementById(id); if (b) return b; }
++  return null;
++};
++const qAny = (sel) => { for (const d of allDocs()) { const r = d.querySelector(sel); if (r) return r; } return null; };
+ const art = $("art"), ovl = $("ovl");
+ const actx = art.getContext("2d"), octx = ovl.getContext("2d");
+ let ghostTmp = null;
+@@ -392,7 +401,7 @@ function renderOverlayOnly() {
+   octx.restore();
+   if (camKeys) {
+     if (proj.showCamera !== false) drawCameraOverlay();
+-    const camBody = document.querySelector("[data-panel-key=camera] .pbody");
++    const camBody = qAny("[data-panel-key=camera] .pbody");
+     if (camBody && camBody._syncCamera) camBody._syncCamera();
+   }
+   drawCanvasHud();
+@@ -1448,7 +1457,7 @@ function tvPanelDef(key) { return TV_PANEL_DEFS.find(d => d.key === key); }
+ // where the panel of a key lives in the prototype
+ function tvPanelElement(key) {
+   if (key === "timeline") return $("tlpanel");
+-  return document.querySelector("[data-panel-key=\"" + key + "\"]");
++  return qAny("[data-panel-key=\"" + key + "\"]");
+ }
+ // shows or hides a dockable panel of the left column (the Toggle*Panel
+ // commands of TVPaint - commands.js holds the real list)
+@@ -5711,7 +5720,7 @@ ovl.addEventListener("pointermove", (e) => {
+     E.setCameraKey(proj, proj.currentFrame,
+       { x: conducting.ox + (p.x - conducting.sx), y: conducting.oy + (p.y - conducting.sy) });
+     // the live app updates the X / Y fields of the camera panel while dragging
+-    const cb2 = document.querySelector("[data-panel-key=camera] .pbody");
++    const cb2 = qAny("[data-panel-key=camera] .pbody");
+     if (cb2 && cb2._syncCamera) cb2._syncCamera();
+     return renderOverlayOnly();
+   }
+-- 
+2.43.0
+

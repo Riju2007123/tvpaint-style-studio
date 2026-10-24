@@ -79,7 +79,16 @@ let penFlip = false;
 let nsmooth = 4;
 let localSmooth = false;
 
-const $ = (id) => document.getElementById(id);
+// Panels can live in another window (a panel dragged out of the application):
+// every lookup that must find them goes through allDocs() / qAny().
+const allDocs = () => [document].concat(window.__popDocs ? window.__popDocs() : []);
+const $ = (id) => {
+  const a = document.getElementById(id);
+  if (a || !window.__popDocs) return a;
+  for (const d of window.__popDocs()) { const b = d.getElementById(id); if (b) return b; }
+  return null;
+};
+const qAny = (sel) => { for (const d of allDocs()) { const r = d.querySelector(sel); if (r) return r; } return null; };
 const art = $("art"), ovl = $("ovl");
 const actx = art.getContext("2d"), octx = ovl.getContext("2d");
 let ghostTmp = null;
@@ -392,7 +401,7 @@ function renderOverlayOnly() {
   octx.restore();
   if (camKeys) {
     if (proj.showCamera !== false) drawCameraOverlay();
-    const camBody = document.querySelector("[data-panel-key=camera] .pbody");
+    const camBody = qAny("[data-panel-key=camera] .pbody");
     if (camBody && camBody._syncCamera) camBody._syncCamera();
   }
   drawCanvasHud();
@@ -1448,7 +1457,7 @@ function tvPanelDef(key) { return TV_PANEL_DEFS.find(d => d.key === key); }
 // where the panel of a key lives in the prototype
 function tvPanelElement(key) {
   if (key === "timeline") return $("tlpanel");
-  return document.querySelector("[data-panel-key=\"" + key + "\"]");
+  return qAny("[data-panel-key=\"" + key + "\"]");
 }
 // shows or hides a dockable panel of the left column (the Toggle*Panel
 // commands of TVPaint - commands.js holds the real list)
@@ -1951,7 +1960,7 @@ function buildPanels() {
   const wheelGeom = () => {
     const cv = $("wheelCv");
     const R = cv.width / 2;
-    return { R, rIn: R * 0.60, rOut: R - 3 };
+    return { R, rIn: R * 0.72, ringIn: R * 0.80, rOut: R * 0.94 };
   };
   function drawWheel() {
     const cv = $("wheelCv");
@@ -1971,13 +1980,11 @@ function buildPanels() {
         const px = x + 0.5, py = y + 0.5;
         const dx = px - G.R, dy = py - G.R;
         const d = Math.hypot(dx, dy);
-        if (d >= G.rIn && d <= G.rOut) {
-          const a = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
+        if (d >= G.ringIn && d <= G.rOut) {
+          const a = (360 - (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360) % 360;
           const h = a / 360;
-          // the inner ring is saturated, the outside ring fades to black
-          const t = (d - G.rIn) / (G.rOut - G.rIn);
-          const v = 1 - t * 0.88;
-          const [r, gg, b] = hsv2rgb(h, 1, v);
+          // the live wheel: a thin, fully saturated hue ring on a black disc
+          const [r, gg, b] = hsv2rgb(h, 1, 1);
           img.data[i] = r; img.data[i + 1] = gg; img.data[i + 2] = b; img.data[i + 3] = 255;
           continue;
         }
@@ -1999,8 +2006,8 @@ function buildPanels() {
       g.strokeStyle = "#6a6a6a"; g.lineWidth = 1; g.stroke();
     };
     // the marker on the ring (the hue, its radius = the luminosity)
-    const ang = (wheelState.h * 360 - 90) * Math.PI / 180;
-    const rr = G.rIn + (1 - wheelState.v) / 0.88 * (G.rOut - G.rIn);
+    const ang = (-wheelState.h * 360 - 90) * Math.PI / 180;
+    const rr = (G.ringIn + G.rOut) / 2;
     mark(G.R + Math.cos(ang) * rr, G.R + Math.sin(ang) * rr);
     // the marker in the triangle (the saturation and the value)
     const wl = 1 - wheelState.v, wv = wheelState.s * wheelState.v, wr = wheelState.v * (1 - wheelState.s);
@@ -2025,13 +2032,10 @@ function buildPanels() {
     const G = wheelGeom();
     const dx = x - G.R, dy = y - G.R;
     const d = Math.hypot(dx, dy);
-    if (d >= G.rIn && d <= G.rOut) {
-      // the ring: the angle is the hue, the radius is the luminosity
-      const a = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
+    if (d >= G.ringIn && d <= G.rOut + 3) {
+      // the ring: the angle is the hue; saturation and value stay as they are
+      const a = (360 - (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360) % 360;
       wheelState.h = a / 360;
-      const t = (d - G.rIn) / (G.rOut - G.rIn);
-      wheelState.v = Math.max(0.02, 1 - t * 0.88);
-      wheelState.s = 1;
     } else {
       const p = pointInTri(x, y, G.R, G.R - G.rIn, G.R - G.rIn * 0.87, G.R + G.rIn * 0.5,
         G.R + G.rIn * 0.87, G.R + G.rIn * 0.5);
@@ -5716,7 +5720,7 @@ ovl.addEventListener("pointermove", (e) => {
     E.setCameraKey(proj, proj.currentFrame,
       { x: conducting.ox + (p.x - conducting.sx), y: conducting.oy + (p.y - conducting.sy) });
     // the live app updates the X / Y fields of the camera panel while dragging
-    const cb2 = document.querySelector("[data-panel-key=camera] .pbody");
+    const cb2 = qAny("[data-panel-key=camera] .pbody");
     if (cb2 && cb2._syncCamera) cb2._syncCamera();
     return renderOverlayOnly();
   }

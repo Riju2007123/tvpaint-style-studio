@@ -13,6 +13,9 @@ const os = require("os");
 const fsafe = require("./fsafe");
 
 let win = null;
+// panels dragged out of the application live in windows of their own
+const panelWins = {};
+const isPanelName = (n) => /^tvpanel-[a-z0-9_-]+$/i.test(String(n || ""));
 // the page tells the shell whether the project has unsaved changes, so the
 // window's X button can ask instead of silently throwing the work away
 let projectDirty = false;
@@ -49,6 +52,29 @@ function createWindow() {
     // the panels float over the canvas, so the window must not be smaller
     // than the drawing area of the live app
     try { win.setMenuBarVisibility(false); } catch (e) { /* ignore */ }
+  });
+  // a panel dragged out of the window: a small frameless window that belongs to
+  // the main one (it closes with it and stays on top of it). The page moves the
+  // panel's DOM node into it - it opens as about:blank so it shares the origin.
+  win.webContents.setWindowOpenHandler(({ frameName }) => {
+    if (!isPanelName(frameName)) return { action: "deny" };
+    return {
+      action: "allow",
+      overrideBrowserWindowOptions: {
+        frame: false, parent: win, skipTaskbar: true, show: true, useContentSize: true,
+        resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
+        backgroundColor: "#313136", hasShadow: true,
+        webPreferences: { contextIsolation: true, nodeIntegration: false, spellcheck: false }
+      }
+    };
+  });
+  win.webContents.on("did-create-window", (child, details) => {
+    const name = details && details.frameName;
+    if (!isPanelName(name)) return;
+    panelWins[name] = child;
+    try { child.setMenuBarVisibility(false); } catch (e) { /* ignore */ }
+    child.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    child.on("closed", () => { if (panelWins[name] === child) delete panelWins[name]; });
   });
   // X button / Alt+F4: with unsaved changes the page's own Quit dialog decides
   win.on("close", (e) => {
@@ -210,6 +236,18 @@ ipcMain.handle("tv:printImage", async (event, payload) => {
   return await new Promise(resolve => {
     w.webContents.print({ silent: false, printBackground: true }, (ok) => { w.destroy(); resolve(!!ok); });
   });
+});
+
+ipcMain.handle("tv:panelWin", async (event, o) => {
+  o = o || {};
+  const w = panelWins[o.name];
+  if (!w || w.isDestroyed()) return false;
+  try {
+    if (o.close) { w.close(); return true; }
+    if (o.w > 0 && o.h > 0) w.setContentSize(Math.max(60, Math.round(o.w)), Math.max(24, Math.min(4000, Math.round(o.h))));
+    if (typeof o.x === "number" && typeof o.y === "number") w.setPosition(Math.round(o.x), Math.round(o.y));
+    return true;
+  } catch (e) { return false; }
 });
 
 ipcMain.handle("tv:quit", async () => {
